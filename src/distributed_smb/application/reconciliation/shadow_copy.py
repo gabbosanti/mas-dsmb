@@ -29,11 +29,7 @@ class ShadowCopyProtocol(Protocol):
 
 
 class NoopShadowCopy:
-    """Pass-through — stores the last known state and returns it unchanged.
-
-    Preserves current rendering behaviour until Persona 2 delivers the
-    real interpolation implementation.
-    """
+    """Pass-through — stores the last known state and returns it unchanged."""
 
     def __init__(self) -> None:
         self._state: CharacterState | None = None

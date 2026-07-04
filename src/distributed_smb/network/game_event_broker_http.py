@@ -35,7 +35,7 @@ class HttpGameEventBroker:
                 LOGGER.warning("HTTP POST failed → %s: %s", self._url, exc)
 
     def get_disconnected_player(self) -> str | None:
-        return None  # M8: add GET /disconnections endpoint
+        return None
 
     def launch(self, host: str = "0.0.0.0", port: int = GAME_EVENT_WS_PORT) -> None:
         pass  # container lifecycle managed by LobbyContainerManager

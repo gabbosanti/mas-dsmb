@@ -132,9 +132,7 @@ class LobbyManager:
             next_join_index=next_join_index,
         )
 
-    def poll_new_joiners(
-        self, session_id: str, known_join_indices: set[int]
-    ) -> list[dict]:
+    def poll_new_joiners(self, session_id: str, known_join_indices: set[int]) -> list[dict]:
         """Return roster entries whose join_index is not in known_join_indices."""
         record = self._sessions.get(session_id)
         if not record:

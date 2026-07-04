@@ -1,4 +1,4 @@
-"""UDP transport helpers for the M2 loopback milestone."""
+"""UDP transport helpers."""
 
 import heapq
 import random
