@@ -37,6 +37,14 @@ class SessionJoinSchema(BaseModel):
     message_type: str = Field(default="session_join")
 
 
+class SessionRecreateSchema(BaseModel):
+    """Schema for WebSocket SessionRecreate message."""
+
+    session_id: str = Field(..., min_length=1)
+    next_join_index: int = Field(..., ge=0)
+    message_type: str = Field(default="session_recreate")
+
+
 class SessionCreatedSchema(BaseModel):
     """Schema for WebSocket SessionCreated message."""
 

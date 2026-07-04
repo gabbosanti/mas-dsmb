@@ -47,6 +47,7 @@ from distributed_smb.shared.messages.schemas import (
     SessionCreateSchema,
     SessionJoinedSchema,
     SessionJoinSchema,
+    SessionRecreateSchema,
     WorldStateSchema,
 )
 from distributed_smb.shared.messages.session import (
@@ -57,6 +58,7 @@ from distributed_smb.shared.messages.session import (
     SessionCreated,
     SessionJoin,
     SessionJoined,
+    SessionRecreate,
 )
 from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 from distributed_smb.shared.roster import GlobalRoster, RosterEntry
@@ -67,6 +69,7 @@ WsMessage = Union[
     SessionCreated,
     SessionJoin,
     SessionJoined,
+    SessionRecreate,
     RosterUpdate,
     GameStart,
     InitialStateSync,
@@ -197,6 +200,13 @@ class Serializer:
                     player_id=validated.player_id,
                     ip=validated.ip,
                     port=validated.port,
+                )
+
+            if message_type == MessageType.SESSION_RECREATE:
+                validated = SessionRecreateSchema(**data)
+                return SessionRecreate(
+                    session_id=validated.session_id,
+                    next_join_index=validated.next_join_index,
                 )
 
             if message_type == MessageType.SESSION_JOINED:

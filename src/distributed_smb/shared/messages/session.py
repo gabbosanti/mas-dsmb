@@ -81,6 +81,26 @@ class RosterUpdate:
 
 
 @dataclass(slots=True)
+class SessionRecreate:
+    """Sent by the promoted host to its own new lobby after M8 host migration (M9).
+
+    Unlike SessionCreate (which generates a new session_id), SessionRecreate
+    preserves the existing session_id so that recovering nodes can rejoin using
+    the session_id stored in session_metadata.json.
+    """
+
+    session_id: str
+    next_join_index: int
+    message_type: MessageType = field(init=False, default=MessageType.SESSION_RECREATE)
+
+    def __post_init__(self):
+        if not self.session_id or not isinstance(self.session_id, str):
+            raise MessageValidationError(f"Invalid session_id: {self.session_id}")
+        if self.next_join_index < 0:
+            raise MessageValidationError(f"Invalid next_join_index: {self.next_join_index}")
+
+
+@dataclass(slots=True)
 class GameStart:
     session_id: str
     message_type: MessageType = field(init=False, default=MessageType.GAME_START)

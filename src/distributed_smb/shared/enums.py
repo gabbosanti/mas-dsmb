@@ -49,6 +49,7 @@ class MessageType(StrEnum):
     # WebSocket — lobby coordination (client → lobby)
     SESSION_CREATE = "session_create"
     SESSION_JOIN = "session_join"
+    SESSION_RECREATE = "session_recreate"
     GAME_START = "game_start"
     INITIAL_STATE_SYNC = "initial_state_sync"
 
