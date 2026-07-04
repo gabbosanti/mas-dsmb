@@ -3,6 +3,8 @@
 import argparse
 import logging
 import socket
+import threading
+import time
 
 from distributed_smb.application.node_controller import LobbyCancelledError, NodeController
 from distributed_smb.application.recovery.prober import RecoveryProber
@@ -18,10 +20,11 @@ from distributed_smb.shared.config import (
     ARTIFICIAL_LATENCY_MS,
     DEFAULT_HOST,
     DEFAULT_PACKET_DROP_RATE,
+    HOST_UDP_PORT,
     LOBBY_WS_PORT,
 )
 from distributed_smb.shared.enums import PlayerRole
-from distributed_smb.shared.roster import GlobalRoster
+from distributed_smb.shared.roster import GlobalRoster, RosterEntry
 from distributed_smb.shared.session_metadata import delete_session_metadata, read_session_metadata
 
 
@@ -140,24 +143,58 @@ def _try_recover_session(
     if metadata is None:
         return None
 
+    # Build a display roster from cached peers so the lobby screen shows them.
+    cached_roster = GlobalRoster()
+    for peer in metadata.peers:
+        cached_roster.add_player(
+            RosterEntry(
+                player_id=peer.player_id,
+                host=peer.ip,
+                udp_port=HOST_UDP_PORT,
+                join_index=peer.join_index,
+            )
+        )
+
     screen = lobby_screen if lobby_screen is not None else LobbyScreen()
     try:
+        # Show the recovery screen immediately (first frame) so the user sees the
+        # session info and can cancel by closing the window.
         if not screen.render(
             role=PlayerRole.CLIENT,
-            status="Rientro nella sessione… come client",
-            session_id="",
-            roster=GlobalRoster(),
+            status="Rientro nella sessione… Chiudi per annullare",
+            session_id=metadata.session_id,
+            roster=cached_roster,
         ):
             return None
 
-        current_prober = prober or RecoveryProber()
-        host_ip = current_prober.find_current_host(
-            metadata.session_id,
-            local_ip,
-            metadata.peers,
-            timeout_per_peer=0.5,
-        )
+        # Run the UDP probe in a background thread so the lobby screen stays
+        # responsive while waiting for peer responses.
+        result: list[str | None] = [None]
+        probe_done = threading.Event()
 
+        def _probe() -> None:
+            current_prober = prober or RecoveryProber()
+            result[0] = current_prober.find_current_host(
+                metadata.session_id,
+                local_ip,
+                metadata.peers,
+                timeout_per_peer=0.5,
+            )
+            probe_done.set()
+
+        threading.Thread(target=_probe, name="recovery-probe", daemon=True).start()
+
+        while not probe_done.is_set():
+            if not screen.render(
+                role=PlayerRole.CLIENT,
+                status="Rientro nella sessione… Chiudi per annullare",
+                session_id=metadata.session_id,
+                roster=cached_roster,
+            ):
+                return None
+            time.sleep(0.033)
+
+        host_ip = result[0]
         if host_ip is None:
             delete_session_metadata()
             return None
