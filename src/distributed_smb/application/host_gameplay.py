@@ -6,6 +6,7 @@ import time
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
 from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.session import RosterUpdate
 from distributed_smb.shared.messages.sync import WorldStateSnapshot
 
 LOGGER = logging.getLogger(__name__)
@@ -102,9 +103,28 @@ class HostGameplayMixin:
         self.sent_snapshots += 1
         return len(payload)
 
+    def _check_for_rejoining_players(self) -> None:
+        """Detect players that rejoined via lobby WS (M9) and add them to the active game."""
+        msg = self.ws_handler.poll()
+        if not isinstance(msg, RosterUpdate):
+            return
+        known = {e.join_index for e in self.roster.get_all_players()}
+        for entry in msg.roster.get_all_players():
+            if entry.join_index not in known:
+                x, y = self._spawn_position_for(entry.join_index)
+                self.roster.add_player(entry)
+                self.engine.spawn_player(entry.player_id, x=x, y=y, join_index=entry.join_index)
+                self.last_input_time[entry.player_id] = time.time()
+                LOGGER.info(
+                    "rejoin: %s (join_index=%d) re-entered the game",
+                    entry.player_id,
+                    entry.join_index,
+                )
+
     def _process_host_frame(self, dt: float, local_input: InputState) -> object:
         """Run one authoritative host frame: drain inputs, tick, broadcast snapshot."""
         self._record_host_frame_interval()
+        self._check_for_rejoining_players()
         self._check_player_disconnections()
         self.host_input_packets_window += self._drain_remote_input_packets()
         authoritative_inputs = self._build_host_inputs(local_input)
