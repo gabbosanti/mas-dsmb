@@ -120,15 +120,11 @@ class ClientGameplayMixin:
                 event.claimer_ip,
                 event.claimer_join_index,
             )
-        # Send ElectionAck back to claimer — Persona 2 wires game_event_broker.send_to_peer()
-        # TODO(persona2): self.game_event_broker.send_to_peer(msg.claimer_ip, ElectionAck(...))
 
     def _on_election_ack(self, msg: ElectionAck) -> None:
-        """Quorum tracking for the self-elected node. Persona 2 (ElectionMixin) overrides."""
         pass
 
     def _on_election_nack(self, msg: ElectionNack) -> None:
-        """Handle rejection of our claim. Persona 2 (ElectionMixin) overrides."""
         pass
 
     def _on_reconnection_ack(self, ack: ReconnectionAck) -> None:
@@ -148,18 +144,32 @@ class ClientGameplayMixin:
             ack.game_events_port,
         )
 
-    def _on_self_elected(self, event: SelfElected) -> None:
-        """Called when this node wins the election.
+        # Sync local roster: evict the crashed host and promote the newly elected one.
+        # Without this, _known_client_peers() would still see the old host as a peer
+        # and _promote_to_host() would evict the wrong entry in any future election.
+        old_host = self.roster.get_host()
+        if old_host is not None:
+            self._evict_player(old_host.player_id)
+        new_host_entry = next(
+            (e for e in self.roster.get_all_players() if e.host == ack.new_host_ip), None
+        )
+        if new_host_entry is not None:
+            self.roster.promote_host(new_host_entry.player_id)
 
-        Persona 2 (ElectionMixin) overrides this to broadcast NewHostClaim,
-        collect ElectionAck quorum, and call _promote_to_host().
-        This stub logs the event so the frame loop continues correctly even
-        before Persona 2's work is integrated.
-        """
-        LOGGER.info("election: won — waiting for Persona 2 ElectionMixin to promote")
+        # Reset the election machinery so a future host crash triggers a fresh election.
+        # election_triggered stays True after a follow, which silently swallows the second
+        # timeout check and prevents the node from ever detecting a subsequent crash.
+        self.election_triggered = False
+        self._pending_election_acks = set()
+        self._election_claim_deadline = 0.0
+        self.election_coordinator = None  # lazily re-created in _ensure_election_components
+        self.timeout_watcher = HostTimeoutWatcher(timeout_s=HOST_TIMEOUT_S)
+
+    def _on_self_elected(self, event: SelfElected) -> None:
+        pass
 
     # ------------------------------------------------------------------
-    # Prediction and reconciliation (unchanged from M5)
+    # Prediction and reconciliation
     # ------------------------------------------------------------------
 
     def _run_predicted_ticks(self, dt: float, local_input: InputState) -> None:
