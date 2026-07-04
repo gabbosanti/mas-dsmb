@@ -9,24 +9,19 @@ from distributed_smb.shared.config import (
     ELECTION_CLAIM_TIMEOUT_S,
     GAME_EVENT_WS_PORT,
     HOST_UDP_PORT,
+    LOBBY_STARTUP_WAIT,
+    LOBBY_WS_PORT,
 )
 from distributed_smb.shared.enums import PlayerRole
 from distributed_smb.shared.messages.election import ElectionAck, NewHostClaim, ReconnectionAck
+from distributed_smb.shared.messages.session import SessionCreated, SessionRecreate
 
 LOGGER = logging.getLogger(__name__)
 
 
 class ElectionMixin:
-    """Overrides the election-handler stubs in ClientGameplayMixin with real logic.
-
-    Responsibilities:
-    - Broadcast NewHostClaim when self-elected, collect ElectionAck quorum.
-    - Yield to a lower-index claimer by sending ElectionAck back.
-    - Promote this node from CLIENT to HOST once quorum is reached (or deadline passes).
-    """
-
     # ------------------------------------------------------------------
-    # Override stubs from ClientGameplayMixin
+    # Election handlers (override stubs in ClientGameplayMixin)
     # ------------------------------------------------------------------
 
     def _on_self_elected(self, event: SelfElected) -> None:
@@ -157,6 +152,51 @@ class ElectionMixin:
         self.game_event_broker.promote_to_server(GAME_EVENT_WS_PORT)
         self.lobby_container_manager.start()
         self.game_event_broker.reconnect("localhost", GAME_EVENT_WS_PORT)
+
+        # Start lobby and re-register the existing session so recovering nodes can rejoin (M9).
+        # Works in both Docker mode (LobbyContainerManager starts the container, then we
+        # connect via WS) and in-process mode (LobbyService starts uvicorn, same WS path).
+        self.lobby_service.launch(port=LOBBY_WS_PORT)
+        time.sleep(LOBBY_STARTUP_WAIT)
+        try:
+            self._make_lobby_ws_client("localhost", LOBBY_WS_PORT)
+            for attempt in range(10):
+                try:
+                    self.ws_handler.connect(timeout=2.0)
+                    break
+                except (ConnectionError, TimeoutError, OSError):
+                    if attempt < 9:
+                        LOGGER.info(
+                            "election: lobby not ready yet (attempt %d/10), retrying in 1s…",
+                            attempt + 1,
+                        )
+                        time.sleep(1.0)
+                    else:
+                        raise
+            all_players = self.roster.get_all_players()
+            next_ji = (max(e.join_index for e in all_players) + 1) if all_players else 0
+            self.ws_handler.send(
+                SessionRecreate(session_id=self.session_id, next_join_index=next_ji)
+            )
+            got_ack = False
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if isinstance(self.ws_handler.poll(), SessionCreated):
+                    LOGGER.info("election: lobby ready for rejoin (session=%s)", self.session_id)
+                    got_ack = True
+                    break
+                time.sleep(0.05)
+            if not got_ack:
+                LOGGER.warning(
+                    "election: lobby did not ack SESSION_RECREATE (session=%s) — rejoin disabled",
+                    self.session_id,
+                )
+        except Exception as exc:
+            LOGGER.warning(
+                "election: lobby registration failed (%s: %s) — rejoin disabled",
+                type(exc).__name__,
+                exc,
+            )
 
         # Give surviving peers a fresh grace period so _check_player_disconnections()
         # does not false-positive them out immediately (last_input_time was empty as client).
