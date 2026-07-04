@@ -160,3 +160,97 @@ def test_game_start_marks_session_active():
         host_ws.send_text(_game_start_msg(session_id))
         host_ws.receive_text()  # consume broadcast
         assert lobby_manager.is_active(session_id)
+
+
+# ---------------------------------------------------------------------------
+# register_active_session + poll_new_joiners (M9 rejoin)
+# ---------------------------------------------------------------------------
+
+
+def test_register_active_session_creates_active_session():
+    from distributed_smb.shared.roster import GlobalRoster, RosterEntry
+
+    roster = GlobalRoster()
+    roster.add_player(
+        RosterEntry(player_id="player2", host="10.0.0.2", udp_port=50010, join_index=1)
+    )
+    lobby_manager.register_active_session("abc123", roster, next_join_index=2)
+
+    assert lobby_manager.is_active("abc123")
+
+
+def test_poll_new_joiners_returns_only_unknown_entries():
+    from distributed_smb.shared.roster import GlobalRoster, RosterEntry
+
+    roster = GlobalRoster()
+    roster.add_player(
+        RosterEntry(player_id="player2", host="10.0.0.2", udp_port=50010, join_index=1)
+    )
+    lobby_manager.register_active_session("abc123", roster, next_join_index=2)
+
+    # join_index=1 already known — should not be returned
+    new_entries = lobby_manager.poll_new_joiners("abc123", known_join_indices={1})
+    assert new_entries == []
+
+    # after a new player joins, join_index=2 appears
+    lobby_manager.join_session("abc123", "player3", "10.0.0.3", 49500)
+    new_entries = lobby_manager.poll_new_joiners("abc123", known_join_indices={1})
+    assert len(new_entries) == 1
+    assert new_entries[0]["join_index"] == 2
+
+
+def test_session_join_for_active_session_sends_game_start_immediately():
+    """Rejoining node must receive GameStart right after SessionJoined (M9 fix #3)."""
+    from distributed_smb.shared.roster import GlobalRoster, RosterEntry
+
+    roster = GlobalRoster()
+    roster.add_player(
+        RosterEntry(player_id="player2", host="10.0.0.2", udp_port=50010, join_index=1)
+    )
+    lobby_manager.register_active_session("abc123", roster, next_join_index=2)
+
+    with client.websocket_connect("/lobby") as rejoining_ws:
+        rejoining_ws.send_text(
+            json.dumps(
+                {
+                    "message_type": "session_join",
+                    "session_id": "abc123",
+                    "player_id": "player3",
+                    "ip": "10.0.0.3",
+                    "port": 49500,
+                }
+            )
+        )
+
+        # 1) SessionJoined with new join_index
+        joined = json.loads(rejoining_ws.receive_text())
+        assert joined["message_type"] == MessageType.SESSION_JOINED
+        assert joined["join_index"] == 2
+
+        # 2) RosterUpdate broadcast
+        roster_msg = json.loads(rejoining_ws.receive_text())
+        assert roster_msg["message_type"] == MessageType.ROSTER_UPDATE
+
+        # 3) GameStart sent immediately because session is active
+        game_start = json.loads(rejoining_ws.receive_text())
+        assert game_start["message_type"] == MessageType.GAME_START
+        assert game_start["session_id"] == "abc123"
+
+
+def test_session_recreate_registers_session_and_sends_created_ack():
+    """SESSION_RECREATE creates an active session with the preserved session_id (M9)."""
+    with client.websocket_connect("/lobby") as host_ws:
+        host_ws.send_text(
+            json.dumps(
+                {
+                    "message_type": "session_recreate",
+                    "session_id": "restored-session-abc",
+                    "next_join_index": 2,
+                }
+            )
+        )
+
+        ack = json.loads(host_ws.receive_text())
+        assert ack["message_type"] == MessageType.SESSION_CREATED
+        assert ack["session_id"] == "restored-session-abc"
+        assert lobby_manager.is_active("restored-session-abc")

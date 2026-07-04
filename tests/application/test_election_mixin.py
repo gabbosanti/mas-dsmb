@@ -362,6 +362,142 @@ class TestPromoteToHost:
         sent_types = [json.loads(p).get("message_type") for p in broker.sent]
         assert MessageType.RECONNECTION_ACK.value not in sent_types
 
+    def test_promote_to_host_launches_lobby_and_sends_session_recreate(self):
+        """After promotion, lobby is started and SESSION_RECREATE is sent via ws_handler (M9)."""
+        from distributed_smb.shared.messages.session import SessionCreated, SessionRecreate
+
+        class SpyLobbyService:
+            def __init__(self):
+                self.launched = False
+
+            def launch(self, host="0.0.0.0", port=0):
+                self.launched = True
+
+        class FakeWsHandler:
+            def __init__(self):
+                self.sent: list = []
+                self._connected = False
+
+            def connect(self, timeout=10.0):
+                self._connected = True
+
+            def send(self, message):
+                self.sent.append(message)
+
+            def poll(self):
+                # Return SessionCreated ack after any send, so the handshake completes.
+                if self.sent:
+                    return SessionCreated(session_id="test-session", join_index=0)
+                return None
+
+        nc, _ = _make_controller()
+        spy_lobby = SpyLobbyService()
+        nc.lobby_service = spy_lobby
+
+        fake_ws = FakeWsHandler()
+        nc._make_lobby_ws_client = lambda host, port: setattr(nc, "ws_handler", fake_ws)
+
+        nc._promote_to_host()
+
+        assert spy_lobby.launched
+        assert len(fake_ws.sent) == 1
+        msg = fake_ws.sent[0]
+        assert isinstance(msg, SessionRecreate)
+        assert msg.session_id == "test-session"
+        # After evicting original host (join_index=0), remaining player is join_index=1 (self).
+        # next_join_index must be max(1) + 1 = 2.
+        assert msg.next_join_index == 2
+
+
+# ---------------------------------------------------------------------------
+# _on_reconnection_ack — election reset after following a new host
+# ---------------------------------------------------------------------------
+
+
+class TestOnReconnectionAck:
+    def _make_following_controller(self) -> NodeController:
+        """Controller that has just followed a new host (A crashed, B promoted)."""
+        nc, _ = _make_controller(local_ip="10.0.0.3", local_player_id="player3", join_index=2)
+        # Add B to the roster (B is the promoted host, still is_host=False in C's stale view)
+        nc.roster.add_player(
+            RosterEntry(player_id="player2", host="10.0.0.2", udp_port=50011, join_index=1)
+        )
+        # Simulate state after C followed B in the first election
+        nc.election_triggered = True
+        return nc
+
+    def test_reconnection_ack_resets_election_triggered(self):
+        """After following a new host, election_triggered must be cleared so a future
+        host crash can be detected by _tick_election_state."""
+        from distributed_smb.shared.messages.election import ReconnectionAck
+
+        nc = self._make_following_controller()
+        nc._on_reconnection_ack(
+            ReconnectionAck(
+                new_host_ip="10.0.0.2",
+                udp_port=50010,
+                game_events_port=50003,
+                session_id="test-session",
+            )
+        )
+
+        assert nc.election_triggered is False
+
+    def test_reconnection_ack_resets_election_coordinator(self):
+        """election_coordinator is set to None so _ensure_election_components re-creates it."""
+        from distributed_smb.shared.messages.election import ReconnectionAck
+
+        nc = self._make_following_controller()
+        nc._on_reconnection_ack(
+            ReconnectionAck(
+                new_host_ip="10.0.0.2",
+                udp_port=50010,
+                game_events_port=50003,
+                session_id="test-session",
+            )
+        )
+
+        assert nc.election_coordinator is None
+        assert nc.timeout_watcher is not None  # fresh watcher created
+
+    def test_reconnection_ack_updates_roster(self):
+        """Old host (A) is evicted and new host (B) is promoted in the local roster."""
+        from distributed_smb.shared.messages.election import ReconnectionAck
+
+        nc = self._make_following_controller()
+        # Before: A is is_host=True (stale), B is is_host=False
+        assert nc.roster.get_host().player_id == "player1"  # old host A
+
+        nc._on_reconnection_ack(
+            ReconnectionAck(
+                new_host_ip="10.0.0.2",
+                udp_port=50010,
+                game_events_port=50003,
+                session_id="test-session",
+            )
+        )
+
+        # A evicted, B promoted
+        assert nc.roster.get_player("player1") is None
+        assert nc.roster.get_host().player_id == "player2"
+
+    def test_reconnection_ack_idempotent(self):
+        """Second ack (relay echo) is ignored; roster stays consistent."""
+        from distributed_smb.shared.messages.election import ReconnectionAck
+
+        nc = self._make_following_controller()
+        ack = ReconnectionAck(
+            new_host_ip="10.0.0.2",
+            udp_port=50010,
+            game_events_port=50003,
+            session_id="test-session",
+        )
+        nc._on_reconnection_ack(ack)
+        nc._on_reconnection_ack(ack)  # second call must be a no-op
+
+        assert nc.roster.get_player("player1") is None
+        assert nc.roster.get_host().player_id == "player2"
+
 
 # ---------------------------------------------------------------------------
 # GlobalRoster.promote_host

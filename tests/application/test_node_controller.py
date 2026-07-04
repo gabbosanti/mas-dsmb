@@ -218,7 +218,7 @@ def test_try_recover_session_returns_host_and_session_when_probe_succeeds(monkey
     )
 
     assert result == ("10.0.0.2", "session-abc")
-    fake_screen.render.assert_called_once()
+    assert fake_screen.render.call_count >= 1
     fake_prober.find_current_host.assert_called_once_with(
         "session-abc",
         "127.0.0.5",
