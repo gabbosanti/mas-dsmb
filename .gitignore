@@ -172,6 +172,7 @@ __marimo__/
 # Log & Temp
 *.log
 .cache/
+session_metadata.json
 
 # Ruff
 .ruff_cache/
