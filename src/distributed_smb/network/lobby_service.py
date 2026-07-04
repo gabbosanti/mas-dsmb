@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -20,8 +21,11 @@ from distributed_smb.shared.messages.session import (
     SessionCreated,
     SessionJoin,
     SessionJoined,
+    SessionRecreate,
 )
 from distributed_smb.shared.roster import GlobalRoster, RosterEntry
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -106,6 +110,37 @@ class LobbyManager:
         record = self._sessions.get(session_id)
         return record.is_active if record else False
 
+    def register_active_session(
+        self, session_id: str, roster: GlobalRoster, next_join_index: int
+    ) -> None:
+        """Pre-seed an already-running session so rejoining nodes can connect (M9)."""
+        entries = [
+            {
+                "player_id": e.player_id,
+                "host": e.host,
+                "udp_port": e.udp_port,
+                "join_index": e.join_index,
+                "status": e.status.value,
+                "is_host": e.is_host,
+            }
+            for e in roster.get_all_players()
+        ]
+        self._sessions[session_id] = _SessionRecord(
+            session_id=session_id,
+            entries=entries,
+            is_active=True,
+            next_join_index=next_join_index,
+        )
+
+    def poll_new_joiners(
+        self, session_id: str, known_join_indices: set[int]
+    ) -> list[dict]:
+        """Return roster entries whose join_index is not in known_join_indices."""
+        record = self._sessions.get(session_id)
+        if not record:
+            return []
+        return [e for e in record.entries if e["join_index"] not in known_join_indices]
+
     async def broadcast(self, session_id: str, payload: dict) -> None:
         """Send JSON to every WebSocket connected in the session."""
         record = self._sessions.get(session_id)
@@ -158,6 +193,29 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                 await lobby_manager.broadcast(
                     session_id, _serializer.encode_ws_message(RosterUpdate(roster=roster))
                 )
+                # Game already running (rejoin after host migration): send GameStart immediately
+                # so _client_lobby_phase() can proceed without waiting for a host trigger.
+                if lobby_manager.is_active(session_id):
+                    game_start = GameStart(session_id=session_id)
+                    await ws.send_text(json.dumps(_serializer.encode_ws_message(game_start)))
+
+            elif message_type == MessageType.SESSION_RECREATE:
+                # Promoted host re-registers an existing session after M8 migration (M9).
+                # Preserves the session_id so recovering nodes can join with their cached ID.
+                msg: SessionRecreate = _serializer.decode_ws_message(data)
+                session_id = msg.session_id
+                LOGGER.info(
+                    "lobby: SESSION_RECREATE received (session=%s, next_join_index=%d)",
+                    session_id,
+                    msg.next_join_index,
+                )
+                lobby_manager.register_active_session(
+                    session_id, GlobalRoster(), msg.next_join_index
+                )
+                lobby_manager.add_connection(session_id, ws)
+                LOGGER.info("lobby: session %s registered, sending SessionCreated ack", session_id)
+                ack = SessionCreated(session_id=session_id, join_index=0)
+                await ws.send_text(json.dumps(_serializer.encode_ws_message(ack)))
 
             elif message_type == MessageType.GAME_START:
                 msg: GameStart = _serializer.decode_ws_message(data)
@@ -167,7 +225,10 @@ async def lobby_endpoint(ws: WebSocket) -> None:
     except WebSocketDisconnect:
         if session_id:
             lobby_manager.remove_connection(session_id, ws)
-    except Exception:
+    except Exception as exc:
+        LOGGER.error(
+            "lobby: unhandled exception in WebSocket handler: %s: %s", type(exc).__name__, exc
+        )
         if session_id:
             lobby_manager.remove_connection(session_id, ws)
 
