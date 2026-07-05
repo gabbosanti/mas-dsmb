@@ -82,8 +82,8 @@ class GameEngine:
 
         self.world_state.add_gate(
             CooperativeGate(
-                x=820,
-                y=floor_y - 85 - GATE_HEIGHT,
+                x=720,
+                y=floor_y - 250 - GATE_HEIGHT,
                 width=GATE_WIDTH,
                 height=GATE_HEIGHT,
                 gate_id="gate-test",
