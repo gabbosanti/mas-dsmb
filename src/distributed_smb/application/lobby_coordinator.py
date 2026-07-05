@@ -111,11 +111,7 @@ class LobbyMixin:
         self.session_id = created.session_id
         LOGGER.info("Session created: %s", self.session_id)
         if self.use_discovery:
-            self.discovery_service.announce(
-                self.session_id,
-                LOBBY_WS_PORT,
-                allowed_ips=self._discovery_allowed_ips(),
-            )
+            self.discovery_service.announce(self.session_id, LOBBY_WS_PORT)
         self._notify_lobby_update("Waiting for players", on_update)
 
         deadline = time.time() + LOBBY_TIMEOUT
@@ -123,8 +119,6 @@ class LobbyMixin:
             msg = self.ws_handler.poll()
             if isinstance(msg, RosterUpdate):
                 self.roster = msg.roster
-                if self.use_discovery and hasattr(self.discovery_service, "set_allowed_ips"):
-                    self.discovery_service.set_allowed_ips(self._discovery_allowed_ips())
             self._notify_lobby_update("Waiting for players", on_update)
             if start_requested is not None and start_requested() and self.roster.players:
                 LOGGER.info("Host manually requested game start")
