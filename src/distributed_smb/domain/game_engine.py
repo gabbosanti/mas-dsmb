@@ -121,6 +121,10 @@ class GameEngine:
             player.is_crouching = bool(input_state.down and player.on_ground)
 
     def tick(self, dt, inputs: dict[str, InputState]):
+        if self.world_state.victory:
+            self.world_state.sequence_number += 1
+            return
+
         for player in self.world_state.characters.values():
             player.prev_x = player.x
             player.prev_y = player.y
@@ -131,6 +135,7 @@ class GameEngine:
 
         self.handle_collisions()
         self.handle_environment_collisions()
+        self.handle_victory_condition()
         self.world_state.sequence_number += 1
 
     def handle_collisions(self) -> None:
@@ -193,6 +198,20 @@ class GameEngine:
             if gate.state == "closed":
                 for player in colliding_players:
                     resolve_collision(player, gate)
+
+    def handle_victory_condition(self) -> None:
+        if self.world_state.victory:
+            return
+
+        for gate in self.world_state.environment.cooperative_gates.values():
+            if gate.state != "open":
+                continue
+
+            for player in self.world_state.characters.values():
+                if check_collision(player, gate):
+                    self.world_state.victory = True
+                    self.world_state.victory_player_id = player.player_id
+                    return
 
     def _is_head_bump(self, player: CharacterState, block: DestructibleBlock) -> bool:
         previous_top = player.prev_y

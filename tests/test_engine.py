@@ -181,6 +181,24 @@ def test_gate_opens_after_all_players_touch_it():
     )
 
 
+def test_reaching_open_gate_triggers_victory():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    gate = engine.world_state.get_gate("gate-test")
+    player = engine.world_state.get_player("player1")
+
+    gate.state = "open"
+    player.x = gate.x + 4
+    player.y = gate.y + gate.height - player.height
+    player.prev_x = player.x
+    player.prev_y = player.y
+
+    engine.tick(1 / 60, {"player1": InputState()})
+
+    assert engine.world_state.victory is True
+    assert engine.world_state.victory_player_id == "player1"
+
+
 def test_head_bump_destroys_destructible_block():
     engine = GameEngine()
     engine.spawn_player("player1")

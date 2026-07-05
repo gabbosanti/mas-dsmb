@@ -38,6 +38,8 @@ class WorldState:
     sequence_number: int = 0
     characters: dict[str, CharacterState] = field(default_factory=dict)
     environment: EnvironmentalState = field(default_factory=EnvironmentalState)
+    victory: bool = False
+    victory_player_id: str | None = None
 
     def add_player(self, character: CharacterState):
         self.characters[character.player_id] = character
@@ -101,5 +103,9 @@ class WorldState:
             cooperative_gates=cooperative_gates,
         )
         return cls(
-            sequence_number=data["sequence_number"], characters=characters, environment=environment
+            sequence_number=data["sequence_number"],
+            characters=characters,
+            environment=environment,
+            victory=data.get("victory", False),
+            victory_player_id=data.get("victory_player_id"),
         )

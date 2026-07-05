@@ -486,6 +486,26 @@ class Renderer:
             sprite = pygame.transform.flip(sprite, True, False)
         return sprite
 
+    def _render_victory_overlay(self, screen: pygame.Surface) -> None:
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
+
+        title_font = pygame.font.SysFont(None, 56)
+        body_font = pygame.font.SysFont(None, 32)
+        title_surface = title_font.render("Victory!", True, (255, 230, 120))
+        body_surface = body_font.render(
+            "Hai raggiunto la porta del castello",
+            True,
+            (255, 255, 255),
+        )
+        screen.blit(
+            title_surface, title_surface.get_rect(center=(self.width // 2, self.height // 2 - 20))
+        )
+        screen.blit(
+            body_surface, body_surface.get_rect(center=(self.width // 2, self.height // 2 + 20))
+        )
+
     def render(
         self,
         screen: pygame.Surface,
@@ -507,5 +527,8 @@ class Renderer:
                 int(character.height),
             )
             screen.blit(self._get_player_sprite(character), player_rect.topleft)
+
+        if world_state.victory:
+            self._render_victory_overlay(screen)
 
         pygame.display.flip()
