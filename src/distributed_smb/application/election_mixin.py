@@ -186,7 +186,11 @@ class ElectionMixin:
                     got_ack = True
                     break
                 time.sleep(0.05)
-            if not got_ack:
+            if got_ack:
+                if self.use_discovery:
+                    self.discovery_service.announce(self.session_id, LOBBY_WS_PORT)
+                    LOGGER.info("election: discovery announce started for rejoin")
+            else:
                 LOGGER.warning(
                     "election: lobby did not ack SESSION_RECREATE (session=%s) — rejoin disabled",
                     self.session_id,
