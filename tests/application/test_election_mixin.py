@@ -50,6 +50,33 @@ class SpyBroker:
         return json.loads(self.sent[-1]).get("message_type")
 
 
+class SpyLobbyService:
+    def __init__(self) -> None:
+        self.launched = False
+
+    def launch(self, host: str = "0.0.0.0", port: int = 0) -> None:
+        self.launched = True
+
+
+class FakeWsHandler:
+    def __init__(self) -> None:
+        self.sent: list[object] = []
+        self.connected = False
+
+    def connect(self, timeout: float = 10.0) -> None:
+        self.connected = True
+
+    def send(self, message: object) -> None:
+        self.sent.append(message)
+
+    def poll(self) -> object | None:
+        if self.sent:
+            from distributed_smb.shared.messages.session import SessionCreated
+
+            return SessionCreated(session_id="test-session", join_index=0)
+        return None
+
+
 def _make_controller(
     local_ip: str = "10.0.0.2",
     local_player_id: str = "player2",
@@ -90,6 +117,11 @@ def _make_controller(
         timeout_delta_s=T_ELECTION_DELTA_S,
     )
     nc.env_state_buffer = EnvironmentalStateBuffer()
+
+    fake_ws = FakeWsHandler()
+    nc.lobby_service = SpyLobbyService()
+    nc._make_lobby_ws_client = lambda host, port: setattr(nc, "ws_handler", fake_ws)
+    nc._reconnect_game_event_handler = lambda host, port, path: None
     return nc, broker
 
 
