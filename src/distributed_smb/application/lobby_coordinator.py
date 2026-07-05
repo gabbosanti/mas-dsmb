@@ -8,6 +8,7 @@ from typing import Any
 from distributed_smb.shared.config import (
     GAME_EVENT_WS_PATH,
     GAME_EVENT_WS_PORT,
+    HOST_UDP_PORT,
     LOBBY_STARTUP_WAIT,
     LOBBY_TIMEOUT,
     LOBBY_WS_PORT,
@@ -231,8 +232,11 @@ class LobbyMixin:
         if others:
             self.remote_player_id = others[0].player_id
         host_entry = next((e for e in self.roster.get_all_players() if e.is_host), None)
-        if host_entry and self.role is PlayerRole.CLIENT:
-            self.remote_host = host_entry.host
-            self.remote_port = host_entry.udp_port
+        if self.role is PlayerRole.CLIENT:
+            # Fallback to ws_handler.host when the lobby roster has no host entry
+            # (rejoin path: SESSION_RECREATE registers an empty roster).
+            game_event_host = host_entry.host if host_entry else self.ws_handler.host
+            self.remote_host = game_event_host
+            self.remote_port = host_entry.udp_port if host_entry else HOST_UDP_PORT
             path = f"{GAME_EVENT_WS_PATH}?player_id={self.local_player_id}"
-            self._make_ws_client(host_entry.host, GAME_EVENT_WS_PORT, path)
+            self._make_ws_client(game_event_host, GAME_EVENT_WS_PORT, path)
