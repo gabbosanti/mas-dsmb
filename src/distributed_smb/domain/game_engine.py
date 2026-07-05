@@ -24,6 +24,7 @@ class GameEngine:
     world_state: WorldState = field(default_factory=WorldState)
     platforms: list = field(default_factory=list)
     events: list = field(default_factory=list)
+    is_authoritative: bool = True
 
     def __post_init__(self) -> None:
         self._build_default_level()
@@ -171,6 +172,9 @@ class GameEngine:
                     resolve_collision(player, block)
 
     def _sync_coin_counter_from_environment(self) -> None:
+        if not self.is_authoritative:
+            return
+
         collected_coins = sum(
             1
             for power_up in self.world_state.environment.power_ups.values()
@@ -179,6 +183,9 @@ class GameEngine:
         self.world_state.coins_collected = max(self.world_state.coins_collected, collected_coins)
 
     def handle_powerup_collisions(self) -> None:
+        if not self.is_authoritative:
+            return
+
         for power_up in self.world_state.environment.power_ups.values():
             if power_up.collected:
                 continue
@@ -216,6 +223,8 @@ class GameEngine:
                     resolve_collision(player, gate)
 
     def handle_victory_condition(self) -> None:
+        if not self.is_authoritative:
+            return
         if self.world_state.victory:
             return
         if self.world_state.coins_collected < self.world_state.coins_to_win:

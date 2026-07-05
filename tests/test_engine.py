@@ -221,6 +221,24 @@ def test_collecting_coins_updates_shared_counter():
     assert engine.world_state.coins_collected == 1
 
 
+def test_non_authoritative_engine_does_not_mutate_coin_counter():
+    engine = GameEngine(is_authoritative=False)
+    engine.spawn_player("player1")
+    player = engine.world_state.get_player("player1")
+    power_up = ExclusivePowerUp(powerup_id="coin-custom", x=player.x + 10, y=player.y - 10)
+    engine.world_state.add_power_up(power_up)
+
+    player.x = power_up.x
+    player.y = power_up.y
+    player.prev_x = player.x
+    player.prev_y = player.y
+
+    engine.handle_powerup_collisions()
+
+    assert power_up.collected is False
+    assert engine.world_state.coins_collected == 0
+
+
 def test_gate_requires_coin_threshold_for_victory():
     engine = GameEngine()
     engine.spawn_player("player1")

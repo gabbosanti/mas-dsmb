@@ -272,6 +272,7 @@ class NodeController(
         """Configure ports and player identities for host or client mode."""
         if self.role is PlayerRole.HOST:
             self.local_player_id = HOST_PLAYER_ID
+            self.engine.is_authoritative = True
             self.udp_handler = UdpHandler(
                 host="0.0.0.0",
                 port=HOST_UDP_PORT,
@@ -280,6 +281,7 @@ class NodeController(
             )
         else:
             self.local_player_id = player_id_for(1)  # placeholder, overwritten after lobby join
+            self.engine.is_authoritative = False
             self.udp_handler = UdpHandler(
                 host="0.0.0.0",
                 port=0,  # OS assigns a unique port, avoiding same-machine collisions
