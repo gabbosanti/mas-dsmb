@@ -38,6 +38,8 @@ class WorldState:
     sequence_number: int = 0
     characters: dict[str, CharacterState] = field(default_factory=dict)
     environment: EnvironmentalState = field(default_factory=EnvironmentalState)
+    coins_collected: int = 0
+    coins_to_win: int = 5
     victory: bool = False
     victory_player_id: str | None = None
 
@@ -106,6 +108,8 @@ class WorldState:
             sequence_number=data["sequence_number"],
             characters=characters,
             environment=environment,
+            coins_collected=data.get("coins_collected", 0),
+            coins_to_win=data.get("coins_to_win", 5),
             victory=data.get("victory", False),
             victory_player_id=data.get("victory_player_id"),
         )

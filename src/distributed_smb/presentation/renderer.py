@@ -486,6 +486,19 @@ class Renderer:
             sprite = pygame.transform.flip(sprite, True, False)
         return sprite
 
+    def _render_coin_counter(self, screen: pygame.Surface, world_state: WorldState) -> None:
+        font = pygame.font.SysFont(None, 22)
+        text = f"Coins: {world_state.coins_collected}/{world_state.coins_to_win}"
+        label_surface = font.render(text, True, (255, 255, 255))
+        panel_width = label_surface.get_width() + 24
+        panel_height = label_surface.get_height() + 12
+        panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 160))
+        x = self.width - panel_width - 16
+        y = 16
+        screen.blit(panel, (x, y))
+        screen.blit(label_surface, (x + 12, y + 6))
+
     def _render_victory_overlay(self, screen: pygame.Surface) -> None:
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
@@ -516,6 +529,7 @@ class Renderer:
         screen.fill(self.background_color)
 
         self._render_platforms(screen, platforms)
+        self._render_coin_counter(screen, world_state)
 
         self._render_environment(screen, world_state)
 

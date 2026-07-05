@@ -14,6 +14,7 @@ POWERUP_SIZE = 34
 COIN_SIZE = 26
 GATE_WIDTH = 54
 GATE_HEIGHT = 96
+COINS_TO_WIN = 5
 
 
 @dataclass(slots=True)
@@ -65,9 +66,10 @@ class GameEngine:
             DestructibleBlock(x=745, y=floor_y - 401, width=BLOCK_SIZE, height=BLOCK_SIZE)
         )
 
-        self._add_power_up("coin-1", 230, floor_y - 85, COIN_SIZE)
-        self._add_power_up("coin-2", 265, floor_y - 85, COIN_SIZE)
-        self._add_power_up("coin-3", 300, floor_y - 85, COIN_SIZE)
+        self._add_power_up("coin-10", 50, floor_y - 85, COIN_SIZE)
+        #self._add_power_up("coin-1", 230, floor_y - 85, COIN_SIZE)
+        #self._add_power_up("coin-2", 265, floor_y - 85, COIN_SIZE)
+        #self._add_power_up("coin-3", 300, floor_y - 85, COIN_SIZE)
         self._add_power_up("mushroom-1", 350, floor_y - 85, POWERUP_SIZE)
         self._add_power_up("coin-4", 450, floor_y - 135, COIN_SIZE)
         self._add_power_up("coin-5", 490, floor_y - 135, COIN_SIZE)
@@ -75,10 +77,13 @@ class GameEngine:
         self._add_power_up("coin-6", 645, floor_y - 185, COIN_SIZE)
         self._add_power_up("coin-7", 688, floor_y - 185, COIN_SIZE)
         self._add_power_up("star-1", 670, floor_y - 250, POWERUP_SIZE)
-        self._add_power_up("coin-8", 725, floor_y - 250, COIN_SIZE)
+        #self._add_power_up("coin-8", 725, floor_y - 250, COIN_SIZE)
         self._add_power_up("coin-9", 770, floor_y - 250, COIN_SIZE)
         self._add_power_up("mushroom-2", 835, floor_y - 330, POWERUP_SIZE)
         self._add_power_up("flower-2", 420, floor_y - 285, POWERUP_SIZE)
+
+        self.world_state.coins_collected = 0
+        self.world_state.coins_to_win = COINS_TO_WIN
 
         self.world_state.add_gate(
             CooperativeGate(
@@ -135,6 +140,7 @@ class GameEngine:
 
         self.handle_collisions()
         self.handle_environment_collisions()
+        self._sync_coin_counter_from_environment()
         self.handle_victory_condition()
         self.world_state.sequence_number += 1
 
@@ -164,6 +170,14 @@ class GameEngine:
                         self.events.append(event)
                     resolve_collision(player, block)
 
+    def _sync_coin_counter_from_environment(self) -> None:
+        collected_coins = sum(
+            1
+            for power_up in self.world_state.environment.power_ups.values()
+            if power_up.collected and power_up.powerup_id.startswith("coin-")
+        )
+        self.world_state.coins_collected = max(self.world_state.coins_collected, collected_coins)
+
     def handle_powerup_collisions(self) -> None:
         for power_up in self.world_state.environment.power_ups.values():
             if power_up.collected:
@@ -181,6 +195,8 @@ class GameEngine:
             winner = min(colliding_players, key=lambda p: p.join_index)
             event = power_up.collect(winner.player_id)
             self.events.append(event)
+            if power_up.powerup_id.startswith("coin-"):
+                self.world_state.coins_collected += 1
 
     def handle_gate_collisions(self) -> None:
         active_players = self.world_state.get_all_players_dict().keys()
@@ -201,6 +217,8 @@ class GameEngine:
 
     def handle_victory_condition(self) -> None:
         if self.world_state.victory:
+            return
+        if self.world_state.coins_collected < self.world_state.coins_to_win:
             return
 
         for gate in self.world_state.environment.cooperative_gates.values():

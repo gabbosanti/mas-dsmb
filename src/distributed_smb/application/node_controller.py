@@ -324,6 +324,10 @@ class NodeController(
             sequence_number=self.engine.world_state.sequence_number,
             characters=visual_characters,
             environment=deepcopy(self.engine.world_state.environment),
+            coins_collected=self.engine.world_state.coins_collected,
+            coins_to_win=self.engine.world_state.coins_to_win,
+            victory=self.engine.world_state.victory,
+            victory_player_id=self.engine.world_state.victory_player_id,
         )
 
     def _spawn_position_for(self, join_index: int) -> tuple[int, int]:

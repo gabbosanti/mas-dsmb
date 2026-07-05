@@ -1,3 +1,4 @@
+from distributed_smb.domain.entity import ExclusivePowerUp
 from distributed_smb.domain.game_engine import GameEngine
 from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
 from distributed_smb.shared.input import InputState
@@ -177,7 +178,9 @@ def test_gate_opens_after_all_players_touch_it():
 
     assert gate.state == "open"
     assert any(
-        event.gate_id == "gate-test" and event.new_state == "open" for event in engine.events
+        getattr(event, "gate_id", None) == "gate-test"
+        and getattr(event, "new_state", None) == "open"
+        for event in engine.events
     )
 
 
@@ -188,6 +191,7 @@ def test_reaching_open_gate_triggers_victory():
     player = engine.world_state.get_player("player1")
 
     gate.state = "open"
+    engine.world_state.coins_collected = 5
     player.x = gate.x + 4
     player.y = gate.y + gate.height - player.height
     player.prev_x = player.x
@@ -197,6 +201,43 @@ def test_reaching_open_gate_triggers_victory():
 
     assert engine.world_state.victory is True
     assert engine.world_state.victory_player_id == "player1"
+
+
+def test_collecting_coins_updates_shared_counter():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    player = engine.world_state.get_player("player1")
+    power_up = ExclusivePowerUp(powerup_id="coin-custom", x=player.x + 10, y=player.y - 10)
+    engine.world_state.add_power_up(power_up)
+
+    player.x = power_up.x
+    player.y = power_up.y
+    player.prev_x = player.x
+    player.prev_y = player.y
+
+    engine.handle_powerup_collisions()
+
+    assert power_up.collected is True
+    assert engine.world_state.coins_collected == 1
+
+
+def test_gate_requires_coin_threshold_for_victory():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    gate = engine.world_state.get_gate("gate-test")
+    player = engine.world_state.get_player("player1")
+
+    gate.state = "open"
+    engine.world_state.environment.power_ups = {}
+    engine.world_state.coins_collected = 4
+    player.x = gate.x + 4
+    player.y = gate.y + gate.height - player.height
+    player.prev_x = player.x
+    player.prev_y = player.y
+
+    engine.tick(1 / 60, {"player1": InputState()})
+
+    assert engine.world_state.victory is False
 
 
 def test_head_bump_destroys_destructible_block():
