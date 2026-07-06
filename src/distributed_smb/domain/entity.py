@@ -71,3 +71,15 @@ class CooperativeGate:
 
         self.state = new_state
         return GateStateChangedEvent(gate_id=self.gate_id, new_state=self.state)
+
+
+@dataclass(slots=True)
+class Enemy:
+    enemy_id: str
+    x: float
+    y: float
+    width: int = 34
+    height: int = 30
+    vx: float = 50.0
+    left_bound: float = 0.0
+    right_bound: float = 0.0

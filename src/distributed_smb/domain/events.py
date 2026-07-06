@@ -17,3 +17,9 @@ class PowerUpCollectedEvent:
 class GateStateChangedEvent:
     gate_id: str
     new_state: str
+
+
+@dataclass(slots=True)
+class PlayerDeathEvent:
+    player_id: str
+    enemy_id: str

@@ -70,3 +70,4 @@ class MessageType(StrEnum):
     GATE_STATE_CHANGED_MESSAGE = "gate_state_changed_message"
     PLAYER_LEFT = "player_left"
     PLAYER_DISCONNECTED = "player_disconnected"
+    PLAYER_DEATH_MESSAGE = "player_death_message"

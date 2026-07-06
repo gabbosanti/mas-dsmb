@@ -2,7 +2,12 @@
 
 from dataclasses import asdict, dataclass, field
 
-from distributed_smb.domain.entity import CooperativeGate, DestructibleBlock, ExclusivePowerUp
+from distributed_smb.domain.entity import (
+    CooperativeGate,
+    DestructibleBlock,
+    Enemy,
+    ExclusivePowerUp,
+)
 from distributed_smb.shared.config import PLAYER_HEIGHT, PLAYER_WIDTH
 
 
@@ -28,6 +33,7 @@ class CharacterState:
 class EnvironmentalState:
     destructible_blocks: list[DestructibleBlock] = field(default_factory=list)
     power_ups: dict[str, ExclusivePowerUp] = field(default_factory=dict)
+    enemies: dict[str, Enemy] = field(default_factory=dict)
     cooperative_gates: dict[str, CooperativeGate] = field(default_factory=dict)
 
 
@@ -42,6 +48,7 @@ class WorldState:
     coins_to_win: int = 5
     victory: bool = False
     victory_player_id: str | None = None
+    respawn_timers: dict[str, float] = field(default_factory=dict)
 
     def add_player(self, character: CharacterState):
         self.characters[character.player_id] = character
@@ -80,6 +87,9 @@ class WorldState:
     def get_gate(self, gate_id: str) -> CooperativeGate | None:
         return self.environment.cooperative_gates.get(gate_id)
 
+    def get_enemy(self, enemy_id: str) -> Enemy | None:
+        return self.environment.enemies.get(enemy_id)
+
     def to_dict(self) -> dict:
         """Serialize WorldState in dict for messages."""
         d = asdict(self)
@@ -99,9 +109,11 @@ class WorldState:
             k: CooperativeGate(**{**v, "contributions": set(v["contributions"])})
             for k, v in data["environment"]["cooperative_gates"].items()
         }
+        enemies = {k: Enemy(**v) for k, v in data["environment"].get("enemies", {}).items()}
         environment = EnvironmentalState(
             destructible_blocks=destructible_blocks,
             power_ups=power_ups,
+            enemies=enemies,
             cooperative_gates=cooperative_gates,
         )
         return cls(
@@ -112,4 +124,5 @@ class WorldState:
             coins_to_win=data.get("coins_to_win", 5),
             victory=data.get("victory", False),
             victory_player_id=data.get("victory_player_id"),
+            respawn_timers=data.get("respawn_timers", {}),
         )

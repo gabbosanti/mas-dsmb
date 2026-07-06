@@ -18,6 +18,7 @@ from distributed_smb.shared.messages.election import (
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
     GateStateChangedMessage,
+    PlayerDeathMessage,
     PlayerDisconnected,
     PlayerInputPacket,
     PlayerLeft,
@@ -37,6 +38,7 @@ from distributed_smb.shared.messages.schemas import (
     HostIdentityResponseSchema,
     InitialStateSyncSchema,
     NewHostClaimSchema,
+    PlayerDeathMessageSchema,
     PlayerDisconnectedSchema,
     PlayerInputSchema,
     PlayerLeftSchema,
@@ -77,6 +79,7 @@ WsMessage = Union[
     PowerUpCollectedMessage,
     GateStateChangedMessage,
     PlayerLeft,
+    PlayerDeathMessage,
     PlayerDisconnected,
     NewHostClaim,
     ElectionAck,
@@ -247,6 +250,13 @@ class Serializer:
                 return PowerUpCollectedMessage(
                     powerup_id=validated.powerup_id,
                     player_id=validated.player_id,
+                )
+
+            if message_type == MessageType.PLAYER_DEATH_MESSAGE:
+                validated = PlayerDeathMessageSchema(**data)
+                return PlayerDeathMessage(
+                    player_id=validated.player_id,
+                    enemy_id=validated.enemy_id,
                 )
 
             if message_type == MessageType.GATE_STATE_CHANGED_MESSAGE:

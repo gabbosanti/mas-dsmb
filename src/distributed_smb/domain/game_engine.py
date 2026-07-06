@@ -1,9 +1,11 @@
 """Authoritative game simulation placeholder."""
 
+import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
 from distributed_smb.domain.entity import CooperativeGate, DestructibleBlock, ExclusivePowerUp
+from distributed_smb.domain.events import PlayerDeathEvent
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
 from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
@@ -68,9 +70,9 @@ class GameEngine:
         )
 
         self._add_power_up("coin-10", 50, floor_y - 85, COIN_SIZE)
-        #self._add_power_up("coin-1", 230, floor_y - 85, COIN_SIZE)
-        #self._add_power_up("coin-2", 265, floor_y - 85, COIN_SIZE)
-        #self._add_power_up("coin-3", 300, floor_y - 85, COIN_SIZE)
+        # self._add_power_up("coin-1", 230, floor_y - 85, COIN_SIZE)
+        # self._add_power_up("coin-2", 265, floor_y - 85, COIN_SIZE)
+        # self._add_power_up("coin-3", 300, floor_y - 85, COIN_SIZE)
         self._add_power_up("mushroom-1", 350, floor_y - 85, POWERUP_SIZE)
         self._add_power_up("coin-4", 450, floor_y - 135, COIN_SIZE)
         self._add_power_up("coin-5", 490, floor_y - 135, COIN_SIZE)
@@ -78,7 +80,7 @@ class GameEngine:
         self._add_power_up("coin-6", 645, floor_y - 185, COIN_SIZE)
         self._add_power_up("coin-7", 688, floor_y - 185, COIN_SIZE)
         self._add_power_up("star-1", 670, floor_y - 250, POWERUP_SIZE)
-        #self._add_power_up("coin-8", 725, floor_y - 250, COIN_SIZE)
+        # self._add_power_up("coin-8", 725, floor_y - 250, COIN_SIZE)
         self._add_power_up("coin-9", 770, floor_y - 250, COIN_SIZE)
         self._add_power_up("mushroom-2", 835, floor_y - 330, POWERUP_SIZE)
         self._add_power_up("flower-2", 420, floor_y - 285, POWERUP_SIZE)
@@ -141,8 +143,11 @@ class GameEngine:
 
         self.handle_collisions()
         self.handle_environment_collisions()
+        self._update_enemies(dt)
+        self._handle_enemy_collisions()
         self._sync_coin_counter_from_environment()
         self.handle_victory_condition()
+        self._process_respawns()
         self.world_state.sequence_number += 1
 
     def handle_collisions(self) -> None:
@@ -253,6 +258,39 @@ class GameEngine:
             and current_top <= block_bottom
             and player.y + player.height > block.y
         )
+
+    def _update_enemies(self, dt: float) -> None:
+        for enemy in self.world_state.environment.enemies.values():
+            enemy.x += enemy.vx * dt
+            if enemy.x < enemy.left_bound:
+                enemy.x = enemy.left_bound
+                enemy.vx = -enemy.vx
+            elif enemy.x + enemy.width > enemy.right_bound:
+                enemy.x = enemy.right_bound - enemy.width
+                enemy.vx = -enemy.vx
+
+    def _handle_enemy_collisions(self) -> None:
+        if not self.is_authoritative:
+            return
+        now = time.time()
+        for enemy in list(self.world_state.environment.enemies.values()):
+            for player in list(self.world_state.characters.values()):
+                if check_collision(player, enemy):
+                    event = PlayerDeathEvent(player_id=player.player_id, enemy_id=enemy.enemy_id)
+                    self.events.append(event)
+                    # remove player and set respawn timer
+                    if player.player_id in self.world_state.characters:
+                        del self.world_state.characters[player.player_id]
+                    self.world_state.respawn_timers[player.player_id] = now + 10.0
+
+    def _process_respawns(self) -> None:
+        if not self.is_authoritative:
+            return
+        now = time.time()
+        for pid, due in list(self.world_state.respawn_timers.items()):
+            if now >= due:
+                self.spawn_player(pid, x=100, y=100)
+                del self.world_state.respawn_timers[pid]
 
 
 @dataclass

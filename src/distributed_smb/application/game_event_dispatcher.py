@@ -15,6 +15,7 @@ from distributed_smb.shared.messages.election import (
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
     GateStateChangedMessage,
+    PlayerDeathMessage,
     PlayerLeft,
     PowerUpCollectedMessage,
 )
@@ -92,6 +93,14 @@ class GameEventMixin:
             elif isinstance(msg, PlayerLeft):
                 LOGGER.info("Player left (received): %s", msg.player_id)
                 self._evict_player(msg.player_id)
+            elif isinstance(msg, PlayerDeathMessage):
+                LOGGER.info("Player died (received): %s by enemy %s", msg.player_id, msg.enemy_id)
+                # remove player locally and set client's respawn timer
+                try:
+                    self.engine.world_state.remove_player(msg.player_id)
+                    self.engine.world_state.respawn_timers[msg.player_id] = time.time() + 10.0
+                except Exception:
+                    pass
             elif isinstance(msg, NewHostClaim):
                 LOGGER.info(
                     "election: NewHostClaim from %s (join_index=%d)",

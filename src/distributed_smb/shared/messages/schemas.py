@@ -125,6 +125,12 @@ class PlayerDisconnectedSchema(BaseModel):
     message_type: str = Field(default="player_disconnected")
 
 
+class PlayerDeathMessageSchema(BaseModel):
+    player_id: str = Field(..., min_length=1)
+    enemy_id: str = Field(..., min_length=1)
+    message_type: str = Field(default="player_death_message")
+
+
 class NewHostClaimSchema(BaseModel):
     claimer_ip: str = Field(..., min_length=1)
     claimer_join_index: int = Field(..., ge=0)
