@@ -218,9 +218,7 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                         is_host=True,
                     )
                 )
-                lobby_manager.register_active_session(
-                    session_id, host_roster, msg.next_join_index
-                )
+                lobby_manager.register_active_session(session_id, host_roster, msg.next_join_index)
                 lobby_manager.add_connection(session_id, ws)
                 LOGGER.info("lobby: session %s registered, sending SessionCreated ack", session_id)
                 ack = SessionCreated(session_id=session_id, join_index=0)

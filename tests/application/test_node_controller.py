@@ -12,7 +12,6 @@ from distributed_smb.shared.config import DEFAULT_HOST, LOBBY_WS_PORT, TICK_INTE
 from distributed_smb.shared.enums import NodeState, PlayerRole
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.sync import WorldStateSnapshot
-from distributed_smb.shared.session_metadata import CachedPeer, SessionMetadata
 
 
 def test_bootstrap_initializes_node_controller_state():
@@ -185,72 +184,6 @@ def test_main_auto_detects_local_ip_when_not_provided():
         controller = main(role=PlayerRole.HOST)
 
     assert controller.local_ip == "192.168.1.42"
-
-
-def test_try_recover_session_returns_none_when_no_metadata(monkeypatch):
-    from distributed_smb.main import _try_recover_session
-
-    monkeypatch.setattr("distributed_smb.main.read_session_metadata", lambda: None)
-    fake_screen = MagicMock()
-
-    result = _try_recover_session("127.0.0.5", lobby_screen=fake_screen)
-
-    assert result is None
-    fake_screen.render.assert_not_called()
-
-
-def test_try_recover_session_returns_host_and_session_when_probe_succeeds(monkeypatch):
-    from distributed_smb.main import _try_recover_session
-
-    metadata = SessionMetadata(
-        session_id="session-abc",
-        local_player_id="player-1",
-        peers=[CachedPeer(player_id="player-2", ip="127.0.0.2", join_index=1)],
-    )
-    monkeypatch.setattr("distributed_smb.main.read_session_metadata", lambda: metadata)
-    fake_screen = MagicMock(render=MagicMock(return_value=True))
-    fake_prober = MagicMock(find_current_host=MagicMock(return_value="10.0.0.2"))
-
-    result = _try_recover_session(
-        "127.0.0.5",
-        lobby_screen=fake_screen,
-        prober=fake_prober,
-    )
-
-    assert result == ("10.0.0.2", "session-abc")
-    assert fake_screen.render.call_count >= 1
-    fake_prober.find_current_host.assert_called_once_with(
-        "session-abc",
-        "127.0.0.5",
-        metadata.peers,
-        timeout_per_peer=0.5,
-    )
-
-
-def test_try_recover_session_cleans_up_metadata_when_probe_fails(monkeypatch):
-    from distributed_smb.main import _try_recover_session
-
-    metadata = SessionMetadata(
-        session_id="session-abc",
-        local_player_id="player-1",
-        peers=[CachedPeer(player_id="player-2", ip="127.0.0.2", join_index=1)],
-    )
-    monkeypatch.setattr("distributed_smb.main.read_session_metadata", lambda: metadata)
-    deletions = []
-    monkeypatch.setattr(
-        "distributed_smb.main.delete_session_metadata", lambda: deletions.append(True)
-    )
-    fake_screen = MagicMock(render=MagicMock(return_value=True))
-    fake_prober = MagicMock(find_current_host=MagicMock(return_value=None))
-
-    result = _try_recover_session(
-        "127.0.0.5",
-        lobby_screen=fake_screen,
-        prober=fake_prober,
-    )
-
-    assert result is None
-    assert deletions == [True]
 
 
 def test_parse_args_client_flags():

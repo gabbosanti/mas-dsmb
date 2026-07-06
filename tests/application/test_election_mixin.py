@@ -3,6 +3,8 @@
 import json
 import time
 
+import pytest
+
 from distributed_smb.application.election import ElectionCoordinator, EnvironmentalStateBuffer
 from distributed_smb.application.node_controller import NodeController
 from distributed_smb.domain.world import CharacterState
@@ -16,11 +18,39 @@ from distributed_smb.shared.config import (
 from distributed_smb.shared.enums import MessageType, PlayerRole
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.election import ElectionAck, NewHostClaim
+from distributed_smb.shared.messages.session import SessionCreated, SessionRecreate
 from distributed_smb.shared.roster import GlobalRoster, RosterEntry
 
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
+
+
+class FakeWsHandler:
+    """WsHandler stub — connect/send/poll/close are no-ops; auto-acks SessionRecreate."""
+
+    def __init__(self):
+        self.sent: list = []
+        self._queue: list = []
+
+    def connect(self, timeout: float = 10.0) -> None:
+        pass
+
+    def send(self, message) -> None:
+        self.sent.append(message)
+        if isinstance(message, SessionRecreate):
+            self._queue.append(SessionCreated(session_id=message.session_id, join_index=0))
+
+    def poll(self):
+        return self._queue.pop(0) if self._queue else None
+
+    def close(self) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _no_election_sleep(monkeypatch):
+    monkeypatch.setattr("distributed_smb.application.election_mixin.time.sleep", lambda s: None)
 
 
 class SpyBroker:
@@ -90,6 +120,11 @@ def _make_controller(
         timeout_delta_s=T_ELECTION_DELTA_S,
     )
     nc.env_state_buffer = EnvironmentalStateBuffer()
+    # Patch out network-touching paths so unit tests never block on real I/O.
+    fake_ws = FakeWsHandler()
+    nc.ws_handler = fake_ws
+    nc._make_lobby_ws_client = lambda host, port: setattr(nc, "ws_handler", FakeWsHandler())
+    nc._reconnect_game_event_handler = lambda *a, **kw: None
     return nc, broker
 
 
@@ -364,7 +399,6 @@ class TestPromoteToHost:
 
     def test_promote_to_host_launches_lobby_and_sends_session_recreate(self):
         """After promotion, lobby is started and SESSION_RECREATE is sent via ws_handler (M9)."""
-        from distributed_smb.shared.messages.session import SessionCreated, SessionRecreate
 
         class SpyLobbyService:
             def __init__(self):
@@ -373,33 +407,25 @@ class TestPromoteToHost:
             def launch(self, host="0.0.0.0", port=0):
                 self.launched = True
 
-        class FakeWsHandler:
-            def __init__(self):
-                self.sent: list = []
-                self._connected = False
-
-            def connect(self, timeout=10.0):
-                self._connected = True
-
-            def send(self, message):
-                self.sent.append(message)
-
-            def poll(self):
-                # Return SessionCreated ack after any send, so the handshake completes.
-                if self.sent:
-                    return SessionCreated(session_id="test-session", join_index=0)
-                return None
-
         nc, _ = _make_controller()
         spy_lobby = SpyLobbyService()
         nc.lobby_service = spy_lobby
 
-        fake_ws = FakeWsHandler()
-        nc._make_lobby_ws_client = lambda host, port: setattr(nc, "ws_handler", fake_ws)
+        # Capture the FakeWsHandler that _make_lobby_ws_client will assign.
+        captured: list = []
+
+        def capturing_make(host, port):
+            fw = FakeWsHandler()
+            nc.ws_handler = fw
+            captured.append(fw)
+
+        nc._make_lobby_ws_client = capturing_make
 
         nc._promote_to_host()
 
         assert spy_lobby.launched
+        assert captured, "FakeWsHandler was never assigned"
+        fake_ws = captured[0]
         assert len(fake_ws.sent) == 1
         msg = fake_ws.sent[0]
         assert isinstance(msg, SessionRecreate)

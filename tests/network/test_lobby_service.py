@@ -246,6 +246,9 @@ def test_session_recreate_registers_session_and_sends_created_ack():
                     "message_type": "session_recreate",
                     "session_id": "restored-session-abc",
                     "next_join_index": 2,
+                    "host_ip": "192.168.1.10",
+                    "host_udp_port": 50010,
+                    "host_join_index": 1,
                 }
             )
         )
@@ -254,3 +257,8 @@ def test_session_recreate_registers_session_and_sends_created_ack():
         assert ack["message_type"] == MessageType.SESSION_CREATED
         assert ack["session_id"] == "restored-session-abc"
         assert lobby_manager.is_active("restored-session-abc")
+        roster = lobby_manager.get_roster("restored-session-abc")
+        host_entry = next((e for e in roster.get_all_players() if e.is_host), None)
+        assert host_entry is not None
+        assert host_entry.host == "192.168.1.10"
+        assert host_entry.join_index == 1
