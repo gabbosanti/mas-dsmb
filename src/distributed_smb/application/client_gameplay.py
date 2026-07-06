@@ -14,6 +14,7 @@ from distributed_smb.application.election import (
 from distributed_smb.shared.config import (
     GAME_EVENT_WS_PATH,
     HOST_TIMEOUT_S,
+    PREDICTION_LEAD_CALIBRATION_FRAMES,
     PREDICTION_LEAD_DRIFT_TOLERANCE,
     PREDICTION_LEAD_EWMA_ALPHA,
     RECONCILE_GLIDE_RATE,
@@ -165,6 +166,14 @@ class ClientGameplayMixin:
         self._election_claim_deadline = 0.0
         self.election_coordinator = None  # lazily re-created in _ensure_election_components
         self.timeout_watcher = HostTimeoutWatcher(timeout_s=HOST_TIMEOUT_S)
+
+        # Reset prediction-lead calibration for the new host. The baseline was frozen
+        # against the old host's RTT; the new host may be on a different machine with
+        # a different round-trip time, which would produce a permanent deviation and
+        # cause sustained reconciliation corrections and visible jitter.
+        self.prediction_lead_baseline = 0.0
+        self.prediction_lead_calibration_remaining = PREDICTION_LEAD_CALIBRATION_FRAMES
+        self.visual_correction_offset = (0.0, 0.0)
 
     def _on_self_elected(self, event: SelfElected) -> None:
         pass
