@@ -24,7 +24,7 @@ from distributed_smb.shared.config import (
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.election import ElectionAck, ElectionNack, ReconnectionAck
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
-from distributed_smb.shared.messages.sync import WorldStateSnapshot
+from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ class ClientGameplayMixin:
         """Run one client frame: send input, predict, tick, reconcile, drain events."""
         self._ensure_election_components()
         self._record_client_frame_interval()
+        self._drain_lobby_messages()
         self._send_input_packet(local_input)
         self._run_predicted_ticks(dt, local_input)
         pre_reconcile_player = self.engine.world_state.get_player(self.local_player_id)
@@ -167,6 +168,20 @@ class ClientGameplayMixin:
 
     def _on_self_elected(self, event: SelfElected) -> None:
         pass
+
+    def _drain_lobby_messages(self) -> None:
+        """Drain lobby WS messages during gameplay — handles InitialStateSync on rejoin."""
+        while True:
+            msg = self.ws_handler.poll()
+            if msg is None:
+                break
+            if isinstance(msg, InitialStateSync):
+                self.engine.world_state = msg.world_state
+                self.last_snapshot_sequence = self.engine.world_state.sequence_number
+                LOGGER.info(
+                    "rejoin: applied InitialStateSync (seq=%d)",
+                    self.engine.world_state.sequence_number,
+                )
 
     # ------------------------------------------------------------------
     # Prediction and reconciliation
