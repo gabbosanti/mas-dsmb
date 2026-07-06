@@ -207,13 +207,28 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                     session_id,
                     msg.next_join_index,
                 )
+                host_roster = GlobalRoster()
+                host_roster.add_player(
+                    RosterEntry(
+                        player_id=player_id_for(msg.host_join_index),
+                        host=msg.host_ip,
+                        udp_port=msg.host_udp_port,
+                        join_index=msg.host_join_index,
+                        status=ConnectionStatus.CONNECTED,
+                        is_host=True,
+                    )
+                )
                 lobby_manager.register_active_session(
-                    session_id, GlobalRoster(), msg.next_join_index
+                    session_id, host_roster, msg.next_join_index
                 )
                 lobby_manager.add_connection(session_id, ws)
                 LOGGER.info("lobby: session %s registered, sending SessionCreated ack", session_id)
                 ack = SessionCreated(session_id=session_id, join_index=0)
                 await ws.send_text(json.dumps(_serializer.encode_ws_message(ack)))
+
+            elif message_type == MessageType.INITIAL_STATE_SYNC:
+                if session_id:
+                    await lobby_manager.broadcast(session_id, data)
 
             elif message_type == MessageType.GAME_START:
                 msg: GameStart = _serializer.decode_ws_message(data)
