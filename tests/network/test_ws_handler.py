@@ -14,7 +14,7 @@ from distributed_smb.shared.messages.session import (
     SessionJoined,
 )
 
-TEST_PORT = 59100
+TEST_PORT = 60000
 
 
 def _poll_until(handler: WsHandler, timeout: float = 2.0):

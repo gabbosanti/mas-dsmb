@@ -1,6 +1,9 @@
 # domain/level.py
+from dataclasses import dataclass, field
 from pathlib import Path
+
 import pytmx
+
 from distributed_smb.domain.entity import (
     CooperativeGate,
     DestructibleBlock,
@@ -9,7 +12,7 @@ from distributed_smb.domain.entity import (
     Platform,
 )
 from distributed_smb.shared.config import ENEMY_HEIGHT, ENEMY_WIDTH
-from dataclasses import dataclass, field
+
 
 @dataclass(slots=True)
 class SpawnPoint:
@@ -27,8 +30,8 @@ class Level:
     spawn_points: list = field(default_factory=list)
     coins_to_win: int = 5
 
-class TiledLevel:
 
+class TiledLevel:
     def __init__(self, filename: str):
         self.filename = filename
 
@@ -41,7 +44,6 @@ class TiledLevel:
         level = Level()
 
         for obj in tmx.objects:
-
             if obj.type == "Platforms":
                 level.platforms.append(
                     Platform(

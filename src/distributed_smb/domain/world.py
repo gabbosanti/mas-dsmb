@@ -1,13 +1,14 @@
 """World state definitions."""
 
 from dataclasses import asdict, dataclass, field
-from distributed_smb.domain.level import Level
+
 from distributed_smb.domain.entity import (
     CooperativeGate,
     DestructibleBlock,
     Enemy,
     ExclusivePowerUp,
 )
+from distributed_smb.domain.level import Level
 from distributed_smb.shared.config import PLAYER_HEIGHT, PLAYER_WIDTH
 
 
@@ -53,20 +54,11 @@ class WorldState:
     def load_level(self, level: Level) -> None:
         self.environment.destructible_blocks = list(level.blocks)
 
-        self.environment.power_ups = {
-            powerup.powerup_id: powerup
-            for powerup in level.powerups
-        }
+        self.environment.power_ups = {powerup.powerup_id: powerup for powerup in level.powerups}
 
-        self.environment.enemies = {
-            enemy.enemy_id: enemy
-            for enemy in level.enemies
-        }
+        self.environment.enemies = {enemy.enemy_id: enemy for enemy in level.enemies}
 
-        self.environment.cooperative_gates = {
-            gate.gate_id: gate
-            for gate in level.gates
-        }
+        self.environment.cooperative_gates = {gate.gate_id: gate for gate in level.gates}
 
         self.coins_collected = 0
         self.coins_to_win = level.coins_to_win

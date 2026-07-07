@@ -8,12 +8,14 @@ from distributed_smb.domain.events import (
 )
 from src.distributed_smb.shared.config import ENEMY_HEIGHT, ENEMY_WIDTH
 
+
 @dataclass(slots=True)
 class Platform:
     x: int
     y: int
     width: int
     height: int
+
 
 @dataclass(slots=True)
 class DestructibleBlock:

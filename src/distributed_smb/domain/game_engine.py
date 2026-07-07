@@ -4,12 +4,14 @@ import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
-from distributed_smb.domain.entity import CooperativeGate, DestructibleBlock, Enemy, ExclusivePowerUp
+from distributed_smb.domain.entity import (
+    DestructibleBlock,
+)
 from distributed_smb.domain.events import PlayerDeathEvent
+from distributed_smb.domain.level import TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
 from distributed_smb.shared.input import InputState
-from distributed_smb.domain.level import Level, TiledLevel
 
 BLOCK_SIZE = 36
 POWERUP_SIZE = 34
@@ -214,4 +216,3 @@ class GameEngine:
             if now >= due:
                 self.spawn_player(pid, x=100, y=100)
                 del self.world_state.respawn_timers[pid]
-
