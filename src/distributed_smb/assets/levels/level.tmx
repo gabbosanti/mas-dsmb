@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="60" height="30" tilewidth="32" tileheight="32" infinite="0" nextlayerid="10" nextobjectid="72">
+ <properties>
+  <property name="blocks_to_win" type="int" value="3"/>
+  <property name="coins_to_win" type="int" value="6"/>
+  <property name="enemies_to_win" type="int" value="2"/>
+ </properties>
+ <layer id="1" name="Livello tile 1" width="60" height="30">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <objectgroup id="7" name="Enemies" visible="0">
+  <object id="68" name="enemy-1" type="Enemies" x="576" y="192" width="64" height="96">
+   <properties>
+    <property name="left_bound" type="int" value="0"/>
+    <property name="right_bound" type="int" value="640"/>
+    <property name="vx" type="float" value="80"/>
+   </properties>
+  </object>
+  <object id="69" name="enemy-2" type="Enemies" x="1664" y="704" width="64" height="96">
+   <properties>
+    <property name="left_bound" type="int" value="1536"/>
+    <property name="right_bound" type="int" value="1728"/>
+    <property name="vx" type="float" value="50"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="8" name="Gates" visible="0">
+  <object id="60" name="gate-1" type="Gates" x="1696" y="0" width="192" height="160"/>
+ </objectgroup>
+ <objectgroup id="9" name="SpawnPoints" visible="0">
+  <object id="44" name="spawnpoint-3" type="SpawnPoints" x="576" y="800" width="64" height="96"/>
+  <object id="46" name="spawnpoint-2" type="SpawnPoints" x="288" y="800" width="64" height="96"/>
+  <object id="47" name="spawnpoint-1" type="SpawnPoints" x="128" y="800" width="64" height="96"/>
+  <object id="48" name="spawnpoint-4" type="SpawnPoints" x="704" y="800" width="64" height="96"/>
+ </objectgroup>
+ <objectgroup id="2" name="Platforms" class="Platforms">
+  <object id="3" name="platform-1" type="Platforms" x="0" y="928" width="64" height="32"/>
+  <object id="4" name="platform-2" type="Platforms" x="128" y="928" width="288" height="32"/>
+  <object id="5" name="platform-3" type="Platforms" x="512" y="928" width="288" height="32"/>
+  <object id="6" name="platform-4" type="Platforms" x="896" y="928" width="64" height="32"/>
+  <object id="7" name="platform-5" type="Platforms" x="1024" y="928" width="288" height="32"/>
+  <object id="8" name="platform-9" type="Platforms" x="1152" y="800" width="160" height="32"/>
+  <object id="9" name="platform-6" type="Platforms" x="1056" y="896" width="256" height="32"/>
+  <object id="10" name="platform-7" type="Platforms" x="1088" y="864" width="224" height="32"/>
+  <object id="11" name="platform-8" type="Platforms" x="1120" y="832" width="192" height="32"/>
+  <object id="12" name="platform-10" type="Platforms" x="1184" y="768" width="128" height="32"/>
+  <object id="13" name="platform-11" type="Platforms" x="1216" y="736" width="96" height="32"/>
+  <object id="14" name="platform-12" type="Platforms" x="1248" y="704" width="64" height="32"/>
+  <object id="15" name="platform-13" type="Platforms" x="1536" y="800" width="192" height="32"/>
+  <object id="16" name="platform-14" type="Platforms" x="1376" y="928" width="192" height="32"/>
+  <object id="17" name="platform-15" type="Platforms" x="1728" y="928" width="160" height="32"/>
+  <object id="18" name="platform-16" type="Platforms" x="416" y="832" width="128" height="32"/>
+  <object id="19" name="platform-17" type="Platforms" x="640" y="704" width="256" height="32"/>
+  <object id="20" name="platform-18" type="Platforms" x="416" y="608" width="128" height="32"/>
+  <object id="21" name="platform-19" type="Platforms" x="192" y="512" width="192" height="32"/>
+  <object id="22" name="platform-20" type="Platforms" x="0" y="480" width="96" height="32"/>
+  <object id="23" name="platform-21" type="Platforms" x="64" y="192" width="160" height="32"/>
+  <object id="24" name="platform-22" type="Platforms" x="544" y="480" width="288" height="32"/>
+  <object id="25" name="platform-24" type="Platforms" x="1216" y="352" width="192" height="32"/>
+  <object id="26" name="platform-23" type="Platforms" x="768" y="352" width="96" height="32"/>
+  <object id="27" name="platform-25" type="Platforms" x="1760" y="704" width="160" height="32"/>
+  <object id="28" name="platform-27" type="Platforms" x="1504" y="608" width="192" height="32"/>
+  <object id="29" name="platform-28" type="Platforms" x="1728" y="384" width="192" height="32"/>
+  <object id="30" name="platform-26" type="Platforms" x="1280" y="512" width="160" height="32"/>
+  <object id="31" name="platform-29" type="Platforms" x="992" y="288" width="160" height="32"/>
+  <object id="32" name="platform-30" type="Platforms" x="1280" y="224" width="160" height="32"/>
+  <object id="33" name="platform-31" type="Platforms" x="352" y="192" width="160" height="32"/>
+  <object id="34" name="platform-32" type="Platforms" x="0" y="320" width="640" height="32"/>
+  <object id="36" name="platform-33" type="Platforms" x="768" y="192" width="160" height="29.5385"/>
+  <object id="37" name="platform-35" type="Platforms" x="1504" y="160" width="416" height="32"/>
+  <object id="38" name="platform-34" type="Platforms" x="1024" y="96" width="160" height="32"/>
+  <object id="42" name="platform-36" type="Platforms" x="928" y="576" width="160" height="32"/>
+  <object id="43" name="platform-37" type="Platforms" x="1504" y="416" width="160" height="32"/>
+ </objectgroup>
+ <objectgroup id="3" name="Blocks">
+  <object id="61" name="block-1" type="Blocks" x="64" y="64" width="32" height="32"/>
+  <object id="64" name="block-2" type="Blocks" x="192" y="64" width="32" height="32"/>
+  <object id="65" name="block-3" type="Blocks" x="1312" y="96" width="32" height="32"/>
+  <object id="66" name="block-4" type="Blocks" x="32" y="352" width="32" height="32"/>
+  <object id="67" name="block-5" type="Blocks" x="288" y="384" width="32" height="32"/>
+ </objectgroup>
+ <objectgroup id="4" name="PowerUps" class="PowerUps">
+  <object id="39" name="star-1" type="PowerUps" x="1248" y="608" width="32" height="32"/>
+  <object id="41" name="star-2" type="PowerUps" x="576" y="384" width="32" height="32"/>
+  <object id="49" name="coin-1" type="PowerUps" x="0" y="800" width="32" height="32"/>
+  <object id="53" name="coin-2" type="PowerUps" x="1408" y="800" width="32" height="32"/>
+  <object id="54" name="coin-3" type="PowerUps" x="1792" y="800" width="32" height="32"/>
+  <object id="55" name="coin-4" type="PowerUps" x="1760" y="256" width="32" height="32"/>
+  <object id="56" name="coin-5" type="PowerUps" x="1056" y="192" width="32" height="32"/>
+  <object id="57" name="coin-6" type="PowerUps" x="960" y="480" width="32" height="32"/>
+  <object id="58" name="coin-8" type="PowerUps" x="352" y="64" width="32" height="32"/>
+  <object id="59" name="coin-7" type="PowerUps" x="448" y="64" width="32" height="32"/>
+ </objectgroup>
+</map>

@@ -6,7 +6,14 @@ from distributed_smb.domain.events import (
     GateStateChangedEvent,
     PowerUpCollectedEvent,
 )
+from src.distributed_smb.shared.config import ENEMY_HEIGHT, ENEMY_WIDTH
 
+@dataclass(slots=True)
+class Platform:
+    x: int
+    y: int
+    width: int
+    height: int
 
 @dataclass(slots=True)
 class DestructibleBlock:
@@ -78,8 +85,8 @@ class Enemy:
     enemy_id: str
     x: float
     y: float
-    width: int = 34
-    height: int = 30
+    width: int = ENEMY_WIDTH
+    height: int = ENEMY_HEIGHT
     vx: float = 50.0
     left_bound: float = 0.0
     right_bound: float = 0.0

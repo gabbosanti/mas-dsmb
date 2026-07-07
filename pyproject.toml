@@ -12,7 +12,8 @@ dependencies = [
     "fastapi (>=0.136.1,<0.137.0)",
     "uvicorn[standard] (>=0.46.0,<0.47.0)",
     "websockets (>=16.0,<17.0)",
-    "httpx (>=0.28.1,<0.29.0)"
+    "httpx (>=0.28.1,<0.29.0)",
+    "pytmx (>=3.32,<4.0)"
 ]
 
 
@@ -21,7 +22,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-include = ["src/distributed_smb/assets/mario1/*.png"]
+include = ["src/distributed_smb/assets/*/*.png"]
 
 [dependency-groups]
 dev = [

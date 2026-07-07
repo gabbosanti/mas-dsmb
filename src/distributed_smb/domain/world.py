@@ -1,7 +1,7 @@
 """World state definitions."""
 
 from dataclasses import asdict, dataclass, field
-
+from distributed_smb.domain.level import Level
 from distributed_smb.domain.entity import (
     CooperativeGate,
     DestructibleBlock,
@@ -50,6 +50,29 @@ class WorldState:
     victory_player_id: str | None = None
     respawn_timers: dict[str, float] = field(default_factory=dict)
 
+    def load_level(self, level: Level) -> None:
+        self.environment.destructible_blocks = list(level.blocks)
+
+        self.environment.power_ups = {
+            powerup.powerup_id: powerup
+            for powerup in level.powerups
+        }
+
+        self.environment.enemies = {
+            enemy.enemy_id: enemy
+            for enemy in level.enemies
+        }
+
+        self.environment.cooperative_gates = {
+            gate.gate_id: gate
+            for gate in level.gates
+        }
+
+        self.coins_collected = 0
+        self.coins_to_win = level.coins_to_win
+        self.victory = False
+        self.victory_player_id = None
+
     def add_player(self, character: CharacterState):
         self.characters[character.player_id] = character
 
@@ -86,6 +109,9 @@ class WorldState:
 
     def get_gate(self, gate_id: str) -> CooperativeGate | None:
         return self.environment.cooperative_gates.get(gate_id)
+
+    def add_enemy(self, enemy: Enemy) -> None:
+        self.environment.enemies[enemy.enemy_id] = enemy
 
     def get_enemy(self, enemy_id: str) -> Enemy | None:
         return self.environment.enemies.get(enemy_id)

@@ -4,19 +4,18 @@ import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
-from distributed_smb.domain.entity import CooperativeGate, DestructibleBlock, ExclusivePowerUp
+from distributed_smb.domain.entity import CooperativeGate, DestructibleBlock, Enemy, ExclusivePowerUp
 from distributed_smb.domain.events import PlayerDeathEvent
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
-from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
 from distributed_smb.shared.input import InputState
+from distributed_smb.domain.level import Level, TiledLevel
 
 BLOCK_SIZE = 36
 POWERUP_SIZE = 34
 COIN_SIZE = 26
 GATE_WIDTH = 54
 GATE_HEIGHT = 96
-COINS_TO_WIN = 5
 
 
 @dataclass(slots=True)
@@ -29,85 +28,9 @@ class GameEngine:
     is_authoritative: bool = True
 
     def __post_init__(self) -> None:
-        self._build_default_level()
-
-    def _build_default_level(self) -> None:
-        """Create a compact level where all objects are visible and reachable."""
-        floor_y = WINDOW_HEIGHT - 90
-        self.platforms = [
-            Platform(0, floor_y, WINDOW_WIDTH, 60),
-            Platform(210, floor_y - 85, 190, 30),
-            Platform(420, floor_y - 135, 180, 30),
-            Platform(620, floor_y - 185, 155, 30),
-            Platform(735, floor_y - 85, 165, 30),
-            Platform(650, floor_y - 250, 230, 30),
-            Platform(365, floor_y - 285, 150, 30),
-            Platform(795, floor_y - 330, 105, 30),
-        ]
-        self._seed_default_environment()
-
-    def _seed_default_environment(self) -> None:
-        floor_y = WINDOW_HEIGHT - 90
-        env = self.world_state.environment
-        env.destructible_blocks.clear()
-        env.power_ups.clear()
-        env.cooperative_gates.clear()
-
-        self.world_state.add_block(
-            DestructibleBlock(x=225, y=floor_y - 236, width=BLOCK_SIZE, height=BLOCK_SIZE)
-        )
-        self.world_state.add_block(
-            DestructibleBlock(x=265, y=floor_y - 236, width=BLOCK_SIZE, height=BLOCK_SIZE)
-        )
-        self.world_state.add_block(
-            DestructibleBlock(x=430, y=floor_y - 286, width=BLOCK_SIZE, height=BLOCK_SIZE)
-        )
-        self.world_state.add_block(
-            DestructibleBlock(x=570, y=floor_y - 336, width=BLOCK_SIZE, height=BLOCK_SIZE)
-        )
-        self.world_state.add_block(
-            DestructibleBlock(x=745, y=floor_y - 401, width=BLOCK_SIZE, height=BLOCK_SIZE)
-        )
-
-        self._add_power_up("coin-10", 50, floor_y - 85, COIN_SIZE)
-        # self._add_power_up("coin-1", 230, floor_y - 85, COIN_SIZE)
-        # self._add_power_up("coin-2", 265, floor_y - 85, COIN_SIZE)
-        # self._add_power_up("coin-3", 300, floor_y - 85, COIN_SIZE)
-        self._add_power_up("mushroom-1", 350, floor_y - 85, POWERUP_SIZE)
-        self._add_power_up("coin-4", 450, floor_y - 135, COIN_SIZE)
-        self._add_power_up("coin-5", 490, floor_y - 135, COIN_SIZE)
-        self._add_power_up("flower-1", 545, floor_y - 135, POWERUP_SIZE)
-        self._add_power_up("coin-6", 645, floor_y - 185, COIN_SIZE)
-        self._add_power_up("coin-7", 688, floor_y - 185, COIN_SIZE)
-        self._add_power_up("star-1", 670, floor_y - 250, POWERUP_SIZE)
-        # self._add_power_up("coin-8", 725, floor_y - 250, COIN_SIZE)
-        self._add_power_up("coin-9", 770, floor_y - 250, COIN_SIZE)
-        self._add_power_up("mushroom-2", 835, floor_y - 330, POWERUP_SIZE)
-        self._add_power_up("flower-2", 420, floor_y - 285, POWERUP_SIZE)
-
-        self.world_state.coins_collected = 0
-        self.world_state.coins_to_win = COINS_TO_WIN
-
-        self.world_state.add_gate(
-            CooperativeGate(
-                x=720,
-                y=floor_y - 250 - GATE_HEIGHT,
-                width=GATE_WIDTH,
-                height=GATE_HEIGHT,
-                gate_id="gate-test",
-            )
-        )
-
-    def _add_power_up(self, powerup_id: str, x: int, platform_y: int, size: int) -> None:
-        self.world_state.add_power_up(
-            ExclusivePowerUp(
-                x=x,
-                y=platform_y - size,
-                width=size,
-                height=size,
-                powerup_id=powerup_id,
-            )
-        )
+        level = TiledLevel("assets/levels/level.tmx").build()
+        self.platforms = level.platforms
+        self.world_state.load_level(level)
 
     def apply_inputs(self, inputs: dict[str, InputState]) -> None:
         for player_id, input_state in inputs.items():
@@ -292,10 +215,3 @@ class GameEngine:
                 self.spawn_player(pid, x=100, y=100)
                 del self.world_state.respawn_timers[pid]
 
-
-@dataclass
-class Platform:
-    x: int
-    y: int
-    width: int
-    height: int

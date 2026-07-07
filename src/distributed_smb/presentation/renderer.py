@@ -6,7 +6,7 @@ import pygame
 
 from distributed_smb.domain.world import CharacterState, WorldState
 from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
-from distributed_smb.shared.paths import MARIO1_ASSETS_DIR
+from distributed_smb.shared.paths import TILESETS_DIR
 
 MARIO_FRAME_SIZE = 32
 TILE_SIZE = 16
@@ -146,7 +146,7 @@ class Renderer:
         if filename in self._asset_sheets:
             return self._asset_sheets[filename]
 
-        path = MARIO1_ASSETS_DIR / filename
+        path = TILESETS_DIR / filename
         if not path.exists():
             self._asset_sheets[filename] = None
             return None
@@ -326,6 +326,13 @@ class Renderer:
                 pygame.draw.rect(sprite, (91, 55, 30), door)
                 pygame.draw.rect(sprite, (36, 24, 18), door, width=max(1, width // 18))
             return sprite
+        if sprite_kind == "enemy":
+            return self._get_asset_sprite(
+                "Enemies.png",
+                (100, 6, 18, 25),
+                width,
+                height,
+            )
         return None
 
     def _powerup_sprite_state(self, powerup_id: str) -> str:
@@ -427,6 +434,12 @@ class Renderer:
             screen.blit(
                 self._get_environment_sprite("gate", gate.state, gate.width, gate.height),
                 (int(gate.x), int(gate.y)),
+            )
+
+        for enemy in world_state.environment.enemies.values():
+            screen.blit(
+                self._get_environment_sprite("enemy", "default", enemy.width, enemy.height),
+                (int(enemy.x), int(enemy.y)),
             )
 
     def _get_player_sprite(self, character: CharacterState) -> pygame.Surface:
