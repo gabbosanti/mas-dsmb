@@ -210,6 +210,9 @@ class Serializer:
                 return SessionRecreate(
                     session_id=validated.session_id,
                     next_join_index=validated.next_join_index,
+                    host_ip=validated.host_ip,
+                    host_udp_port=validated.host_udp_port,
+                    host_join_index=validated.host_join_index,
                 )
 
             if message_type == MessageType.SESSION_JOINED:

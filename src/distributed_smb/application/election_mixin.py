@@ -176,7 +176,13 @@ class ElectionMixin:
             all_players = self.roster.get_all_players()
             next_ji = (max(e.join_index for e in all_players) + 1) if all_players else 0
             self.ws_handler.send(
-                SessionRecreate(session_id=self.session_id, next_join_index=next_ji)
+                SessionRecreate(
+                    session_id=self.session_id,
+                    next_join_index=next_ji,
+                    host_ip=self.local_ip,
+                    host_udp_port=HOST_UDP_PORT,
+                    host_join_index=self.join_index,
+                )
             )
             got_ack = False
             deadline = time.time() + 2.0

@@ -82,7 +82,10 @@ class WsHandler:
         """Send a coordination message from the game loop thread (thread-safe)."""
         if self._loop is None or self._ws is None:
             raise RuntimeError("WsHandler not connected — call connect() first")
-        payload = json.dumps(_serializer.encode_ws_message(message))
+        payload = json.dumps(
+            _serializer.encode_ws_message(message),
+            default=lambda o: list(o) if isinstance(o, set) else o,
+        )
         future = asyncio.run_coroutine_threadsafe(self._ws.send(payload), self._loop)
         future.result(timeout=5.0)
 

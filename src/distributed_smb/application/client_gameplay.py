@@ -14,6 +14,7 @@ from distributed_smb.application.election import (
 from distributed_smb.shared.config import (
     GAME_EVENT_WS_PATH,
     HOST_TIMEOUT_S,
+    PREDICTION_LEAD_CALIBRATION_FRAMES,
     PREDICTION_LEAD_DRIFT_TOLERANCE,
     PREDICTION_LEAD_EWMA_ALPHA,
     RECONCILE_GLIDE_RATE,
@@ -24,7 +25,7 @@ from distributed_smb.shared.config import (
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.election import ElectionAck, ElectionNack, ReconnectionAck
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
-from distributed_smb.shared.messages.sync import WorldStateSnapshot
+from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class ClientGameplayMixin:
         """Run one client frame: send input, predict, tick, reconcile, drain events."""
         self._ensure_election_components()
         self._record_client_frame_interval()
+        self._drain_lobby_messages()
         self._send_input_packet(local_input)
         self._run_predicted_ticks(dt, local_input)
         pre_reconcile_player = self.engine.world_state.get_player(self.local_player_id)
@@ -165,8 +167,30 @@ class ClientGameplayMixin:
         self.election_coordinator = None  # lazily re-created in _ensure_election_components
         self.timeout_watcher = HostTimeoutWatcher(timeout_s=HOST_TIMEOUT_S)
 
+        # Reset prediction-lead calibration for the new host. The baseline was frozen
+        # against the old host's RTT; the new host may be on a different machine with
+        # a different round-trip time, which would produce a permanent deviation and
+        # cause sustained reconciliation corrections and visible jitter.
+        self.prediction_lead_baseline = 0.0
+        self.prediction_lead_calibration_remaining = PREDICTION_LEAD_CALIBRATION_FRAMES
+        self.visual_correction_offset = (0.0, 0.0)
+
     def _on_self_elected(self, event: SelfElected) -> None:
         pass
+
+    def _drain_lobby_messages(self) -> None:
+        """Drain lobby WS messages during gameplay — handles InitialStateSync on rejoin."""
+        while True:
+            msg = self.ws_handler.poll()
+            if msg is None:
+                break
+            if isinstance(msg, InitialStateSync):
+                self.engine.world_state = msg.world_state
+                self.last_snapshot_sequence = self.engine.world_state.sequence_number
+                LOGGER.info(
+                    "rejoin: applied InitialStateSync (seq=%d)",
+                    self.engine.world_state.sequence_number,
+                )
 
     # ------------------------------------------------------------------
     # Prediction and reconciliation

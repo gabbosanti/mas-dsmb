@@ -42,6 +42,9 @@ class SessionRecreateSchema(BaseModel):
 
     session_id: str = Field(..., min_length=1)
     next_join_index: int = Field(..., ge=0)
+    host_ip: str = Field(..., min_length=1)
+    host_udp_port: int = Field(..., ge=1024, le=65535)
+    host_join_index: int = Field(..., ge=0)
     message_type: str = Field(default="session_recreate")
 
 

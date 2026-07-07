@@ -7,7 +7,7 @@ from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
 from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
 from distributed_smb.shared.messages.session import RosterUpdate
-from distributed_smb.shared.messages.sync import WorldStateSnapshot
+from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 
 LOGGER = logging.getLogger(__name__)
 
@@ -109,6 +109,7 @@ class HostGameplayMixin:
         if not isinstance(msg, RosterUpdate):
             return
         known = {e.join_index for e in self.roster.get_all_players()}
+        new_entries = []
         for entry in msg.roster.get_all_players():
             if entry.join_index not in known:
                 x, y = self._spawn_position_for(entry.join_index)
@@ -120,6 +121,11 @@ class HostGameplayMixin:
                     entry.player_id,
                     entry.join_index,
                 )
+                new_entries.append(entry)
+        if new_entries:
+            sync = InitialStateSync(world_state=self.engine.world_state)
+            self.ws_handler.send(sync)
+            LOGGER.info("rejoin: sent InitialStateSync to %d rejoining player(s)", len(new_entries))
 
     def _process_host_frame(self, dt: float, local_input: InputState) -> object:
         """Run one authoritative host frame: drain inputs, tick, broadcast snapshot."""
