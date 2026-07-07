@@ -88,25 +88,6 @@ class SpyLobbyService:
         self.launched = True
 
 
-class FakeWsHandler:
-    def __init__(self) -> None:
-        self.sent: list[object] = []
-        self.connected = False
-
-    def connect(self, timeout: float = 10.0) -> None:
-        self.connected = True
-
-    def send(self, message: object) -> None:
-        self.sent.append(message)
-
-    def poll(self) -> object | None:
-        if self.sent:
-            from distributed_smb.shared.messages.session import SessionCreated
-
-            return SessionCreated(session_id="test-session", join_index=0)
-        return None
-
-
 def _make_controller(
     local_ip: str = "10.0.0.2",
     local_player_id: str = "player2",
