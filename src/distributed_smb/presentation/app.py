@@ -39,11 +39,14 @@ class GameApp:
                 return True
         return False
 
-    def _clamp_player_to_window(self, player_id: str) -> None:
-        character = self.engine.world_state.get_player(player_id)
+    def _clamp_player_to_world(self, world_state: WorldState, player_id: str) -> None:
+        character = world_state.get_player(player_id)
         if character is None:
             return
-        character.x = max(0, min(character.x, self.width - character.width))
+        max_x = max(0, getattr(self.engine, "world_width", self.width) - character.width)
+        max_y = max(0, getattr(self.engine, "world_height", self.height) - character.height)
+        character.x = max(0, min(character.x, max_x))
+        character.y = max(0, min(character.y, max_y))
 
     def _build_platform_rects(self) -> list[pygame.Rect]:
         return [
@@ -72,12 +75,14 @@ class GameApp:
             running = not self._should_quit()
             local_input = self.input_handler.read_input()
             render_world_state = self.frame_handler(dt, local_input)
-            self._clamp_player_to_window(self.local_player_id)
+            self._clamp_player_to_world(render_world_state, self.local_player_id)
             self._update_window_caption(render_world_state)
             self.renderer.render(
                 screen=self.screen,
                 world_state=render_world_state,
                 platforms=self._build_platform_rects(),
+                focus_player_id=self.local_player_id,
+                world_size=(self.engine.world_width, self.engine.world_height),
             )
         pygame.quit()
 

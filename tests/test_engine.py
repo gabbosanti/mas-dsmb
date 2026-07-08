@@ -250,3 +250,19 @@ def test_jump_from_platform_destroys_reachable_block():
 
     assert block.destroyed is True
 """
+
+
+def test_level_dimensions_match_tiled_map():
+    engine = GameEngine()
+
+    assert engine.world_width == 1920
+    assert engine.world_height == 960
+
+
+def test_spawn_player_clamps_to_world_bounds():
+    engine = GameEngine()
+    engine.spawn_player("player1", x=9999, y=-50)
+    player = engine.world_state.get_player("player1")
+
+    assert player.x == engine.world_width - player.width
+    assert player.y == 0

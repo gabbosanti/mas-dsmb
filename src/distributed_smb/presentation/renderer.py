@@ -184,16 +184,86 @@ class Renderer:
         self._asset_sprite_cache[cache_key] = scaled
         return scaled
 
-    def _render_platforms(self, screen: pygame.Surface, platforms: list[pygame.Rect]) -> None:
+    def _world_bounds(
+        self,
+        world_state: WorldState,
+        platforms: list[pygame.Rect],
+        world_size: tuple[int, int] | None,
+    ) -> tuple[int, int]:
+        if world_size is not None:
+            return max(self.width, world_size[0]), max(self.height, world_size[1])
+
+        max_right = self.width
+        max_bottom = self.height
+
+        for platform in platforms:
+            max_right = max(max_right, platform.right)
+            max_bottom = max(max_bottom, platform.bottom)
+
+        for character in world_state.characters.values():
+            max_right = max(max_right, int(character.x + character.width))
+            max_bottom = max(max_bottom, int(character.y + character.height))
+
+        for block in world_state.environment.destructible_blocks:
+            max_right = max(max_right, int(block.x + block.width))
+            max_bottom = max(max_bottom, int(block.y + block.height))
+
+        for power_up in world_state.environment.power_ups.values():
+            max_right = max(max_right, int(power_up.x + power_up.width))
+            max_bottom = max(max_bottom, int(power_up.y + power_up.height))
+
+        for gate in world_state.environment.cooperative_gates.values():
+            max_right = max(max_right, int(gate.x + gate.width))
+            max_bottom = max(max_bottom, int(gate.y + gate.height))
+
+        for enemy in world_state.environment.enemies.values():
+            max_right = max(max_right, int(enemy.x + enemy.width))
+            max_bottom = max(max_bottom, int(enemy.y + enemy.height))
+
+        return max_right, max_bottom
+
+    def _camera_offset(
+        self,
+        world_state: WorldState,
+        platforms: list[pygame.Rect],
+        focus_player_id: str | None,
+        world_size: tuple[int, int] | None,
+    ) -> tuple[int, int]:
+        if focus_player_id is None:
+            return 0, 0
+
+        focus = world_state.get_player(focus_player_id)
+        if focus is None:
+            return 0, 0
+
+        world_width, world_height = self._world_bounds(world_state, platforms, world_size)
+        target_x = focus.x + focus.width / 2 - self.width / 2
+        target_y = focus.y + focus.height / 2 - self.height / 2
+        max_x = max(0, world_width - self.width)
+        max_y = max(0, world_height - self.height)
+        return round(max(0, min(target_x, max_x))), round(max(0, min(target_y, max_y)))
+
+    @staticmethod
+    def _to_screen_position(x: float, y: float, camera_offset: tuple[int, int]) -> tuple[int, int]:
+        camera_x, camera_y = camera_offset
+        return round(x) - camera_x, round(y) - camera_y
+
+    def _render_platforms(
+        self,
+        screen: pygame.Surface,
+        platforms: list[pygame.Rect],
+        camera_offset: tuple[int, int],
+    ) -> None:
         tile = self._get_asset_sprite(
             "OverWorld.png",
             (TILE_SIZE, 0, TILE_SIZE, TILE_SIZE),
             DISPLAY_TILE_SIZE,
             DISPLAY_TILE_SIZE,
         )
+        camera_x, camera_y = camera_offset
         if tile is None:
             for platform in platforms:
-                pygame.draw.rect(screen, self.platform_color, platform)
+                pygame.draw.rect(screen, self.platform_color, platform.move(-camera_x, -camera_y))
             return
 
         for platform in platforms:
@@ -201,10 +271,11 @@ class Renderer:
                 for x in range(platform.left, platform.right, DISPLAY_TILE_SIZE):
                     width = min(DISPLAY_TILE_SIZE, platform.right - x)
                     height = min(DISPLAY_TILE_SIZE, platform.bottom - y)
+                    target = (x - camera_x, y - camera_y)
                     if width == DISPLAY_TILE_SIZE and height == DISPLAY_TILE_SIZE:
-                        screen.blit(tile, (x, y))
+                        screen.blit(tile, target)
                     else:
-                        screen.blit(pygame.transform.scale(tile, (width, height)), (x, y))
+                        screen.blit(pygame.transform.scale(tile, (width, height)), target)
 
     def _draw_block_surface(self, surface: pygame.Surface) -> None:
         width, height = surface.get_size()
@@ -358,6 +429,7 @@ class Renderer:
         screen: pygame.Surface,
         world_state: WorldState,
         now_ms: int,
+        camera_offset: tuple[int, int],
     ) -> None:
         for powerup_id, started_at in list(self._powerup_collection_effects.items()):
             power_up = world_state.environment.power_ups.get(powerup_id)
@@ -391,16 +463,21 @@ class Renderer:
             )
             ring_x = round(power_up.x + power_up.width / 2 - ring.get_width() / 2)
             ring_y = round(power_up.y + power_up.height / 2 - ring.get_height() / 2)
-            screen.blit(ring, (ring_x, ring_y))
-            screen.blit(sprite, (x, y))
+            screen.blit(ring, self._to_screen_position(ring_x, ring_y, camera_offset))
+            screen.blit(sprite, self._to_screen_position(x, y, camera_offset))
 
-    def _render_environment(self, screen: pygame.Surface, world_state: WorldState) -> None:
+    def _render_environment(
+        self,
+        screen: pygame.Surface,
+        world_state: WorldState,
+        camera_offset: tuple[int, int],
+    ) -> None:
         for block in world_state.environment.destructible_blocks:
             if block.destroyed:
                 continue
             screen.blit(
                 self._get_environment_sprite("block", "intact", block.width, block.height),
-                (int(block.x), int(block.y)),
+                self._to_screen_position(block.x, block.y, camera_offset),
             )
 
         now_ms = pygame.time.get_ticks()
@@ -423,23 +500,23 @@ class Renderer:
                     power_up.width,
                     power_up.height,
                 ),
-                (int(power_up.x), int(power_up.y)),
+                self._to_screen_position(power_up.x, power_up.y, camera_offset),
             )
         for powerup_id in set(self._powerup_collected_state) - seen_powerups:
             del self._powerup_collected_state[powerup_id]
             self._powerup_collection_effects.pop(powerup_id, None)
-        self._render_powerup_collection_effects(screen, world_state, now_ms)
+        self._render_powerup_collection_effects(screen, world_state, now_ms, camera_offset)
 
         for gate in world_state.environment.cooperative_gates.values():
             screen.blit(
                 self._get_environment_sprite("gate", gate.state, gate.width, gate.height),
-                (int(gate.x), int(gate.y)),
+                self._to_screen_position(gate.x, gate.y, camera_offset),
             )
 
         for enemy in world_state.environment.enemies.values():
             screen.blit(
                 self._get_environment_sprite("enemy", "default", enemy.width, enemy.height),
-                (int(enemy.x), int(enemy.y)),
+                self._to_screen_position(enemy.x, enemy.y, camera_offset),
             )
 
     def _get_player_sprite(self, character: CharacterState) -> pygame.Surface:
@@ -537,23 +614,28 @@ class Renderer:
         screen: pygame.Surface,
         world_state: WorldState,
         platforms: list[pygame.Rect],
+        focus_player_id: str | None = None,
+        world_size: tuple[int, int] | None = None,
     ) -> None:
         """Render one frame of the game world."""
         screen.fill(self.background_color)
+        camera_offset = self._camera_offset(
+            world_state,
+            platforms,
+            focus_player_id=focus_player_id,
+            world_size=world_size,
+        )
 
-        self._render_platforms(screen, platforms)
-        self._render_coin_counter(screen, world_state)
-
-        self._render_environment(screen, world_state)
+        self._render_platforms(screen, platforms, camera_offset)
+        self._render_environment(screen, world_state, camera_offset)
 
         for character in sorted(world_state.characters.values(), key=lambda c: (c.y, c.player_id)):
-            player_rect = pygame.Rect(
-                int(character.x),
-                int(character.y),
-                int(character.width),
-                int(character.height),
+            screen.blit(
+                self._get_player_sprite(character),
+                self._to_screen_position(character.x, character.y, camera_offset),
             )
-            screen.blit(self._get_player_sprite(character), player_rect.topleft)
+
+        self._render_coin_counter(screen, world_state)
 
         if world_state.victory:
             self._render_victory_overlay(screen)

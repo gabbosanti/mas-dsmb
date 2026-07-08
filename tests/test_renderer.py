@@ -155,3 +155,53 @@ def test_gate_sprite_changes_between_closed_and_open(monkeypatch):
     open_pixels = pygame.image.tobytes(screen.subsurface(pygame.Rect(40, 40, 40, 48)), "RGBA")
 
     assert closed_pixels != open_pixels
+
+
+def test_renderer_camera_centers_on_focus_player():
+    renderer = Renderer(width=200, height=150)
+    world = WorldState(
+        characters={
+            "player1": CharacterState(
+                player_id="player1",
+                x=300,
+                y=120,
+                width=50,
+                height=50,
+                on_ground=True,
+            )
+        }
+    )
+
+    camera_x, camera_y = renderer._camera_offset(
+        world_state=world,
+        platforms=[],
+        focus_player_id="player1",
+        world_size=(600, 400),
+    )
+
+    assert (camera_x, camera_y) == (225, 70)
+
+
+def test_renderer_camera_clamps_at_world_edge():
+    renderer = Renderer(width=200, height=150)
+    world = WorldState(
+        characters={
+            "player1": CharacterState(
+                player_id="player1",
+                x=10,
+                y=20,
+                width=50,
+                height=50,
+                on_ground=True,
+            )
+        }
+    )
+
+    camera_x, camera_y = renderer._camera_offset(
+        world_state=world,
+        platforms=[],
+        focus_player_id="player1",
+        world_size=(600, 400),
+    )
+
+    assert (camera_x, camera_y) == (0, 0)

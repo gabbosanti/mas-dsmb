@@ -1,4 +1,3 @@
-# domain/level.py
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,6 +28,8 @@ class Level:
     gates: list = field(default_factory=list)
     spawn_points: list = field(default_factory=list)
     coins_to_win: int = 5
+    width: int = 0
+    height: int = 0
 
 
 class TiledLevel:
@@ -41,7 +42,10 @@ class TiledLevel:
 
         tmx = pytmx.TiledMap(tmx_path)
 
-        level = Level()
+        level = Level(
+            width=int(tmx.width * tmx.tilewidth),
+            height=int(tmx.height * tmx.tileheight),
+        )
 
         for obj in tmx.objects:
             if obj.type == "Platforms":
@@ -99,6 +103,9 @@ class TiledLevel:
                         right_bound=float(obj.properties["right_bound"]),
                     )
                 )
+
+            elif obj.type == "SpawnPoints":
+                level.spawn_points.append(SpawnPoint(x=int(obj.x), y=int(obj.y)))
 
         if "coins_to_win" in tmx.properties:
             level.coins_to_win = int(tmx.properties["coins_to_win"])

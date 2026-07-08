@@ -28,10 +28,14 @@ class GameEngine:
     platforms: list = field(default_factory=list)
     events: list = field(default_factory=list)
     is_authoritative: bool = True
+    world_width: int = 0
+    world_height: int = 0
 
     def __post_init__(self) -> None:
         level = TiledLevel("assets/levels/level.tmx").build()
         self.platforms = level.platforms
+        self.world_width = level.width
+        self.world_height = level.height
         self.world_state.load_level(level)
 
     def apply_inputs(self, inputs: dict[str, InputState]) -> None:
@@ -68,6 +72,7 @@ class GameEngine:
 
         self.handle_collisions()
         self.handle_environment_collisions()
+        self._clamp_players_to_world()
         self._update_enemies(dt)
         self._handle_enemy_collisions()
         self._sync_coin_counter_from_environment()
@@ -85,6 +90,7 @@ class GameEngine:
 
     def spawn_player(self, player_id: str, x=100, y=100, join_index: int = 0):
         player = CharacterState(player_id=player_id, x=x, y=y, join_index=join_index)
+        self._clamp_character_to_world(player)
         self.world_state.add_player(player)
 
     def handle_environment_collisions(self) -> None:
@@ -100,6 +106,16 @@ class GameEngine:
                         event = block.destroy()
                         self.events.append(event)
                     resolve_collision(player, block)
+
+    def _clamp_character_to_world(self, character: CharacterState) -> None:
+        max_x = max(0, self.world_width - character.width)
+        max_y = max(0, self.world_height - character.height)
+        character.x = max(0, min(character.x, max_x))
+        character.y = max(0, min(character.y, max_y))
+
+    def _clamp_players_to_world(self) -> None:
+        for player in self.world_state.characters.values():
+            self._clamp_character_to_world(player)
 
     def _sync_coin_counter_from_environment(self) -> None:
         if not self.is_authoritative:
@@ -203,7 +219,6 @@ class GameEngine:
                 if check_collision(player, enemy):
                     event = PlayerDeathEvent(player_id=player.player_id, enemy_id=enemy.enemy_id)
                     self.events.append(event)
-                    # remove player and set respawn timer
                     if player.player_id in self.world_state.characters:
                         del self.world_state.characters[player.player_id]
                     self.world_state.respawn_timers[player.player_id] = now + 10.0
