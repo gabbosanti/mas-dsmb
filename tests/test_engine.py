@@ -150,6 +150,9 @@ def test_default_level_contains_reachable_world_objects():
     assert "gate-1" in env.cooperative_gates
     assert any(powerup_id.startswith("coin-") for powerup_id in env.power_ups)
     assert any(powerup_id.startswith("star-") for powerup_id in env.power_ups)
+    assert engine.world_state.coins_to_win == 6
+    assert engine.world_state.blocks_to_win == 3
+    assert engine.world_state.enemies_to_win == 2
 
     for block in env.destructible_blocks:
         assert any(
@@ -170,6 +173,7 @@ def test_collecting_coins_updates_shared_counter():
     player.prev_y = player.y
 
     engine.handle_powerup_collisions()
+    engine._sync_objective_progress_from_environment()
 
     assert power_up.collected is True
     assert engine.world_state.coins_collected == 1
@@ -188,6 +192,7 @@ def test_non_authoritative_engine_does_not_mutate_coin_counter():
     player.prev_y = player.y
 
     engine.handle_powerup_collisions()
+    engine._sync_objective_progress_from_environment()
 
     assert power_up.collected is False
     assert engine.world_state.coins_collected == 0
@@ -228,28 +233,38 @@ def test_lateral_block_collision_does_not_destroy_block():
     assert block.destroyed is False
 
 
-"""
-def test_jump_from_platform_destroys_reachable_block():
+def test_gate_stays_closed_when_level_requirements_are_not_met():
     engine = GameEngine()
-    engine.spawn_player("player1")
-    player = engine.world_state.get_player("player1")
-    block = engine.world_state.environment.destructible_blocks[0]
-    platform = engine.platforms[2]
+    gate = engine.world_state.get_gate("gate-1")
 
-    player.x = block.x + 4
-    player.y = platform.y - player.height
-    player.prev_x = player.x
-    player.prev_y = player.y
-    player.on_ground = True
+    engine.handle_gate_collisions()
 
-    engine.tick(1 / 60, {"player1": InputState(jump=True)})
-    for _ in range(30):
-        if block.destroyed:
-            break
-        engine.tick(1 / 60, {"player1": InputState()})
+    assert gate.state == "closed"
 
-    assert block.destroyed is True
-"""
+
+def test_gate_opens_only_when_all_level_requirements_are_met():
+    engine = GameEngine()
+    gate = engine.world_state.get_gate("gate-1")
+
+    for block in engine.world_state.environment.destructible_blocks[
+        : engine.world_state.blocks_to_win
+    ]:
+        block.destroyed = True
+    coin_targets = [
+        power_up
+        for power_up in engine.world_state.environment.power_ups.values()
+        if power_up.powerup_id.startswith("coin-")
+    ][: engine.world_state.coins_to_win]
+    for power_up in coin_targets:
+        power_up.collected = True
+    enemies = list(engine.world_state.environment.enemies)
+    for enemy_id in enemies[: engine.world_state.enemies_to_win]:
+        del engine.world_state.environment.enemies[enemy_id]
+
+    engine._sync_objective_progress_from_environment()
+    engine.handle_gate_collisions()
+
+    assert gate.state == "open"
 
 
 def test_level_dimensions_match_tiled_map():

@@ -320,11 +320,8 @@ class Serializer:
             "destructible_blocks": environment.get("destructible_blocks", []),
             "power_ups": environment.get("power_ups", {}),
             "cooperative_gates": environment.get("cooperative_gates", {}),
+            "enemies": environment.get("enemies", {}),
         }
-        return WorldState.from_dict(
-            {
-                "sequence_number": data["sequence_number"],
-                "characters": data["characters"],
-                "environment": normalized_environment,
-            }
-        )
+        normalized_data = dict(data)
+        normalized_data["environment"] = normalized_environment
+        return WorldState.from_dict(normalized_data)

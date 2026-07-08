@@ -28,6 +28,8 @@ class Level:
     gates: list = field(default_factory=list)
     spawn_points: list = field(default_factory=list)
     coins_to_win: int = 5
+    blocks_to_win: int = 0
+    enemies_to_win: int = 0
     width: int = 0
     height: int = 0
 
@@ -109,5 +111,9 @@ class TiledLevel:
 
         if "coins_to_win" in tmx.properties:
             level.coins_to_win = int(tmx.properties["coins_to_win"])
+        if "blocks_to_win" in tmx.properties:
+            level.blocks_to_win = int(tmx.properties["blocks_to_win"])
+        if "enemies_to_win" in tmx.properties:
+            level.enemies_to_win = int(tmx.properties["enemies_to_win"])
 
         return level

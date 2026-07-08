@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from distributed_smb.domain.events import (
     BlockDestroyedEvent,
@@ -64,16 +63,8 @@ class CooperativeGate:
     def contribute(self, player_id: str) -> None:
         self.contributions.add(player_id)
 
-    def update_state(self, active_player_ids: Iterable[str]) -> GateStateChangedEvent | None:
-        active_set = set(active_player_ids)
-
-        # Se non ci sono player attivi, il gate rimane chiuso
-        should_be_open = bool(active_set) and active_set.issubset(self.contributions)
-
-        if should_be_open:
-            new_state = "open"
-        else:
-            new_state = "closed"
+    def update_state(self, should_be_open: bool) -> GateStateChangedEvent | None:
+        new_state = "open" if should_be_open else "closed"
 
         if new_state == self.state:
             return None

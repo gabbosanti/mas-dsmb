@@ -4,9 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
-from distributed_smb.domain.entity import (
-    DestructibleBlock,
-)
+from distributed_smb.domain.entity import DestructibleBlock
 from distributed_smb.domain.events import PlayerDeathEvent
 from distributed_smb.domain.level import TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
@@ -72,10 +70,11 @@ class GameEngine:
 
         self.handle_collisions()
         self.handle_environment_collisions()
-        self._clamp_players_to_world()
         self._update_enemies(dt)
         self._handle_enemy_collisions()
-        self._sync_coin_counter_from_environment()
+        self._sync_objective_progress_from_environment()
+        self.handle_gate_collisions()
+        self._clamp_players_to_world()
         self.handle_victory_condition()
         self._process_respawns()
         self.world_state.sequence_number += 1
@@ -96,7 +95,6 @@ class GameEngine:
     def handle_environment_collisions(self) -> None:
         self.handle_block_collisions()
         self.handle_powerup_collisions()
-        self.handle_gate_collisions()
 
     def handle_block_collisions(self) -> None:
         for player in self.world_state.characters.values():
@@ -117,16 +115,26 @@ class GameEngine:
         for player in self.world_state.characters.values():
             self._clamp_character_to_world(player)
 
-    def _sync_coin_counter_from_environment(self) -> None:
-        if not self.is_authoritative:
-            return
-
-        collected_coins = sum(
+    def _sync_objective_progress_from_environment(self) -> None:
+        self.world_state.coins_collected = sum(
             1
             for power_up in self.world_state.environment.power_ups.values()
             if power_up.collected and power_up.powerup_id.startswith("coin-")
         )
-        self.world_state.coins_collected = max(self.world_state.coins_collected, collected_coins)
+        self.world_state.blocks_destroyed = sum(
+            1 for block in self.world_state.environment.destructible_blocks if block.destroyed
+        )
+        self.world_state.enemies_defeated = max(
+            0,
+            self.world_state.initial_enemy_count - len(self.world_state.environment.enemies),
+        )
+
+    def _objective_requirements_met(self) -> bool:
+        return (
+            self.world_state.coins_collected >= self.world_state.coins_to_win
+            and self.world_state.blocks_destroyed >= self.world_state.blocks_to_win
+            and self.world_state.enemies_defeated >= self.world_state.enemies_to_win
+        )
 
     def handle_powerup_collisions(self) -> None:
         if not self.is_authoritative:
@@ -148,20 +156,16 @@ class GameEngine:
             winner = min(colliding_players, key=lambda p: p.join_index)
             event = power_up.collect(winner.player_id)
             self.events.append(event)
-            if power_up.powerup_id.startswith("coin-"):
-                self.world_state.coins_collected += 1
 
     def handle_gate_collisions(self) -> None:
-        active_players = self.world_state.get_all_players_dict().keys()
+        should_be_open = self._objective_requirements_met()
         for gate in self.world_state.environment.cooperative_gates.values():
             colliding_players = [
                 player
                 for player in self.world_state.characters.values()
                 if check_collision(player, gate)
             ]
-            for player in colliding_players:
-                gate.contribute(player.player_id)
-            event = gate.update_state(active_players)
+            event = gate.update_state(should_be_open)
             if event is not None:
                 self.events.append(event)
             if gate.state == "closed":
@@ -172,8 +176,6 @@ class GameEngine:
         if not self.is_authoritative:
             return
         if self.world_state.victory:
-            return
-        if self.world_state.coins_collected < self.world_state.coins_to_win:
             return
 
         for gate in self.world_state.environment.cooperative_gates.values():

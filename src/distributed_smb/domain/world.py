@@ -47,21 +47,27 @@ class WorldState:
     environment: EnvironmentalState = field(default_factory=EnvironmentalState)
     coins_collected: int = 0
     coins_to_win: int = 5
+    blocks_destroyed: int = 0
+    blocks_to_win: int = 0
+    enemies_defeated: int = 0
+    enemies_to_win: int = 0
+    initial_enemy_count: int = 0
     victory: bool = False
     victory_player_id: str | None = None
     respawn_timers: dict[str, float] = field(default_factory=dict)
 
     def load_level(self, level: Level) -> None:
         self.environment.destructible_blocks = list(level.blocks)
-
         self.environment.power_ups = {powerup.powerup_id: powerup for powerup in level.powerups}
-
         self.environment.enemies = {enemy.enemy_id: enemy for enemy in level.enemies}
-
         self.environment.cooperative_gates = {gate.gate_id: gate for gate in level.gates}
-
         self.coins_collected = 0
         self.coins_to_win = level.coins_to_win
+        self.blocks_destroyed = 0
+        self.blocks_to_win = level.blocks_to_win
+        self.enemies_defeated = 0
+        self.enemies_to_win = level.enemies_to_win
+        self.initial_enemy_count = len(level.enemies)
         self.victory = False
         self.victory_player_id = None
 
@@ -140,6 +146,11 @@ class WorldState:
             environment=environment,
             coins_collected=data.get("coins_collected", 0),
             coins_to_win=data.get("coins_to_win", 5),
+            blocks_destroyed=data.get("blocks_destroyed", 0),
+            blocks_to_win=data.get("blocks_to_win", 0),
+            enemies_defeated=data.get("enemies_defeated", 0),
+            enemies_to_win=data.get("enemies_to_win", 0),
+            initial_enemy_count=data.get("initial_enemy_count", len(enemies)),
             victory=data.get("victory", False),
             victory_player_id=data.get("victory_player_id"),
             respawn_timers=data.get("respawn_timers", {}),

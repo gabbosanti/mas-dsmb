@@ -38,24 +38,20 @@ def test_exclusive_powerup_collects_only_once():
         power_up.collect("player2")
 
 
-def test_cooperative_gate_opens_when_all_active_players_contributed():
+def test_cooperative_gate_opens_when_requirements_are_met():
     gate = CooperativeGate(x=0, y=0, gate_id="gate1")
 
-    gate.contribute("player1")
-    gate.contribute("player2")
-
-    event = gate.update_state(["player1", "player2"])
+    event = gate.update_state(True)
 
     assert isinstance(event, GateStateChangedEvent)
     assert gate.state == "open"
     assert event.new_state == "open"
 
 
-def test_cooperative_gate_stays_closed_if_missing_contribution():
+def test_cooperative_gate_stays_closed_when_requirements_are_unmet():
     gate = CooperativeGate(x=0, y=0, gate_id="gate1")
-    gate.contribute("player1")
 
-    event = gate.update_state(["player1", "player2"])
+    event = gate.update_state(False)
 
     assert event is None
     assert gate.state == "closed"
