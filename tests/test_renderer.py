@@ -205,3 +205,71 @@ def test_renderer_camera_clamps_at_world_edge():
     )
 
     assert (camera_x, camera_y) == (0, 0)
+
+
+def test_renderer_starts_death_effect_when_player_enters_respawn(monkeypatch):
+    tick = 0
+    monkeypatch.setattr(pygame.time, "get_ticks", lambda: tick)
+    screen = pygame.display.set_mode((200, 200))
+    renderer = Renderer(width=200, height=200)
+    alive_world = WorldState(
+        characters={
+            "player1": CharacterState(
+                player_id="player1",
+                x=40,
+                y=30,
+                width=50,
+                height=50,
+                on_ground=True,
+            )
+        }
+    )
+
+    renderer.render(screen=screen, world_state=alive_world, platforms=[], focus_player_id="player1")
+    assert renderer._death_effects == {}
+
+    tick = 50
+    dead_world = WorldState(respawn_timers={"player1": 10.0})
+    renderer.render(screen=screen, world_state=dead_world, platforms=[], focus_player_id="player1")
+
+    assert "player1" in renderer._death_effects
+
+
+def test_renderer_keeps_last_camera_offset_during_death_effect(monkeypatch):
+    tick = 0
+    monkeypatch.setattr(pygame.time, "get_ticks", lambda: tick)
+    screen = pygame.display.set_mode((200, 150))
+    renderer = Renderer(width=200, height=150)
+    alive_world = WorldState(
+        characters={
+            "player1": CharacterState(
+                player_id="player1",
+                x=300,
+                y=120,
+                width=50,
+                height=50,
+                on_ground=True,
+            )
+        }
+    )
+
+    renderer.render(
+        screen=screen,
+        world_state=alive_world,
+        platforms=[],
+        focus_player_id="player1",
+        world_size=(600, 400),
+    )
+    assert renderer._last_camera_offset == (225, 70)
+
+    tick = 50
+    dead_world = WorldState(respawn_timers={"player1": 10.0})
+    renderer.render(
+        screen=screen,
+        world_state=dead_world,
+        platforms=[],
+        focus_player_id="player1",
+        world_size=(600, 400),
+    )
+
+    assert renderer._last_camera_offset == (225, 70)

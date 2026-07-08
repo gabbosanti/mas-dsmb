@@ -1,5 +1,6 @@
 """Rendering abstractions for the game client."""
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 import pygame
@@ -12,6 +13,15 @@ MARIO_FRAME_SIZE = 32
 TILE_SIZE = 16
 DISPLAY_TILE_SIZE = 30
 POWERUP_COLLECTION_EFFECT_MS = 420
+PLAYER_DEATH_EFFECT_MS = 900
+PLAYER_DEATH_RISE_PX = 72
+PLAYER_DEATH_FALL_PX = 120
+
+
+@dataclass(slots=True)
+class PlayerDeathEffect:
+    character: CharacterState
+    started_at_ms: int
 
 
 @dataclass(slots=True)
@@ -36,6 +46,9 @@ class Renderer:
     _facing_by_player: dict[str, int] = field(init=False, default_factory=dict)
     _powerup_collected_state: dict[str, bool] = field(init=False, default_factory=dict)
     _powerup_collection_effects: dict[str, int] = field(init=False, default_factory=dict)
+    _last_rendered_characters: dict[str, CharacterState] = field(init=False, default_factory=dict)
+    _death_effects: dict[str, PlayerDeathEffect] = field(init=False, default_factory=dict)
+    _last_camera_offset: tuple[int, int] = field(init=False, default=(0, 0))
 
     def __post_init__(self) -> None:
         if self.player_palette is None:
@@ -234,7 +247,7 @@ class Renderer:
 
         focus = world_state.get_player(focus_player_id)
         if focus is None:
-            return 0, 0
+            return self._last_camera_offset
 
         world_width, world_height = self._world_bounds(world_state, platforms, world_size)
         target_x = focus.x + focus.width / 2 - self.width / 2
@@ -576,6 +589,62 @@ class Renderer:
             sprite = pygame.transform.flip(sprite, True, False)
         return sprite
 
+    def _sync_player_death_effects(self, world_state: WorldState, now_ms: int) -> None:
+        respawning_players = set(world_state.respawn_timers)
+
+        for player_id in respawning_players:
+            if player_id in world_state.characters or player_id in self._death_effects:
+                continue
+            last_seen = self._last_rendered_characters.get(player_id)
+            if last_seen is None:
+                continue
+            self._death_effects[player_id] = PlayerDeathEffect(
+                character=deepcopy(last_seen),
+                started_at_ms=now_ms,
+            )
+
+        for player_id in list(self._death_effects):
+            if player_id in world_state.characters and player_id not in respawning_players:
+                del self._death_effects[player_id]
+
+    def _render_player_death_effects(
+        self,
+        screen: pygame.Surface,
+        now_ms: int,
+        camera_offset: tuple[int, int],
+    ) -> None:
+        for player_id, effect in list(self._death_effects.items()):
+            progress = (now_ms - effect.started_at_ms) / PLAYER_DEATH_EFFECT_MS
+            if progress >= 1:
+                del self._death_effects[player_id]
+                continue
+
+            character = deepcopy(effect.character)
+            character.vx = 0
+            character.vy = 0
+            character.on_ground = False
+            sprite = self._get_player_sprite(character).copy()
+            sprite.set_alpha(max(0, min(255, round(255 * (1 - progress)))))
+
+            vertical_offset = (
+                -PLAYER_DEATH_RISE_PX * (1 - (2 * progress - 1) ** 2)
+                + PLAYER_DEATH_FALL_PX * (progress**2)
+            )
+            screen.blit(
+                sprite,
+                self._to_screen_position(
+                    character.x,
+                    character.y + vertical_offset,
+                    camera_offset,
+                ),
+            )
+
+    def _remember_rendered_characters(self, world_state: WorldState) -> None:
+        self._last_rendered_characters = {
+            player_id: deepcopy(character)
+            for player_id, character in world_state.characters.items()
+        }
+
     def _render_coin_counter(self, screen: pygame.Surface, world_state: WorldState) -> None:
         font = pygame.font.SysFont(None, 22)
         text = f"Coins: {world_state.coins_collected}/{world_state.coins_to_win}"
@@ -619,15 +688,19 @@ class Renderer:
     ) -> None:
         """Render one frame of the game world."""
         screen.fill(self.background_color)
+        now_ms = pygame.time.get_ticks()
+        self._sync_player_death_effects(world_state, now_ms)
         camera_offset = self._camera_offset(
             world_state,
             platforms,
             focus_player_id=focus_player_id,
             world_size=world_size,
         )
+        self._last_camera_offset = camera_offset
 
         self._render_platforms(screen, platforms, camera_offset)
         self._render_environment(screen, world_state, camera_offset)
+        self._render_player_death_effects(screen, now_ms, camera_offset)
 
         for character in sorted(world_state.characters.values(), key=lambda c: (c.y, c.player_id)):
             screen.blit(
@@ -635,9 +708,12 @@ class Renderer:
                 self._to_screen_position(character.x, character.y, camera_offset),
             )
 
+        self._remember_rendered_characters(world_state)
         self._render_coin_counter(screen, world_state)
 
         if world_state.victory:
             self._render_victory_overlay(screen)
 
         pygame.display.flip()
+
+

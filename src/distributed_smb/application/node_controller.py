@@ -302,9 +302,14 @@ class NodeController(
     ) -> WorldState:
         """Build a render-only snapshot separated from the authoritative world state."""
         visual_characters: dict[str, CharacterState] = {}
+        local_player_respawning = self.local_player_id in self.engine.world_state.respawn_timers
 
         for player_id, character in self.engine.world_state.characters.items():
-            if player_id == self.local_player_id and local_visual_state is not None:
+            if (
+                player_id == self.local_player_id
+                and local_visual_state is not None
+                and not local_player_respawning
+            ):
                 visual_characters[player_id] = local_visual_state
                 continue
 
@@ -317,9 +322,13 @@ class NodeController(
 
             visual_characters[player_id] = character
 
-        # Reconcile may have removed the local player from the engine if the host's
-        # snapshot doesn't include them yet. Always include the pre-reconcile capture.
-        if local_visual_state is not None and self.local_player_id not in visual_characters:
+        # Reconcile may temporarily remove the local player before a later snapshot
+        # restores them. Keep the pre-reconcile capture only while they are not dead.
+        if (
+            local_visual_state is not None
+            and not local_player_respawning
+            and self.local_player_id not in visual_characters
+        ):
             visual_characters[self.local_player_id] = local_visual_state
 
         return WorldState(
@@ -328,8 +337,14 @@ class NodeController(
             environment=deepcopy(self.engine.world_state.environment),
             coins_collected=self.engine.world_state.coins_collected,
             coins_to_win=self.engine.world_state.coins_to_win,
+            blocks_destroyed=self.engine.world_state.blocks_destroyed,
+            blocks_to_win=self.engine.world_state.blocks_to_win,
+            enemies_defeated=self.engine.world_state.enemies_defeated,
+            enemies_to_win=self.engine.world_state.enemies_to_win,
+            initial_enemy_count=self.engine.world_state.initial_enemy_count,
             victory=self.engine.world_state.victory,
             victory_player_id=self.engine.world_state.victory_player_id,
+            respawn_timers=deepcopy(self.engine.world_state.respawn_timers),
         )
 
     def _spawn_position_for(self, join_index: int) -> tuple[int, int]:
@@ -372,3 +387,5 @@ class NodeController(
             LOGGER.warning("presentation.app found, but GameApp is missing")
             return None
         return game_app_class
+
+

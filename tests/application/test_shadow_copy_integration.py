@@ -195,6 +195,19 @@ def test_build_visual_world_state_includes_local_player_when_removed_by_reconcil
     assert display.characters[ctrl.local_player_id] is local_state
 
 
+def test_build_visual_world_state_excludes_local_player_during_respawn():
+    """A dead player must disappear immediately instead of being kept by visual smoothing."""
+    ctrl = _make_client_controller()
+    ctrl._init_shadow_copies()
+
+    local_state = ctrl.engine.world_state.characters[ctrl.local_player_id]
+    del ctrl.engine.world_state.characters[ctrl.local_player_id]
+    ctrl.engine.world_state.respawn_timers[ctrl.local_player_id] = time.time() + 10.0
+
+    display = ctrl._build_visual_world_state(local_visual_state=local_state)
+    assert ctrl.local_player_id not in display.characters
+    assert ctrl.local_player_id in display.respawn_timers
+
 def test_display_world_state_no_shadow_copies_returns_engine_state():
     """HOST path or pre-lobby CLIENT: visual state matches engine.world_state data."""
     ctrl = NodeController()
@@ -313,3 +326,5 @@ def test_reconciliation_at_50ms_corrects_position():
     assert corrected_x == authoritative_x, (
         f"Expected position corrected to {authoritative_x}, got {corrected_x}"
     )
+
+
