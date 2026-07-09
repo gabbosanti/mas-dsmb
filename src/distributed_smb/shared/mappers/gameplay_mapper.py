@@ -1,5 +1,6 @@
 from distributed_smb.domain.events import (
     BlockDestroyedEvent,
+    EnemyKilledEvent,
     GateStateChangedEvent,
     PlayerDeathEvent,
     PowerUpCollectedEvent,
