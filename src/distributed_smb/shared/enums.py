@@ -71,3 +71,4 @@ class MessageType(StrEnum):
     PLAYER_LEFT = "player_left"
     PLAYER_DISCONNECTED = "player_disconnected"
     PLAYER_DEATH_MESSAGE = "player_death_message"
+    ENEMY_KILLED_MESSAGE = "enemy_killed_message"

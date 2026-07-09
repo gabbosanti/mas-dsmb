@@ -261,6 +261,13 @@ class Serializer:
                     player_id=validated.player_id,
                     enemy_id=validated.enemy_id,
                 )
+            
+            if message_type == MessageType.ENEMY_KILLED_MESSAGE:
+                validated = EnemyKilledMessageSchema(**data)
+                return EnemyKilledMessage(
+                    player_id=validated.player_id,
+                    enemy_id=validated.enemy_id,
+                )
 
             if message_type == MessageType.GATE_STATE_CHANGED_MESSAGE:
                 validated = GateStateChangedMessageSchema(**data)

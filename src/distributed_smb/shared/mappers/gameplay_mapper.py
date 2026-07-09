@@ -22,3 +22,7 @@ def event_to_message(event):
         return __import__(
             "distributed_smb.shared.messages.gameplay", fromlist=["PlayerDeathMessage"]
         ).PlayerDeathMessage(player_id=event.player_id, enemy_id=event.enemy_id)
+    if isinstance(event, EnemyKilledEvent):
+        return __import__(
+            "distributed_smb.shared.messages.gameplay", fromlist=["EnemyKilledMessage"]
+        ).EnemyKilledMessage(player_id=event.player_id, enemy_id=event.enemy_id)

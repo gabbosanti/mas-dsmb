@@ -4,8 +4,8 @@ import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
-from distributed_smb.domain.entity import DestructibleBlock
-from distributed_smb.domain.events import PlayerDeathEvent
+from distributed_smb.domain.entity import DestructibleBlock, Enemy
+from distributed_smb.domain.events import EnemyKilledEvent, PlayerDeathEvent
 from distributed_smb.domain.level import TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
@@ -16,6 +16,7 @@ POWERUP_SIZE = 34
 COIN_SIZE = 26
 GATE_WIDTH = 54
 GATE_HEIGHT = 96
+MARGIN = 4
 
 
 @dataclass(slots=True)
@@ -197,11 +198,25 @@ class GameEngine:
         )
         return (
             horizontally_overlapping
-            and previous_top >= block_bottom - 4
+            and previous_top >= block_bottom - MARGIN
             and current_top <= block_bottom
             and player.y + player.height > block.y
         )
 
+    def is_stomp(self, player: CharacterState, enemy: Enemy) -> bool:
+        previous_bottom = player.prev_y + player.height
+        current_bottom = player.y + player.height
+        enemy_top = enemy.y
+        horizontally_overlapping = (
+            player.x < enemy.x + enemy.width and player.x + player.width > enemy.x
+        )
+        return (
+            horizontally_overlapping
+            and previous_bottom <= enemy_top + MARGIN
+            and current_bottom >= enemy_top
+            and player.vy > 0
+        )
+    
     def _update_enemies(self, dt: float) -> None:
         for enemy in self.world_state.environment.enemies.values():
             enemy.x += enemy.vx * dt
@@ -215,15 +230,33 @@ class GameEngine:
     def _handle_enemy_collisions(self) -> None:
         if not self.is_authoritative:
             return
+
         now = time.time()
+
         for enemy in list(self.world_state.environment.enemies.values()):
             for player in list(self.world_state.characters.values()):
-                if check_collision(player, enemy):
-                    event = PlayerDeathEvent(player_id=player.player_id, enemy_id=enemy.enemy_id)
-                    self.events.append(event)
-                    if player.player_id in self.world_state.characters:
-                        del self.world_state.characters[player.player_id]
-                    self.world_state.respawn_timers[player.player_id] = now + 10.0
+                if not check_collision(player, enemy):
+                    continue
+
+                if self.is_stomp(player, enemy):
+                    event = EnemyKilledEvent(
+                        player_id=player.player_id,
+                        enemy_id=enemy.enemy_id,
+                    )
+                    del self.world_state.environment.enemies[enemy.enemy_id]
+                    player.vy = JUMP_FORCE
+                    continue
+
+                event = PlayerDeathEvent(
+                    player_id=player.player_id,
+                    enemy_id=enemy.enemy_id,
+                )
+                self.events.append(event)
+
+                if player.player_id in self.world_state.characters:
+                    del self.world_state.characters[player.player_id]
+
+                self.world_state.respawn_timers[player.player_id] = now + 10.0
 
     def _process_respawns(self) -> None:
         if not self.is_authoritative:

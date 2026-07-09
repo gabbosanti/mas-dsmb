@@ -23,3 +23,8 @@ class GateStateChangedEvent:
 class PlayerDeathEvent:
     player_id: str
     enemy_id: str
+
+@dataclass(slots=True)
+class EnemyKilledEvent:
+    player_id: str
+    enemy_id: str

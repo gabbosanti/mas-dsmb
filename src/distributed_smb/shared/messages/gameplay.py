@@ -85,3 +85,14 @@ class PlayerDeathMessage:
         validate_player_id(self.player_id)
         if not self.enemy_id or not isinstance(self.enemy_id, str):
             raise MessageValidationError(f"Invalid enemy_id: {self.enemy_id}")
+
+@dataclass(slots=True)
+class EnemyKilledMessage:
+    player_id: str
+    enemy_id: str
+    message_type: MessageType = field(init=False, default=MessageType.ENEMY_KILLED_MESSAGE)
+
+    def __post_init__(self):
+        validate_player_id(self.player_id)
+        if not self.enemy_id or not isinstance(self.enemy_id, str):
+            raise MessageValidationError(f"Invalid enemy_id: {self.enemy_id}")
