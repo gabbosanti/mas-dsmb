@@ -133,6 +133,11 @@ class PlayerDeathMessageSchema(BaseModel):
     enemy_id: str = Field(..., min_length=1)
     message_type: str = Field(default="player_death_message")
 
+class EnemyKilledMessageSchema(BaseModel):
+    player_id: str = Field(..., min_length=1)
+    enemy_id: str = Field(..., min_length=1)
+    message_type: str = Field(default="enemy_killed_message")
+
 
 class NewHostClaimSchema(BaseModel):
     claimer_ip: str = Field(..., min_length=1)
