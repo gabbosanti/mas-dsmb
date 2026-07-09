@@ -281,3 +281,60 @@ def test_spawn_player_clamps_to_world_bounds():
 
     assert player.x == engine.world_width - player.width
     assert player.y == 0
+
+
+def test_stomping_enemy_from_above_kills_enemy_and_bounces_player():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    enemy = next(iter(engine.world_state.environment.enemies.values()))
+    player = engine.world_state.get_player("player1")
+    player.x = enemy.x
+    player.width = enemy.width
+    player.height = enemy.height
+    player.y = enemy.y - player.height + 2
+    player.prev_y = enemy.y - player.height
+    player.vy = 80
+
+    engine._handle_enemy_collisions()
+
+    assert enemy.enemy_id not in engine.world_state.environment.enemies
+    assert "player1" in engine.world_state.characters
+    assert player.vy < 0
+
+
+def test_colliding_enemy_sideways_kills_player_and_sets_respawn_timer():
+    engine = GameEngine()
+    engine.spawn_player("player1", join_index=2)
+    enemy = next(iter(engine.world_state.environment.enemies.values()))
+    player = engine.world_state.get_player("player1")
+    player.x = enemy.x
+    player.y = enemy.y
+    player.prev_y = enemy.y
+    player.vy = 0
+
+    engine._handle_enemy_collisions()
+
+    assert enemy.enemy_id in engine.world_state.environment.enemies
+    assert "player1" not in engine.world_state.characters
+    assert "player1" in engine.world_state.respawn_timers
+
+
+def test_respawn_uses_level_spawn_point_for_join_index():
+    engine = GameEngine()
+    engine.spawn_player("player1", join_index=1)
+    enemy = next(iter(engine.world_state.environment.enemies.values()))
+    player = engine.world_state.get_player("player1")
+    player.x = enemy.x
+    player.y = enemy.y
+    player.prev_y = enemy.y
+    player.vy = 0
+    engine._handle_enemy_collisions()
+    engine.world_state.respawn_timers["player1"] = 0.0
+
+    engine._process_respawns()
+
+    respawned = engine.world_state.get_player("player1")
+    expected_x, expected_y = engine._respawn_position_for(1)
+    assert (respawned.x, respawned.y) == (expected_x, expected_y)
+    assert respawned.join_index == 1
+    assert "player1" not in engine.world_state.respawn_timers

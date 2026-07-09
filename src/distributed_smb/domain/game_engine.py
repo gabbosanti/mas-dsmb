@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
-from distributed_smb.domain.entity import DestructibleBlock
+from distributed_smb.domain.entity import DestructibleBlock, Enemy
 from distributed_smb.domain.events import PlayerDeathEvent
 from distributed_smb.domain.level import TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
@@ -28,12 +28,15 @@ class GameEngine:
     is_authoritative: bool = True
     world_width: int = 0
     world_height: int = 0
+    spawn_points: list = field(default_factory=list)
+    _respawn_join_index: dict = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         level = TiledLevel("assets/levels/level.tmx").build()
         self.platforms = level.platforms
         self.world_width = level.width
         self.world_height = level.height
+        self.spawn_points = level.spawn_points
         self.world_state.load_level(level)
 
     def apply_inputs(self, inputs: dict[str, InputState]) -> None:
@@ -212,18 +215,43 @@ class GameEngine:
                 enemy.x = enemy.right_bound - enemy.width
                 enemy.vx = -enemy.vx
 
+    def _is_stomp(self, player: CharacterState, enemy: Enemy) -> bool:
+        """A stomp is a landing from above: player's feet were at/above the
+        enemy's head last frame and the player is currently falling."""
+        previous_bottom = player.prev_y + player.height
+        horizontally_overlapping = (
+            player.x < enemy.x + enemy.width and player.x + player.width > enemy.x
+        )
+        return (
+            horizontally_overlapping
+            and player.vy > 0
+            and previous_bottom <= enemy.y + 4
+        )
+
     def _handle_enemy_collisions(self) -> None:
         if not self.is_authoritative:
             return
         now = time.time()
         for enemy in list(self.world_state.environment.enemies.values()):
             for player in list(self.world_state.characters.values()):
-                if check_collision(player, enemy):
-                    event = PlayerDeathEvent(player_id=player.player_id, enemy_id=enemy.enemy_id)
-                    self.events.append(event)
-                    if player.player_id in self.world_state.characters:
-                        del self.world_state.characters[player.player_id]
-                    self.world_state.respawn_timers[player.player_id] = now + 10.0
+                if not check_collision(player, enemy):
+                    continue
+                if self._is_stomp(player, enemy):
+                    del self.world_state.environment.enemies[enemy.enemy_id]
+                    player.vy = JUMP_FORCE * 0.6
+                    break
+                event = PlayerDeathEvent(player_id=player.player_id, enemy_id=enemy.enemy_id)
+                self.events.append(event)
+                self._respawn_join_index[player.player_id] = player.join_index
+                if player.player_id in self.world_state.characters:
+                    del self.world_state.characters[player.player_id]
+                self.world_state.respawn_timers[player.player_id] = now + 10.0
+
+    def _respawn_position_for(self, join_index: int) -> tuple[int, int]:
+        if not self.spawn_points:
+            return 100, 100
+        point = self.spawn_points[join_index % len(self.spawn_points)]
+        return point.x, point.y
 
     def _process_respawns(self) -> None:
         if not self.is_authoritative:
@@ -231,5 +259,7 @@ class GameEngine:
         now = time.time()
         for pid, due in list(self.world_state.respawn_timers.items()):
             if now >= due:
-                self.spawn_player(pid, x=100, y=100)
+                join_index = self._respawn_join_index.pop(pid, 0)
+                x, y = self._respawn_position_for(join_index)
+                self.spawn_player(pid, x=x, y=y, join_index=join_index)
                 del self.world_state.respawn_timers[pid]
