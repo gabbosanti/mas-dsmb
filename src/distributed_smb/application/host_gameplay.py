@@ -94,7 +94,7 @@ class HostGameplayMixin:
         """
         snapshot = WorldStateSnapshot(
             sequence_number=self.engine.world_state.sequence_number,
-            world_state=self.engine.world_state,
+            world_state=self.engine.world_state.to_dict(),
         )
         payload = self.serializer.encode_message(snapshot)
         for entry in self.roster.get_all_players():
@@ -123,7 +123,7 @@ class HostGameplayMixin:
                 )
                 new_entries.append(entry)
         if new_entries:
-            sync = InitialStateSync(world_state=self.engine.world_state)
+            sync = InitialStateSync(world_state=self.engine.world_state.to_dict())
             self.ws_handler.send(sync)
             LOGGER.info("rejoin: sent InitialStateSync to %d rejoining player(s)", len(new_entries))
 

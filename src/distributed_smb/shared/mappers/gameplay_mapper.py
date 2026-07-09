@@ -7,6 +7,7 @@ from distributed_smb.domain.events import (
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
     GateStateChangedMessage,
+    PlayerDeathMessage,
     PowerUpCollectedMessage,
 )
 
@@ -19,6 +20,4 @@ def event_to_message(event):
     if isinstance(event, GateStateChangedEvent):
         return GateStateChangedMessage(gate_id=event.gate_id, new_state=event.new_state)
     if isinstance(event, PlayerDeathEvent):
-        return __import__(
-            "distributed_smb.shared.messages.gameplay", fromlist=["PlayerDeathMessage"]
-        ).PlayerDeathMessage(player_id=event.player_id, enemy_id=event.enemy_id)
+        return PlayerDeathMessage(player_id=event.player_id, enemy_id=event.enemy_id)
