@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from distributed_smb.application.client_gameplay import ClientGameplayMixin
+from distributed_smb.application.dto import RenderFrame, build_render_frame
 from distributed_smb.application.election import (
     ElectionCoordinator,
     EnvironmentalStateBuffer,
@@ -50,8 +51,6 @@ from distributed_smb.domain.world import CharacterState, WorldState
 from distributed_smb.network.serializer import Serializer
 from distributed_smb.network.udp_handler import UdpHandler
 from distributed_smb.network.ws_handler import WsHandler
-from distributed_smb.presentation.input_handler import InputHandler
-from distributed_smb.presentation.renderer import Renderer
 from distributed_smb.shared.config import (
     DEFAULT_HOST,
     DEFAULT_PACKET_DROP_RATE,
@@ -64,6 +63,8 @@ from distributed_smb.shared.config import (
     LOBBY_WS_PORT,
     PREDICTION_LEAD_CALIBRATION_FRAMES,
     TICK_INTERVAL,
+    WINDOW_HEIGHT,
+    WINDOW_WIDTH,
     player_id_for,
 )
 from distributed_smb.shared.enums import PlayerRole
@@ -94,8 +95,12 @@ class NodeController(
     lifecycle: NodeLifecycle = field(default_factory=NodeLifecycle)
     roster: GlobalRoster = field(default_factory=GlobalRoster)
     engine: GameEngine = field(default_factory=GameEngine)
-    renderer: Renderer = field(default_factory=Renderer)
-    input_handler: InputHandler = field(default_factory=InputHandler)
+    # Presentation objects: application never calls methods on these, it only
+    # holds them to hand off to GameApp in run() — keeping the type unknown
+    # here avoids an application -> presentation import. main.py (composition
+    # root) injects the real Renderer/InputHandler instances.
+    renderer: object | None = None
+    input_handler: object | None = None
     udp_handler: UdpHandler = field(
         default_factory=lambda: UdpHandler(host=DEFAULT_HOST, port=DEFAULT_UDP_PORT)
     )
@@ -212,12 +217,12 @@ class NodeController(
         self.lifecycle.move_to_idle()
         self.is_bootstrapped = True
         LOGGER.info(
-            "Bootstrap completed: state=%s, role=%s, tick_interval=%.4f, renderer=%sx%s",
+            "Bootstrap completed: state=%s, role=%s, tick_interval=%.4f, window=%sx%s",
             self.lifecycle.state,
             self.role,
             self.tick_interval,
-            self.renderer.width,
-            self.renderer.height,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
         )
         return self
 
@@ -235,14 +240,22 @@ class NodeController(
         LOGGER.info("Runtime context ready: %s", ", ".join(sorted(context)))
         return context
 
-    def process_frame(self, dt: float, local_input: InputState) -> object:
+    def process_frame(self, dt: float, local_input: InputState) -> RenderFrame:
         """Advance one frame according to the current runtime role."""
         if not self.lifecycle.is_started:
             self.lifecycle.move_to_game()
         self.udp_handler.open_socket()
         if self.role is PlayerRole.HOST:
-            return self._process_host_frame(dt, local_input)
-        return self._process_client_frame(dt, local_input)
+            world_state = self._process_host_frame(dt, local_input)
+        else:
+            world_state = self._process_client_frame(dt, local_input)
+        return build_render_frame(
+            world_state=world_state,
+            platforms=self.engine.platforms,
+            focus_player_id=self.local_player_id,
+            world_width=self.engine.world_width,
+            world_height=self.engine.world_height,
+        )
 
     def run(self) -> bool:
         """Run the application if the presentation runtime is available."""
@@ -259,7 +272,6 @@ class NodeController(
         LOGGER.info("Delegating execution to presentation runtime")
         app = game_app_class(
             frame_handler=self.process_frame,
-            engine=self.engine,
             input_handler=self.input_handler,
             renderer=self.renderer,
             local_player_id=self.local_player_id,
