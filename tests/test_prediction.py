@@ -58,6 +58,47 @@ def test_prediction_engine_reconcile_applies_authoritative_state():
     assert engine.world_state.get_player("player1").x == 999.0
 
 
+def test_prediction_engine_reconcile_applies_authoritative_enemy_position():
+    """Enemies have no dedicated WS event, so reconcile() must take their
+    position from the authoritative snapshot — otherwise client and host
+    diverge forever (M6-1)."""
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    pe = PredictionEngine(engine=engine, local_player_id="player1")
+
+    local_enemy = next(iter(engine.world_state.environment.enemies.values()))
+    local_enemy.x = 111.0
+
+    authoritative = deepcopy(engine.world_state)
+    authoritative_enemy = next(iter(authoritative.environment.enemies.values()))
+    authoritative_enemy.x = 500.0
+    snapshot = _make_snapshot(authoritative)
+
+    pe.reconcile(snapshot)
+
+    reconciled_enemy = next(iter(engine.world_state.environment.enemies.values()))
+    assert reconciled_enemy.x == 500.0
+
+
+def test_prediction_engine_reconcile_still_preserves_local_blocks_powerups_gates():
+    """Blocks/power-ups/gates stay local — they are synced via WS events, not
+    the UDP snapshot (M4 behavior, must not regress when fixing M6-1)."""
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    pe = PredictionEngine(engine=engine, local_player_id="player1")
+
+    local_block = engine.world_state.environment.destructible_blocks[0]
+    local_block.destroyed = True
+
+    authoritative = deepcopy(engine.world_state)
+    authoritative.environment.destructible_blocks[0].destroyed = False
+    snapshot = _make_snapshot(authoritative)
+
+    pe.reconcile(snapshot)
+
+    assert engine.world_state.environment.destructible_blocks[0].destroyed is True
+
+
 def test_prediction_engine_reconcile_replays_pending_inputs():
     """After reconcile, unacknowledged inputs must be replayed on top of the authoritative state."""
     engine = GameEngine()
