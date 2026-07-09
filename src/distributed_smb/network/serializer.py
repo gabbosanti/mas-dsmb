@@ -17,6 +17,7 @@ from distributed_smb.shared.messages.election import (
 )
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
+    EnemyKilledMessage,
     GateStateChangedMessage,
     PlayerDeathMessage,
     PlayerDisconnected,
@@ -32,6 +33,7 @@ from distributed_smb.shared.messages.schemas import (
     BlockDestroyedMessageSchema,
     ElectionAckSchema,
     ElectionNackSchema,
+    EnemyKilledMessageSchema,
     GameStartSchema,
     GateStateChangedMessageSchema,
     HostDiscoveryProbeSchema,
