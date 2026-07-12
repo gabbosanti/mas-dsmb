@@ -111,9 +111,7 @@ def build_render_frame(
             for player_id, character in world_state.characters.items()
         },
         respawning_player_ids=frozenset(world_state.respawn_timers),
-        platforms=[
-            RenderPlatform(x=p.x, y=p.y, width=p.width, height=p.height) for p in platforms
-        ],
+        platforms=[RenderPlatform(x=p.x, y=p.y, width=p.width, height=p.height) for p in platforms],
         blocks=[
             RenderBlock(x=b.x, y=b.y, width=b.width, height=b.height, destroyed=b.destroyed)
             for b in world_state.environment.destructible_blocks

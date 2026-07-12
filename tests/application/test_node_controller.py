@@ -443,3 +443,38 @@ def test_visual_world_state_clones_environment_from_authoritative_state():
     assert controller.engine.world_state.environment.destructible_blocks[0].destroyed is False
     assert controller.engine.world_state.environment.power_ups["pu-a"].collected is False
     assert controller.engine.world_state.environment.cooperative_gates["gate-a"].state == "closed"
+
+
+class _FakePredictionEngine:
+    def __init__(self, pending: int) -> None:
+        self._pending = pending
+
+    def pending_count(self) -> int:
+        return self._pending
+
+
+def test_adjust_prediction_lead_ignores_noise_within_tolerance():
+    """A frozen baseline must not move for a deviation inside the tolerance band."""
+    controller = NodeController()
+    controller.prediction_lead_calibration_remaining = 0
+    controller.prediction_lead_baseline = 3.0
+    controller.prediction_engine = _FakePredictionEngine(pending=5)
+
+    controller._adjust_prediction_lead()
+
+    assert controller.prediction_lead_baseline == 3.0
+
+
+def test_adjust_prediction_lead_walks_frozen_baseline_toward_sustained_drift():
+    """A sustained deviation (RTT permanently higher than at calibration time)
+    must walk the frozen baseline up until it settles within tolerance,
+    instead of triggering a correction on every reconcile forever."""
+    controller = NodeController()
+    controller.prediction_lead_calibration_remaining = 0
+    controller.prediction_lead_baseline = 3.0
+    controller.prediction_engine = _FakePredictionEngine(pending=8)
+
+    for _ in range(10):
+        controller._adjust_prediction_lead()
+
+    assert controller.prediction_lead_baseline == 5.0

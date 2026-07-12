@@ -222,11 +222,7 @@ class GameEngine:
         horizontally_overlapping = (
             player.x < enemy.x + enemy.width and player.x + player.width > enemy.x
         )
-        return (
-            horizontally_overlapping
-            and player.vy > 0
-            and previous_bottom <= enemy.y + 4
-        )
+        return horizontally_overlapping and player.vy > 0 and previous_bottom <= enemy.y + 4
 
     def _handle_enemy_collisions(self) -> None:
         if not self.is_authoritative:

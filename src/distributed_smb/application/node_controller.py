@@ -399,5 +399,3 @@ class NodeController(
             LOGGER.warning("presentation.app found, but GameApp is missing")
             return None
         return game_app_class
-
-
