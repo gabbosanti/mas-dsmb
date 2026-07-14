@@ -59,6 +59,13 @@ class CooperativeGate:
     height: int = 32
     state: str = "closed"
     contributions: set[str] = field(default_factory=set)
+    coins_required: int = 0
+    blocks_required: int = 0
+    enemies_required: int = 0
+    # Only a final gate triggers victory when open and touched. Non-final
+    # gates (checkpoints) just unblock the path once the team meets their
+    # (lower) requirement — reusing the same shared, cumulative counters.
+    is_final: bool = True
 
     def contribute(self, player_id: str) -> None:
         self.contributions.add(player_id)

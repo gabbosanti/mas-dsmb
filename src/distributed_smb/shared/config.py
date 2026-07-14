@@ -72,10 +72,12 @@ WINDOW_TITLE = "Distributed SMB"
 PLAYER_WIDTH = int(50 * WORLD_SCALE)
 PLAYER_HEIGHT = int(50 * WORLD_SCALE)
 
-ENEMY_HEIGHT = int(50 * WORLD_SCALE)
-ENEMY_WIDTH = int(50 * WORLD_SCALE)
+ENEMY_HEIGHT = int(34 * WORLD_SCALE)
+ENEMY_WIDTH = int(34 * WORLD_SCALE)
 
 MAX_PLAYERS = 4
+
+RESPAWN_DELAY_S = 3.0
 
 # DIVERGENCE_THRESHOLD: positional error (px) above which the client rolls
 # back to the authoritative state and replays buffered inputs. Lower values

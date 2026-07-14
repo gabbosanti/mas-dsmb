@@ -100,12 +100,15 @@ def test_host_bootstrap_configures_players_and_role():
     assert controller.engine.world_state.get_player(controller.local_player_id) is not None
 
 
-def test_spawn_position_scales_with_join_index():
+def test_spawn_position_uses_level_spawn_points():
+    """Initial join spawn now delegates to the level's TMX SpawnPoints (the
+    same source respawn-after-death uses), instead of a separate hardcoded
+    formula that placed players high above the ground."""
     controller = NodeController()
-    assert controller._spawn_position_for(0) == (100, 100)
-    assert controller._spawn_position_for(1) == (240, 100)
-    assert controller._spawn_position_for(2) == (380, 100)
-    assert controller._spawn_position_for(3) == (520, 100)
+    expected = controller.engine.spawn_points
+    for join_index in range(4):
+        point = expected[join_index % len(expected)]
+        assert controller._spawn_position_for(join_index) == (point.x, point.y)
 
 
 def test_client_process_frame_increments_input_sequence():
@@ -382,6 +385,12 @@ def test_client_process_frame_returns_visual_state_with_predicted_local_player()
     controller = NodeController().bootstrap(role=PlayerRole.CLIENT)
     serializer = Serializer()
     local_pid = controller.local_player_id  # "player2" placeholder after bootstrap
+    # Pin the local player's starting position explicitly rather than relying
+    # on whatever the level's spawn point happens to be, so the predicted-tick
+    # math below (and its expected direction of correction) stays meaningful
+    # regardless of spawn changes.
+    controller.engine.world_state.characters[local_pid].x = 100.0
+    controller.engine.world_state.characters[local_pid].y = 100.0
     authoritative_world = WorldState(
         sequence_number=20,
         characters={
