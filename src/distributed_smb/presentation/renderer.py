@@ -16,6 +16,22 @@ POWERUP_COLLECTION_EFFECT_MS = 420
 PLAYER_DEATH_EFFECT_MS = 900
 PLAYER_DEATH_RISE_PX = 72
 PLAYER_DEATH_FALL_PX = 120
+CHECKPOINT_TOAST_MS = 2500
+CHECKPOINT_TOAST_FADE_START = 0.7
+
+# Source rects for background decorations within OverWorld.png, measured from the
+# sheet's actual sprite bounding boxes (they are not aligned to the 16px tile grid).
+DECORATION_SOURCE_RECTS = {
+    "cloud": (89, 32, 37, 22),
+    "bush": (8, 96, 32, 16),
+    "hill": (48, 77, 80, 35),
+    "pipe": (96, 0, 32, 32),
+}
+# Decoration kinds that are purely background dressing, drawn before platforms.
+BACKGROUND_DECORATION_KINDS = {"cloud", "bush", "hill"}
+# Decoration kinds that overlay a solid Platform (pipes), drawn after platforms
+# so the pipe art replaces the generic brick look at that spot.
+FOREGROUND_DECORATION_KINDS = {"pipe"}
 
 
 @dataclass(slots=True)
@@ -49,6 +65,8 @@ class Renderer:
     _last_rendered_characters: dict[str, RenderCharacter] = field(init=False, default_factory=dict)
     _death_effects: dict[str, PlayerDeathEffect] = field(init=False, default_factory=dict)
     _last_camera_offset: tuple[int, int] = field(init=False, default=(0, 0))
+    _checkpoint_toasts: dict[str, int] = field(init=False, default_factory=dict)
+    _checkpoint_toast_shown: set[str] = field(init=False, default_factory=set)
 
     def __post_init__(self) -> None:
         if self.player_palette is None:
@@ -476,6 +494,32 @@ class Renderer:
             screen.blit(ring, self._to_screen_position(ring_x, ring_y, camera_offset))
             screen.blit(sprite, self._to_screen_position(x, y, camera_offset))
 
+    def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
+        rect = DECORATION_SOURCE_RECTS.get(kind)
+        if rect is None:
+            return None
+        return self._get_asset_sprite("OverWorld.png", rect, width, height)
+
+    def _render_decorations(
+        self,
+        screen: pygame.Surface,
+        frame: RenderFrame,
+        camera_offset: tuple[int, int],
+        kinds: set[str],
+    ) -> None:
+        for decoration in frame.decorations:
+            if decoration.kind not in kinds:
+                continue
+            sprite = self._get_decoration_sprite(
+                decoration.kind, decoration.width, decoration.height
+            )
+            if sprite is None:
+                continue
+            screen.blit(
+                sprite,
+                self._to_screen_position(decoration.x, decoration.y, camera_offset),
+            )
+
     def _render_environment(
         self,
         screen: pygame.Surface,
@@ -642,16 +686,68 @@ class Renderer:
 
     def _render_coin_counter(self, screen: pygame.Surface, frame: RenderFrame) -> None:
         font = pygame.font.SysFont(None, 22)
-        text = f"Coins: {frame.coins_collected}/{frame.coins_to_win}"
-        label_surface = font.render(text, True, (255, 255, 255))
-        panel_width = label_surface.get_width() + 24
-        panel_height = label_surface.get_height() + 12
+        lines = [
+            f"Coins: {frame.coins_collected}/{frame.coins_to_win}",
+            f"Blocks: {frame.blocks_destroyed}/{frame.blocks_to_win}",
+            f"Enemies: {frame.enemies_defeated}/{frame.enemies_to_win}",
+        ]
+        label_surfaces = [font.render(line, True, (255, 255, 255)) for line in lines]
+        panel_width = max(surface.get_width() for surface in label_surfaces) + 24
+        line_height = label_surfaces[0].get_height() + 4
+        panel_height = line_height * len(label_surfaces) + 8
         panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
         panel.fill((0, 0, 0, 160))
         x = self.width - panel_width - 16
         y = 16
         screen.blit(panel, (x, y))
-        screen.blit(label_surface, (x + 12, y + 6))
+        for index, label_surface in enumerate(label_surfaces):
+            screen.blit(label_surface, (x + 12, y + 6 + index * line_height))
+
+    @staticmethod
+    def _character_touches_gate(character: RenderCharacter, gate) -> bool:
+        return (
+            character.x < gate.x + gate.width
+            and character.x + character.width > gate.x
+            and character.y < gate.y + gate.height
+            and character.y + character.height > gate.y
+        )
+
+    def _sync_checkpoint_toasts(self, frame: RenderFrame, now_ms: int) -> None:
+        for gate in frame.gates.values():
+            already_shown = gate.gate_id in self._checkpoint_toast_shown
+            if gate.is_final or gate.state != "open" or already_shown:
+                continue
+            if any(self._character_touches_gate(c, gate) for c in frame.characters.values()):
+                self._checkpoint_toasts[gate.gate_id] = now_ms
+                self._checkpoint_toast_shown.add(gate.gate_id)
+
+    def _render_checkpoint_toasts(self, screen: pygame.Surface, now_ms: int) -> None:
+        if not self._checkpoint_toasts:
+            return
+
+        font = pygame.font.SysFont(None, 40)
+        text_surface = font.render("Checkpoint raggiunto!", True, (255, 230, 120))
+        panel_width = text_surface.get_width() + 40
+        panel_height = text_surface.get_height() + 20
+
+        for gate_id, started_at in list(self._checkpoint_toasts.items()):
+            progress = (now_ms - started_at) / CHECKPOINT_TOAST_MS
+            if progress >= 1:
+                del self._checkpoint_toasts[gate_id]
+                continue
+
+            alpha = 255
+            if progress > CHECKPOINT_TOAST_FADE_START:
+                fade_progress = (progress - CHECKPOINT_TOAST_FADE_START) / (
+                    1 - CHECKPOINT_TOAST_FADE_START
+                )
+                alpha = round(255 * (1 - fade_progress))
+
+            panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+            panel.fill((0, 0, 0, 170))
+            panel.blit(text_surface, (20, 10))
+            panel.set_alpha(alpha)
+            screen.blit(panel, panel.get_rect(center=(self.width // 2, 60)))
 
     def _render_victory_overlay(self, screen: pygame.Surface) -> None:
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
@@ -682,7 +778,9 @@ class Renderer:
         camera_offset = self._camera_offset(frame, platform_rects)
         self._last_camera_offset = camera_offset
 
+        self._render_decorations(screen, frame, camera_offset, BACKGROUND_DECORATION_KINDS)
         self._render_platforms(screen, platform_rects, camera_offset)
+        self._render_decorations(screen, frame, camera_offset, FOREGROUND_DECORATION_KINDS)
         self._render_environment(screen, frame, camera_offset)
         self._render_player_death_effects(screen, now_ms, camera_offset)
 
@@ -694,6 +792,9 @@ class Renderer:
 
         self._remember_rendered_characters(frame)
         self._render_coin_counter(screen, frame)
+
+        self._sync_checkpoint_toasts(frame, now_ms)
+        self._render_checkpoint_toasts(screen, now_ms)
 
         if frame.victory:
             self._render_victory_overlay(screen)

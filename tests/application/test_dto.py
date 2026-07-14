@@ -6,6 +6,7 @@ from distributed_smb.domain.entity import (
     ExclusivePowerUp,
     Platform,
 )
+from distributed_smb.domain.level import Decoration
 from distributed_smb.domain.world import CharacterState, EnvironmentalState, WorldState
 
 
@@ -33,10 +34,12 @@ def _world_state() -> WorldState:
 def test_build_render_frame_maps_every_field():
     world_state = _world_state()
     platforms = [Platform(x=0, y=0, width=32, height=32)]
+    decorations = [Decoration(kind="cloud", x=50, y=60, width=37, height=26)]
 
     frame = build_render_frame(
         world_state=world_state,
         platforms=platforms,
+        decorations=decorations,
         focus_player_id="player1",
         world_width=1920,
         world_height=960,
@@ -67,6 +70,10 @@ def test_build_render_frame_maps_every_field():
     assert frame.world_width == 1920
     assert frame.world_height == 960
 
+    assert len(frame.decorations) == 1
+    assert frame.decorations[0].kind == "cloud"
+    assert frame.decorations[0].x == 50
+
 
 def test_build_render_frame_respawning_player_ids_uses_keys_not_timestamps():
     world_state = _world_state()
@@ -74,6 +81,7 @@ def test_build_render_frame_respawning_player_ids_uses_keys_not_timestamps():
     frame = build_render_frame(
         world_state=world_state,
         platforms=[],
+        decorations=[],
         focus_player_id=None,
         world_width=0,
         world_height=0,

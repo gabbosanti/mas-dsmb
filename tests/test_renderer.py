@@ -101,8 +101,8 @@ def test_powerup_ids_use_distinct_item_sprites():
 
 def test_renderer_hides_destroyed_blocks_and_collected_powerups(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: 0)
-    screen = pygame.display.set_mode((200, 200))
-    renderer = Renderer(width=200, height=200)
+    screen = pygame.display.set_mode((400, 200))
+    renderer = Renderer(width=400, height=200)
     frame = RenderFrame(
         blocks=[
             RenderBlock(x=20, y=20, width=32, height=32),
