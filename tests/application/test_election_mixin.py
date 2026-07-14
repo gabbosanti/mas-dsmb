@@ -154,6 +154,7 @@ class TestOnSelfElected:
         assert nc._promotion_done is True
         assert nc.role is PlayerRole.HOST
         assert broker.promoted_port == GAME_EVENT_WS_PORT
+        assert nc.engine.is_authoritative is True
 
     def test_with_peers_broadcasts_claim(self):
         """With surviving peers, NewHostClaim is broadcast and promotion deferred."""
@@ -212,6 +213,7 @@ class TestOnElectionAck:
 
         assert nc._promotion_done is True
         assert nc.role is PlayerRole.HOST
+        assert nc.engine.is_authoritative is True
 
     def test_partial_ack_no_premature_promote(self):
         """A single ack when two are pending does not promote."""
