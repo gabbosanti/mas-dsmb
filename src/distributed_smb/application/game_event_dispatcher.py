@@ -4,7 +4,7 @@ import json
 import logging
 import time
 
-from distributed_smb.shared.config import UDP_INPUT_TIMEOUT
+from distributed_smb.shared.config import RESPAWN_DELAY_S, UDP_INPUT_TIMEOUT
 from distributed_smb.shared.mappers.gameplay_mapper import event_to_message
 from distributed_smb.shared.messages.election import (
     ElectionAck,
@@ -98,7 +98,9 @@ class GameEventMixin:
                 # remove player locally and set client's respawn timer
                 try:
                     self.engine.world_state.remove_player(msg.player_id)
-                    self.engine.world_state.respawn_timers[msg.player_id] = time.time() + 10.0
+                    self.engine.world_state.respawn_timers[msg.player_id] = (
+                        time.time() + RESPAWN_DELAY_S
+                    )
                 except Exception:
                     pass
             elif isinstance(msg, NewHostClaim):

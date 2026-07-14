@@ -252,6 +252,7 @@ class NodeController(
         return build_render_frame(
             world_state=world_state,
             platforms=self.engine.platforms,
+            decorations=self.engine.decorations,
             focus_player_id=self.local_player_id,
             world_width=self.engine.world_width,
             world_height=self.engine.world_height,
@@ -305,7 +306,8 @@ class NodeController(
     def _bootstrap_world(self) -> None:
         """Ensure the local player exists before lobby assigns the full roster."""
         if self.engine.world_state.get_player(self.local_player_id) is None:
-            self.engine.spawn_player(self.local_player_id, x=100, y=100)
+            x, y = self.engine.spawn_position_for(0)
+            self.engine.spawn_player(self.local_player_id, x=x, y=y)
 
     def _build_visual_world_state(
         self,
@@ -360,8 +362,13 @@ class NodeController(
         )
 
     def _spawn_position_for(self, join_index: int) -> tuple[int, int]:
-        """Return a stable spawn point determined by join order (0-based)."""
-        return 100 + join_index * 140, 100
+        """Return a stable spawn point determined by join order (0-based).
+
+        Delegates to the domain engine, which reads the level's TMX
+        SpawnPoints — the same source used for respawn-after-death, so
+        initial join and respawn no longer disagree on where the ground is.
+        """
+        return self.engine.spawn_position_for(join_index)
 
     def _rebuild_udp_as_host(self) -> None:
         """Rebind the UDP socket to the authoritative host port after promotion."""
