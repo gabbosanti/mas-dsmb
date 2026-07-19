@@ -1,5 +1,5 @@
 from distributed_smb.domain.entity import ExclusivePowerUp
-from distributed_smb.domain.game_engine import GameEngine
+from distributed_smb.domain.game_engine import GameEngine, VOID_DEATH_CAUSE
 from distributed_smb.shared.input import InputState
 from src.distributed_smb.domain.entity import CooperativeGate, DestructibleBlock
 from src.distributed_smb.domain.world import EnvironmentalState, WorldState
@@ -231,6 +231,23 @@ def test_lateral_block_collision_does_not_destroy_block():
     engine.handle_block_collisions()
 
     assert block.destroyed is False
+
+
+def test_player_dies_when_falling_below_map():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    player = engine.world_state.get_player("player1")
+    player.y = engine.world_height + 1
+    player.prev_y = player.y
+
+    engine.tick(0.016, {"player1": InputState()})
+
+    assert engine.world_state.get_player("player1") is None
+    assert "player1" in engine.world_state.respawn_timers
+    assert any(
+        event.player_id == "player1" and event.enemy_id == VOID_DEATH_CAUSE
+        for event in engine.events
+    )
 
 
 def test_gate_stays_closed_when_level_requirements_are_not_met():

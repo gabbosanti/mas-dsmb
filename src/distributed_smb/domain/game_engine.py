@@ -16,6 +16,7 @@ POWERUP_SIZE = 34
 COIN_SIZE = 26
 GATE_WIDTH = 54
 GATE_HEIGHT = 96
+VOID_DEATH_CAUSE = "void"
 
 
 @dataclass(slots=True)
@@ -72,6 +73,7 @@ class GameEngine:
         self.handle_environment_collisions()
         self._update_enemies(dt)
         self._handle_enemy_collisions()
+        self._handle_void_deaths()
         self._sync_objective_progress_from_environment()
         self.handle_gate_collisions()
         self._clamp_players_to_world()
@@ -105,15 +107,20 @@ class GameEngine:
                         self.events.append(event)
                     resolve_collision(player, block)
 
-    def _clamp_character_to_world(self, character: CharacterState) -> None:
+    def _clamp_character_to_world(
+        self, character: CharacterState, *, clamp_bottom: bool = True
+    ) -> None:
         max_x = max(0, self.world_width - character.width)
-        max_y = max(0, self.world_height - character.height)
         character.x = max(0, min(character.x, max_x))
-        character.y = max(0, min(character.y, max_y))
+        if clamp_bottom:
+            max_y = max(0, self.world_height - character.height)
+            character.y = max(0, min(character.y, max_y))
+        else:
+            character.y = max(0, character.y)
 
     def _clamp_players_to_world(self) -> None:
         for player in self.world_state.characters.values():
-            self._clamp_character_to_world(player)
+            self._clamp_character_to_world(player, clamp_bottom=False)
 
     def _sync_objective_progress_from_environment(self) -> None:
         self.world_state.coins_collected = sum(
@@ -212,18 +219,25 @@ class GameEngine:
                 enemy.x = enemy.right_bound - enemy.width
                 enemy.vx = -enemy.vx
 
+    def _queue_player_death(self, player_id: str, cause: str) -> None:
+        self.events.append(PlayerDeathEvent(player_id=player_id, enemy_id=cause))
+        self.world_state.remove_player(player_id)
+        self.world_state.respawn_timers[player_id] = time.time() + 10.0
+
     def _handle_enemy_collisions(self) -> None:
         if not self.is_authoritative:
             return
-        now = time.time()
         for enemy in list(self.world_state.environment.enemies.values()):
             for player in list(self.world_state.characters.values()):
                 if check_collision(player, enemy):
-                    event = PlayerDeathEvent(player_id=player.player_id, enemy_id=enemy.enemy_id)
-                    self.events.append(event)
-                    if player.player_id in self.world_state.characters:
-                        del self.world_state.characters[player.player_id]
-                    self.world_state.respawn_timers[player.player_id] = now + 10.0
+                    self._queue_player_death(player.player_id, enemy.enemy_id)
+
+    def _handle_void_deaths(self) -> None:
+        if not self.is_authoritative:
+            return
+        for player in list(self.world_state.characters.values()):
+            if player.y >= self.world_height:
+                self._queue_player_death(player.player_id, VOID_DEATH_CAUSE)
 
     def _process_respawns(self) -> None:
         if not self.is_authoritative:
