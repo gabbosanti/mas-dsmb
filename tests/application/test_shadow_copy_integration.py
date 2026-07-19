@@ -208,6 +208,7 @@ def test_build_visual_world_state_excludes_local_player_during_respawn():
     assert ctrl.local_player_id not in display.characters
     assert ctrl.local_player_id in display.respawn_timers
 
+
 def test_display_world_state_no_shadow_copies_returns_engine_state():
     """HOST path or pre-lobby CLIENT: visual state matches engine.world_state data."""
     ctrl = NodeController()
@@ -326,5 +327,3 @@ def test_reconciliation_at_50ms_corrects_position():
     assert corrected_x == authoritative_x, (
         f"Expected position corrected to {authoritative_x}, got {corrected_x}"
     )
-
-

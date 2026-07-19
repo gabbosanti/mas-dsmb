@@ -100,12 +100,15 @@ def test_host_bootstrap_configures_players_and_role():
     assert controller.engine.world_state.get_player(controller.local_player_id) is not None
 
 
-def test_spawn_position_scales_with_join_index():
+def test_spawn_position_uses_level_spawn_points():
+    """Initial join spawn now delegates to the level's TMX SpawnPoints (the
+    same source respawn-after-death uses), instead of a separate hardcoded
+    formula that placed players high above the ground."""
     controller = NodeController()
-    assert controller._spawn_position_for(0) == (100, 100)
-    assert controller._spawn_position_for(1) == (240, 100)
-    assert controller._spawn_position_for(2) == (380, 100)
-    assert controller._spawn_position_for(3) == (520, 100)
+    expected = controller.engine.spawn_points
+    for join_index in range(4):
+        point = expected[join_index % len(expected)]
+        assert controller._spawn_position_for(join_index) == (point.x, point.y)
 
 
 def test_client_process_frame_increments_input_sequence():
@@ -382,6 +385,12 @@ def test_client_process_frame_returns_visual_state_with_predicted_local_player()
     controller = NodeController().bootstrap(role=PlayerRole.CLIENT)
     serializer = Serializer()
     local_pid = controller.local_player_id  # "player2" placeholder after bootstrap
+    # Pin the local player's starting position explicitly rather than relying
+    # on whatever the level's spawn point happens to be, so the predicted-tick
+    # math below (and its expected direction of correction) stays meaningful
+    # regardless of spawn changes.
+    controller.engine.world_state.characters[local_pid].x = 100.0
+    controller.engine.world_state.characters[local_pid].y = 100.0
     authoritative_world = WorldState(
         sequence_number=20,
         characters={
@@ -443,3 +452,38 @@ def test_visual_world_state_clones_environment_from_authoritative_state():
     assert controller.engine.world_state.environment.destructible_blocks[0].destroyed is False
     assert controller.engine.world_state.environment.power_ups["pu-a"].collected is False
     assert controller.engine.world_state.environment.cooperative_gates["gate-a"].state == "closed"
+
+
+class _FakePredictionEngine:
+    def __init__(self, pending: int) -> None:
+        self._pending = pending
+
+    def pending_count(self) -> int:
+        return self._pending
+
+
+def test_adjust_prediction_lead_ignores_noise_within_tolerance():
+    """A frozen baseline must not move for a deviation inside the tolerance band."""
+    controller = NodeController()
+    controller.prediction_lead_calibration_remaining = 0
+    controller.prediction_lead_baseline = 3.0
+    controller.prediction_engine = _FakePredictionEngine(pending=5)
+
+    controller._adjust_prediction_lead()
+
+    assert controller.prediction_lead_baseline == 3.0
+
+
+def test_adjust_prediction_lead_walks_frozen_baseline_toward_sustained_drift():
+    """A sustained deviation (RTT permanently higher than at calibration time)
+    must walk the frozen baseline up until it settles within tolerance,
+    instead of triggering a correction on every reconcile forever."""
+    controller = NodeController()
+    controller.prediction_lead_calibration_remaining = 0
+    controller.prediction_lead_baseline = 3.0
+    controller.prediction_engine = _FakePredictionEngine(pending=8)
+
+    for _ in range(10):
+        controller._adjust_prediction_lead()
+
+    assert controller.prediction_lead_baseline == 5.0

@@ -205,26 +205,14 @@ class ClientGameplayMixin:
             self.engine.tick(dt, {self.local_player_id: local_input})
 
     def _adjust_prediction_lead(self) -> None:
-        """Track the prediction lead and correct clock drift against the host.
-
-        The prediction lead (number of unacknowledged predicted ticks) tracks
-        the round-trip latency in ticks and is expected to stay roughly
-        constant. Client and host tick loops run at very slightly different
-        real-world rates, so the lead drifts steadily if left uncorrected.
-
-        During the first PREDICTION_LEAD_CALIBRATION_FRAMES frames, the
-        baseline is settled onto the connection's true lead via EWMA. After
-        that it is frozen: deviations from this fixed baseline trigger a
-        one-tick correction (skip a tick if running ahead, double-tick if
-        running behind) for the next frame, which cancels the clock-rate
-        mismatch instead of letting the baseline drift along with it.
-        """
+        """Track the prediction lead and correct clock drift against the host."""
         pending = self.prediction_engine.pending_count()
         baseline = self.prediction_lead_baseline or float(pending)
         deviation = pending - baseline
 
         if deviation > PREDICTION_LEAD_DRIFT_TOLERANCE:
             self.pending_tick_adjustment = -1
+            baseline += 1.0
             LOGGER.debug(
                 "prediction lead drift: pending=%d baseline=%.2f -> skipping next tick",
                 pending,
@@ -232,6 +220,7 @@ class ClientGameplayMixin:
             )
         elif deviation < -PREDICTION_LEAD_DRIFT_TOLERANCE:
             self.pending_tick_adjustment = 1
+            baseline -= 1.0
             LOGGER.debug(
                 "prediction lead drift: pending=%d baseline=%.2f -> double-ticking next frame",
                 pending,
@@ -246,18 +235,7 @@ class ClientGameplayMixin:
         self.prediction_lead_baseline = baseline
 
     def _smoothed_local_visual_state(self, pre_reconcile_pos: tuple[float, float] | None):
-        """Absorb the reconciliation correction gradually instead of snapping.
-
-        reconcile() may have moved the local player (rollback + replay). Render
-        a position that continues smoothly from last frame and closes the
-        accumulated error toward the authoritative position at a rate
-        proportional to the outstanding error (RECONCILE_GLIDE_RATE), capped
-        at RECONCILE_MAX_GLIDE_PX per frame. Small errors (a few px of normal
-        prediction jitter) resolve in 1-2 frames; large errors (a jump-timing
-        mismatch, tens of px) resolve in a handful of frames at the capped
-        rate instead of lingering for a full second, which would let the
-        backlog pile up if corrections recur faster than that.
-        """
+        """Absorb the reconciliation correction gradually instead of snapping."""
         player = self.engine.world_state.get_player(self.local_player_id)
         if player is None or pre_reconcile_pos is None:
             return player

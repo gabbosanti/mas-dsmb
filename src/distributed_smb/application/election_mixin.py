@@ -114,6 +114,12 @@ class ElectionMixin:
         self._promotion_done = True
         LOGGER.info("election: promoting to host")
 
+        # The engine was constructed as non-authoritative (CLIENT role at bootstrap).
+        # Without this, handle_powerup_collisions/_handle_enemy_collisions/
+        # handle_victory_condition/_process_respawns all silently no-op forever
+        # after promotion, since they early-return on is_authoritative=False.
+        self.engine.is_authoritative = True
+
         # Restore world state from last received snapshot
         if self.env_state_buffer is not None:
             last = self.env_state_buffer.get_last()

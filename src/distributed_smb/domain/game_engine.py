@@ -4,11 +4,12 @@ import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
-from distributed_smb.domain.entity import DestructibleBlock
+from distributed_smb.domain.entity import DestructibleBlock, Enemy
 from distributed_smb.domain.events import PlayerDeathEvent
 from distributed_smb.domain.level import TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
+from distributed_smb.shared.config import RESPAWN_DELAY_S
 from distributed_smb.shared.input import InputState
 
 BLOCK_SIZE = 36
@@ -29,12 +30,17 @@ class GameEngine:
     is_authoritative: bool = True
     world_width: int = 0
     world_height: int = 0
+    spawn_points: list = field(default_factory=list)
+    decorations: list = field(default_factory=list)
+    _respawn_join_index: dict = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         level = TiledLevel("assets/levels/level.tmx").build()
         self.platforms = level.platforms
         self.world_width = level.width
         self.world_height = level.height
+        self.spawn_points = level.spawn_points
+        self.decorations = level.decorations
         self.world_state.load_level(level)
 
     def apply_inputs(self, inputs: dict[str, InputState]) -> None:
@@ -136,13 +142,6 @@ class GameEngine:
             self.world_state.initial_enemy_count - len(self.world_state.environment.enemies),
         )
 
-    def _objective_requirements_met(self) -> bool:
-        return (
-            self.world_state.coins_collected >= self.world_state.coins_to_win
-            and self.world_state.blocks_destroyed >= self.world_state.blocks_to_win
-            and self.world_state.enemies_defeated >= self.world_state.enemies_to_win
-        )
-
     def handle_powerup_collisions(self) -> None:
         if not self.is_authoritative:
             return
@@ -165,8 +164,12 @@ class GameEngine:
             self.events.append(event)
 
     def handle_gate_collisions(self) -> None:
-        should_be_open = self._objective_requirements_met()
         for gate in self.world_state.environment.cooperative_gates.values():
+            should_be_open = (
+                self.world_state.coins_collected >= gate.coins_required
+                and self.world_state.blocks_destroyed >= gate.blocks_required
+                and self.world_state.enemies_defeated >= gate.enemies_required
+            )
             colliding_players = [
                 player
                 for player in self.world_state.characters.values()
@@ -186,7 +189,7 @@ class GameEngine:
             return
 
         for gate in self.world_state.environment.cooperative_gates.values():
-            if gate.state != "open":
+            if gate.state != "open" or not gate.is_final:
                 continue
 
             for player in self.world_state.characters.values():
@@ -219,25 +222,56 @@ class GameEngine:
                 enemy.x = enemy.right_bound - enemy.width
                 enemy.vx = -enemy.vx
 
-    def _queue_player_death(self, player_id: str, cause: str) -> None:
-        self.events.append(PlayerDeathEvent(player_id=player_id, enemy_id=cause))
-        self.world_state.remove_player(player_id)
-        self.world_state.respawn_timers[player_id] = time.time() + 10.0
+    def _is_stomp(self, player: CharacterState, enemy: Enemy) -> bool:
+        """A stomp is a landing from above: player's feet were at/above the
+        enemy's head last frame and the player is currently falling."""
+        previous_bottom = player.prev_y + player.height
+        horizontally_overlapping = (
+            player.x < enemy.x + enemy.width and player.x + player.width > enemy.x
+        )
+        return horizontally_overlapping and player.vy > 0 and previous_bottom <= enemy.y + 4
+
+    def _queue_player_death(self, player: CharacterState, cause: str) -> None:
+        self.events.append(PlayerDeathEvent(player_id=player.player_id, enemy_id=cause))
+        self._respawn_join_index[player.player_id] = player.join_index
+        self.world_state.remove_player(player.player_id)
+        self.world_state.respawn_timers[player.player_id] = time.time() + RESPAWN_DELAY_S
 
     def _handle_enemy_collisions(self) -> None:
         if not self.is_authoritative:
             return
         for enemy in list(self.world_state.environment.enemies.values()):
             for player in list(self.world_state.characters.values()):
-                if check_collision(player, enemy):
-                    self._queue_player_death(player.player_id, enemy.enemy_id)
+                if not check_collision(player, enemy):
+                    continue
+                if self._is_stomp(player, enemy):
+                    del self.world_state.environment.enemies[enemy.enemy_id]
+                    player.vy = JUMP_FORCE * 0.6
+                    break
+                self._queue_player_death(player, enemy.enemy_id)
 
     def _handle_void_deaths(self) -> None:
+        """Kill players that fell past the level's floor through a pit,
+        before _clamp_players_to_world() would otherwise silently arrest
+        the fall at the world's bottom edge."""
         if not self.is_authoritative:
             return
         for player in list(self.world_state.characters.values()):
-            if player.y >= self.world_height:
-                self._queue_player_death(player.player_id, VOID_DEATH_CAUSE)
+            if player.y + player.height <= self.world_height:
+                continue
+            self._queue_player_death(player, VOID_DEATH_CAUSE)
+
+    def spawn_position_for(self, join_index: int) -> tuple[int, int]:
+        """Spawn point for a given join_index, from the level's TMX SpawnPoints.
+
+        Shared by respawn-after-death and by application's initial join spawn
+        (node_controller._spawn_position_for) so both use the same
+        level-authored positions instead of two independent formulas.
+        """
+        if not self.spawn_points:
+            return 100, 100
+        point = self.spawn_points[join_index % len(self.spawn_points)]
+        return point.x, point.y
 
     def _process_respawns(self) -> None:
         if not self.is_authoritative:
@@ -245,5 +279,7 @@ class GameEngine:
         now = time.time()
         for pid, due in list(self.world_state.respawn_timers.items()):
             if now >= due:
-                self.spawn_player(pid, x=100, y=100)
+                join_index = self._respawn_join_index.pop(pid, 0)
+                x, y = self.spawn_position_for(join_index)
+                self.spawn_player(pid, x=x, y=y, join_index=join_index)
                 del self.world_state.respawn_timers[pid]

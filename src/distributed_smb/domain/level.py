@@ -20,6 +20,17 @@ class SpawnPoint:
 
 
 @dataclass(slots=True)
+class Decoration:
+    """Purely cosmetic background prop (cloud, hill, bush) — no collision, no gameplay state."""
+
+    kind: str
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+@dataclass(slots=True)
 class Level:
     platforms: list = field(default_factory=list)
     blocks: list = field(default_factory=list)
@@ -27,6 +38,7 @@ class Level:
     enemies: list = field(default_factory=list)
     gates: list = field(default_factory=list)
     spawn_points: list = field(default_factory=list)
+    decorations: list = field(default_factory=list)
     coins_to_win: int = 5
     blocks_to_win: int = 0
     enemies_to_win: int = 0
@@ -89,6 +101,10 @@ class TiledLevel:
                         y=int(obj.y),
                         width=int(obj.width),
                         height=int(obj.height),
+                        coins_required=int(obj.properties.get("coins_required", 0)),
+                        blocks_required=int(obj.properties.get("blocks_required", 0)),
+                        enemies_required=int(obj.properties.get("enemies_required", 0)),
+                        is_final=bool(obj.properties.get("is_final", True)),
                     )
                 )
 
@@ -108,6 +124,18 @@ class TiledLevel:
 
             elif obj.type == "SpawnPoints":
                 level.spawn_points.append(SpawnPoint(x=int(obj.x), y=int(obj.y)))
+
+            elif obj.type == "Decorations":
+                kind = obj.name.split("-")[0] if obj.name else "cloud"
+                level.decorations.append(
+                    Decoration(
+                        kind=kind,
+                        x=int(obj.x),
+                        y=int(obj.y),
+                        width=int(obj.width),
+                        height=int(obj.height),
+                    )
+                )
 
         if "coins_to_win" in tmx.properties:
             level.coins_to_win = int(tmx.properties["coins_to_win"])

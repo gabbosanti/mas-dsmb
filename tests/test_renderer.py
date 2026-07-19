@@ -1,7 +1,12 @@
 import pygame
 
-from distributed_smb.domain.entity import CooperativeGate, DestructibleBlock, ExclusivePowerUp
-from distributed_smb.domain.world import CharacterState, WorldState
+from distributed_smb.application.dto import (
+    RenderBlock,
+    RenderCharacter,
+    RenderFrame,
+    RenderGate,
+    RenderPowerUp,
+)
 from distributed_smb.presentation.renderer import Renderer
 
 
@@ -18,9 +23,9 @@ def test_renderer_draws_sprite_instead_of_flat_background(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: 0)
     screen = pygame.display.set_mode((200, 200))
     renderer = Renderer(width=200, height=200)
-    world = WorldState(
+    frame = RenderFrame(
         characters={
-            "player1": CharacterState(
+            "player1": RenderCharacter(
                 player_id="player1",
                 x=40,
                 y=30,
@@ -31,7 +36,7 @@ def test_renderer_draws_sprite_instead_of_flat_background(monkeypatch):
         }
     )
 
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
 
     sprite_pixels = [screen.get_at((x, y))[:3] for x in range(40, 90) for y in range(30, 80)]
     assert any(pixel != renderer.background_color for pixel in sprite_pixels)
@@ -41,7 +46,7 @@ def test_renderer_preserves_last_facing_direction_when_player_stops(monkeypatch)
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: 0)
     screen = pygame.display.set_mode((200, 200))
     renderer = Renderer(width=200, height=200)
-    character = CharacterState(
+    character = RenderCharacter(
         player_id="player1",
         x=40,
         y=30,
@@ -50,19 +55,19 @@ def test_renderer_preserves_last_facing_direction_when_player_stops(monkeypatch)
         vx=-10,
         on_ground=True,
     )
-    world = WorldState(characters={"player1": character})
+    frame = RenderFrame(characters={"player1": character})
 
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
     assert renderer._facing_by_player["player1"] == -1
 
     character.vx = 0
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
     assert renderer._facing_by_player["player1"] == -1
 
 
 def test_walk_animation_uses_distinct_frames(monkeypatch):
     renderer = Renderer()
-    character = CharacterState(
+    character = RenderCharacter(
         player_id="player1",
         width=50,
         height=50,
@@ -96,21 +101,22 @@ def test_powerup_ids_use_distinct_item_sprites():
 
 def test_renderer_hides_destroyed_blocks_and_collected_powerups(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: 0)
-    screen = pygame.display.set_mode((200, 200))
-    renderer = Renderer(width=200, height=200)
-    world = WorldState()
-    world.environment.destructible_blocks.append(DestructibleBlock(x=20, y=20, width=32, height=32))
-    world.environment.destructible_blocks.append(
-        DestructibleBlock(x=60, y=20, width=32, height=32, destroyed=True)
-    )
-    world.environment.power_ups["visible"] = ExclusivePowerUp(
-        x=20, y=70, width=32, height=32, powerup_id="visible"
-    )
-    world.environment.power_ups["collected"] = ExclusivePowerUp(
-        x=60, y=70, width=32, height=32, powerup_id="collected", collected=True
+    screen = pygame.display.set_mode((400, 200))
+    renderer = Renderer(width=400, height=200)
+    frame = RenderFrame(
+        blocks=[
+            RenderBlock(x=20, y=20, width=32, height=32),
+            RenderBlock(x=60, y=20, width=32, height=32, destroyed=True),
+        ],
+        power_ups={
+            "visible": RenderPowerUp(x=20, y=70, width=32, height=32, powerup_id="visible"),
+            "collected": RenderPowerUp(
+                x=60, y=70, width=32, height=32, powerup_id="collected", collected=True
+            ),
+        },
     )
 
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
 
     assert screen.get_at((36, 36))[:3] != renderer.background_color
     assert screen.get_at((76, 36))[:3] == renderer.background_color
@@ -123,18 +129,17 @@ def test_renderer_animates_powerup_collection_transition(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: tick)
     screen = pygame.display.set_mode((200, 200))
     renderer = Renderer(width=200, height=200)
-    world = WorldState()
-    power_up = ExclusivePowerUp(x=50, y=70, width=32, height=32, powerup_id="coin-1")
-    world.environment.power_ups[power_up.powerup_id] = power_up
+    power_up = RenderPowerUp(x=50, y=70, width=32, height=32, powerup_id="coin-1")
+    frame = RenderFrame(power_ups={power_up.powerup_id: power_up})
 
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
     power_up.collected = True
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
 
     assert screen.get_at((66, 86))[:3] != renderer.background_color
 
     tick = 500
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
 
     assert screen.get_at((66, 86))[:3] == renderer.background_color
 
@@ -143,15 +148,14 @@ def test_gate_sprite_changes_between_closed_and_open(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: 0)
     screen = pygame.display.set_mode((200, 200))
     renderer = Renderer(width=200, height=200)
-    world = WorldState()
-    gate = CooperativeGate(x=40, y=40, width=40, height=48, gate_id="gate-a", state="closed")
-    world.environment.cooperative_gates["gate-a"] = gate
+    gate = RenderGate(x=40, y=40, width=40, height=48, gate_id="gate-a", state="closed")
+    frame = RenderFrame(gates={"gate-a": gate})
 
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
     closed_pixels = pygame.image.tobytes(screen.subsurface(pygame.Rect(40, 40, 40, 48)), "RGBA")
 
     gate.state = "open"
-    renderer.render(screen=screen, world_state=world, platforms=[])
+    renderer.render(screen=screen, frame=frame)
     open_pixels = pygame.image.tobytes(screen.subsurface(pygame.Rect(40, 40, 40, 48)), "RGBA")
 
     assert closed_pixels != open_pixels
@@ -159,9 +163,9 @@ def test_gate_sprite_changes_between_closed_and_open(monkeypatch):
 
 def test_renderer_camera_centers_on_focus_player():
     renderer = Renderer(width=200, height=150)
-    world = WorldState(
+    frame = RenderFrame(
         characters={
-            "player1": CharacterState(
+            "player1": RenderCharacter(
                 player_id="player1",
                 x=300,
                 y=120,
@@ -169,24 +173,22 @@ def test_renderer_camera_centers_on_focus_player():
                 height=50,
                 on_ground=True,
             )
-        }
+        },
+        focus_player_id="player1",
+        world_width=600,
+        world_height=400,
     )
 
-    camera_x, camera_y = renderer._camera_offset(
-        world_state=world,
-        platforms=[],
-        focus_player_id="player1",
-        world_size=(600, 400),
-    )
+    camera_x, camera_y = renderer._camera_offset(frame, platforms=[])
 
     assert (camera_x, camera_y) == (225, 70)
 
 
 def test_renderer_camera_clamps_at_world_edge():
     renderer = Renderer(width=200, height=150)
-    world = WorldState(
+    frame = RenderFrame(
         characters={
-            "player1": CharacterState(
+            "player1": RenderCharacter(
                 player_id="player1",
                 x=10,
                 y=20,
@@ -194,15 +196,13 @@ def test_renderer_camera_clamps_at_world_edge():
                 height=50,
                 on_ground=True,
             )
-        }
+        },
+        focus_player_id="player1",
+        world_width=600,
+        world_height=400,
     )
 
-    camera_x, camera_y = renderer._camera_offset(
-        world_state=world,
-        platforms=[],
-        focus_player_id="player1",
-        world_size=(600, 400),
-    )
+    camera_x, camera_y = renderer._camera_offset(frame, platforms=[])
 
     assert (camera_x, camera_y) == (0, 0)
 
@@ -212,9 +212,9 @@ def test_renderer_starts_death_effect_when_player_enters_respawn(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: tick)
     screen = pygame.display.set_mode((200, 200))
     renderer = Renderer(width=200, height=200)
-    alive_world = WorldState(
+    alive_frame = RenderFrame(
         characters={
-            "player1": CharacterState(
+            "player1": RenderCharacter(
                 player_id="player1",
                 x=40,
                 y=30,
@@ -222,15 +222,18 @@ def test_renderer_starts_death_effect_when_player_enters_respawn(monkeypatch):
                 height=50,
                 on_ground=True,
             )
-        }
+        },
+        focus_player_id="player1",
     )
 
-    renderer.render(screen=screen, world_state=alive_world, platforms=[], focus_player_id="player1")
+    renderer.render(screen=screen, frame=alive_frame)
     assert renderer._death_effects == {}
 
     tick = 50
-    dead_world = WorldState(respawn_timers={"player1": 10.0})
-    renderer.render(screen=screen, world_state=dead_world, platforms=[], focus_player_id="player1")
+    dead_frame = RenderFrame(
+        respawning_player_ids=frozenset({"player1"}), focus_player_id="player1"
+    )
+    renderer.render(screen=screen, frame=dead_frame)
 
     assert "player1" in renderer._death_effects
 
@@ -240,9 +243,9 @@ def test_renderer_keeps_last_camera_offset_during_death_effect(monkeypatch):
     monkeypatch.setattr(pygame.time, "get_ticks", lambda: tick)
     screen = pygame.display.set_mode((200, 150))
     renderer = Renderer(width=200, height=150)
-    alive_world = WorldState(
+    alive_frame = RenderFrame(
         characters={
-            "player1": CharacterState(
+            "player1": RenderCharacter(
                 player_id="player1",
                 x=300,
                 y=120,
@@ -250,26 +253,22 @@ def test_renderer_keeps_last_camera_offset_during_death_effect(monkeypatch):
                 height=50,
                 on_ground=True,
             )
-        }
+        },
+        focus_player_id="player1",
+        world_width=600,
+        world_height=400,
     )
 
-    renderer.render(
-        screen=screen,
-        world_state=alive_world,
-        platforms=[],
-        focus_player_id="player1",
-        world_size=(600, 400),
-    )
+    renderer.render(screen=screen, frame=alive_frame)
     assert renderer._last_camera_offset == (225, 70)
 
     tick = 50
-    dead_world = WorldState(respawn_timers={"player1": 10.0})
-    renderer.render(
-        screen=screen,
-        world_state=dead_world,
-        platforms=[],
+    dead_frame = RenderFrame(
+        respawning_player_ids=frozenset({"player1"}),
         focus_player_id="player1",
-        world_size=(600, 400),
+        world_width=600,
+        world_height=400,
     )
+    renderer.render(screen=screen, frame=dead_frame)
 
     assert renderer._last_camera_offset == (225, 70)

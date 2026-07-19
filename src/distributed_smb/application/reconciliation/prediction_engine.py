@@ -103,9 +103,16 @@ class PredictionEngine:
 
         last_acknowledged = self.buffer.acknowledge(world_state.sequence_number)
         pending_inputs = self.buffer.get_unacknowledged()
+        # Blocks/power-ups/gates are managed exclusively by WS events, so the
+        # UDP snapshot must not override the client's local prediction of
+        # them. Enemies have no dedicated WS event (they move continuously)
+        # so they must be taken from the authoritative snapshot, or client
+        # and host would diverge forever with no resync path.
         local_env = self.engine.world_state.environment
         self.engine.world_state = deepcopy(world_state)
-        self.engine.world_state.environment = local_env
+        self.engine.world_state.environment.destructible_blocks = local_env.destructible_blocks
+        self.engine.world_state.environment.power_ups = local_env.power_ups
+        self.engine.world_state.environment.cooperative_gates = local_env.cooperative_gates
         if pending_inputs:
             self._replay_pending(pending_inputs)
 

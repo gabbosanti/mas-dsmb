@@ -146,12 +146,12 @@ def test_default_level_contains_reachable_world_objects():
     env = engine.world_state.environment
     assert len(env.destructible_blocks) >= 4
     assert len(engine.platforms) >= 8
-    assert len(env.power_ups) >= 10
+    assert len(env.power_ups) >= 4
     assert "gate-1" in env.cooperative_gates
     assert any(powerup_id.startswith("coin-") for powerup_id in env.power_ups)
     assert any(powerup_id.startswith("star-") for powerup_id in env.power_ups)
-    assert engine.world_state.coins_to_win == 6
-    assert engine.world_state.blocks_to_win == 3
+    assert engine.world_state.coins_to_win == 5
+    assert engine.world_state.blocks_to_win == 2
     assert engine.world_state.enemies_to_win == 2
 
     for block in env.destructible_blocks:
@@ -284,17 +284,121 @@ def test_gate_opens_only_when_all_level_requirements_are_met():
     assert gate.state == "open"
 
 
+def test_gates_open_independently_based_on_their_own_thresholds():
+    """A checkpoint gate with a lower requirement must open before a
+    stricter gate, even though both read the same shared counters."""
+    engine = GameEngine()
+    checkpoint = CooperativeGate(
+        x=0, y=0, gate_id="checkpoint", coins_required=1, blocks_required=0, enemies_required=0
+    )
+    final_gate = CooperativeGate(
+        x=100, y=0, gate_id="final", coins_required=5, blocks_required=0, enemies_required=0
+    )
+    engine.world_state.environment.cooperative_gates = {
+        "checkpoint": checkpoint,
+        "final": final_gate,
+    }
+    engine.world_state.coins_collected = 1
+
+    engine.handle_gate_collisions()
+
+    assert checkpoint.state == "open"
+    assert final_gate.state == "closed"
+
+
+def test_non_final_gate_does_not_trigger_victory():
+    engine = GameEngine()
+    checkpoint = CooperativeGate(
+        x=100, y=100, gate_id="checkpoint", state="open", is_final=False
+    )
+    engine.world_state.environment.cooperative_gates = {"checkpoint": checkpoint}
+    engine.spawn_player("player1", x=100, y=100)
+
+    engine.handle_victory_condition()
+
+    assert engine.world_state.victory is False
+
+
+def test_final_gate_triggers_victory_when_open_and_touched():
+    engine = GameEngine()
+    final_gate = CooperativeGate(x=100, y=100, gate_id="final", state="open", is_final=True)
+    engine.world_state.environment.cooperative_gates = {"final": final_gate}
+    engine.spawn_player("player1", x=100, y=100)
+
+    engine.handle_victory_condition()
+
+    assert engine.world_state.victory is True
+    assert engine.world_state.victory_player_id == "player1"
+
+
 def test_level_dimensions_match_tiled_map():
     engine = GameEngine()
 
-    assert engine.world_width == 1920
+    assert engine.world_width == 6912
     assert engine.world_height == 960
 
 
 def test_spawn_player_clamps_to_world_bounds():
     engine = GameEngine()
-    engine.spawn_player("player1", x=9999, y=-50)
+    engine.spawn_player("player1", x=999999, y=-50)
     player = engine.world_state.get_player("player1")
 
     assert player.x == engine.world_width - player.width
     assert player.y == 0
+
+
+def test_stomping_enemy_from_above_kills_enemy_and_bounces_player():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    enemy = next(iter(engine.world_state.environment.enemies.values()))
+    player = engine.world_state.get_player("player1")
+    player.x = enemy.x
+    player.width = enemy.width
+    player.height = enemy.height
+    player.y = enemy.y - player.height + 2
+    player.prev_y = enemy.y - player.height
+    player.vy = 80
+
+    engine._handle_enemy_collisions()
+
+    assert enemy.enemy_id not in engine.world_state.environment.enemies
+    assert "player1" in engine.world_state.characters
+    assert player.vy < 0
+
+
+def test_colliding_enemy_sideways_kills_player_and_sets_respawn_timer():
+    engine = GameEngine()
+    engine.spawn_player("player1", join_index=2)
+    enemy = next(iter(engine.world_state.environment.enemies.values()))
+    player = engine.world_state.get_player("player1")
+    player.x = enemy.x
+    player.y = enemy.y
+    player.prev_y = enemy.y
+    player.vy = 0
+
+    engine._handle_enemy_collisions()
+
+    assert enemy.enemy_id in engine.world_state.environment.enemies
+    assert "player1" not in engine.world_state.characters
+    assert "player1" in engine.world_state.respawn_timers
+
+
+def test_respawn_uses_level_spawn_point_for_join_index():
+    engine = GameEngine()
+    engine.spawn_player("player1", join_index=1)
+    enemy = next(iter(engine.world_state.environment.enemies.values()))
+    player = engine.world_state.get_player("player1")
+    player.x = enemy.x
+    player.y = enemy.y
+    player.prev_y = enemy.y
+    player.vy = 0
+    engine._handle_enemy_collisions()
+    engine.world_state.respawn_timers["player1"] = 0.0
+
+    engine._process_respawns()
+
+    respawned = engine.world_state.get_player("player1")
+    expected_x, expected_y = engine.spawn_position_for(1)
+    assert (respawned.x, respawned.y) == (expected_x, expected_y)
+    assert respawned.join_index == 1
+    assert "player1" not in engine.world_state.respawn_timers

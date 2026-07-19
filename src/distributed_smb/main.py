@@ -14,8 +14,10 @@ from distributed_smb.network.game_event_server import GameEventBroker
 from distributed_smb.network.lobby_container import LobbyContainerManager
 from distributed_smb.network.lobby_service import LobbyService
 from distributed_smb.network.ws_handler import WsHandler
+from distributed_smb.presentation.input_handler import InputHandler
 from distributed_smb.presentation.lobby_screen import LobbyScreen
 from distributed_smb.presentation.menu_screen import MenuScreen
+from distributed_smb.presentation.renderer import Renderer
 from distributed_smb.shared.config import (
     ARTIFICIAL_LATENCY_MS,
     DEFAULT_HOST,
@@ -42,11 +44,15 @@ def build_controller(
             discovery_service=DiscoveryService(),
             lobby_container_manager=LobbyContainerManager(),
             use_discovery=True,
+            renderer=Renderer(),
+            input_handler=InputHandler(),
         )
     else:
         controller = NodeController(
             game_event_broker=GameEventBroker(),
             lobby_service=LobbyService(),
+            renderer=Renderer(),
+            input_handler=InputHandler(),
         )
     controller.bootstrap(
         role=role,

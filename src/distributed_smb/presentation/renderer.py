@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 import pygame
 
-from distributed_smb.domain.world import CharacterState, WorldState
+from distributed_smb.application.dto import RenderCharacter, RenderFrame
 from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
 from distributed_smb.shared.paths import TILESETS_DIR
 
@@ -16,11 +16,27 @@ POWERUP_COLLECTION_EFFECT_MS = 420
 PLAYER_DEATH_EFFECT_MS = 900
 PLAYER_DEATH_RISE_PX = 72
 PLAYER_DEATH_FALL_PX = 120
+CHECKPOINT_TOAST_MS = 2500
+CHECKPOINT_TOAST_FADE_START = 0.7
+
+# Source rects for background decorations within OverWorld.png, measured from the
+# sheet's actual sprite bounding boxes (they are not aligned to the 16px tile grid).
+DECORATION_SOURCE_RECTS = {
+    "cloud": (89, 32, 37, 22),
+    "bush": (8, 96, 32, 16),
+    "hill": (48, 77, 80, 35),
+    "pipe": (96, 0, 32, 32),
+}
+# Decoration kinds that are purely background dressing, drawn before platforms.
+BACKGROUND_DECORATION_KINDS = {"cloud", "bush", "hill"}
+# Decoration kinds that overlay a solid Platform (pipes), drawn after platforms
+# so the pipe art replaces the generic brick look at that spot.
+FOREGROUND_DECORATION_KINDS = {"pipe"}
 
 
 @dataclass(slots=True)
 class PlayerDeathEffect:
-    character: CharacterState
+    character: RenderCharacter
     started_at_ms: int
 
 
@@ -46,9 +62,11 @@ class Renderer:
     _facing_by_player: dict[str, int] = field(init=False, default_factory=dict)
     _powerup_collected_state: dict[str, bool] = field(init=False, default_factory=dict)
     _powerup_collection_effects: dict[str, int] = field(init=False, default_factory=dict)
-    _last_rendered_characters: dict[str, CharacterState] = field(init=False, default_factory=dict)
+    _last_rendered_characters: dict[str, RenderCharacter] = field(init=False, default_factory=dict)
     _death_effects: dict[str, PlayerDeathEffect] = field(init=False, default_factory=dict)
     _last_camera_offset: tuple[int, int] = field(init=False, default=(0, 0))
+    _checkpoint_toasts: dict[str, int] = field(init=False, default_factory=dict)
+    _checkpoint_toast_shown: set[str] = field(init=False, default_factory=set)
 
     def __post_init__(self) -> None:
         if self.player_palette is None:
@@ -59,7 +77,7 @@ class Renderer:
                 "player4": (200, 150, 50),
             }
 
-    def _resolve_facing(self, character: CharacterState) -> int:
+    def _resolve_facing(self, character: RenderCharacter) -> int:
         """Keep the latest horizontal facing direction for each player."""
         if character.vx > 0:
             facing = 1
@@ -70,7 +88,7 @@ class Renderer:
         self._facing_by_player[character.player_id] = facing
         return facing
 
-    def _animation_state(self, character: CharacterState) -> str:
+    def _animation_state(self, character: RenderCharacter) -> str:
         """Classify the current sprite state from physics data."""
         if not character.on_ground:
             return "jump"
@@ -199,12 +217,11 @@ class Renderer:
 
     def _world_bounds(
         self,
-        world_state: WorldState,
+        frame: RenderFrame,
         platforms: list[pygame.Rect],
-        world_size: tuple[int, int] | None,
     ) -> tuple[int, int]:
-        if world_size is not None:
-            return max(self.width, world_size[0]), max(self.height, world_size[1])
+        if frame.world_width and frame.world_height:
+            return max(self.width, frame.world_width), max(self.height, frame.world_height)
 
         max_right = self.width
         max_bottom = self.height
@@ -213,23 +230,23 @@ class Renderer:
             max_right = max(max_right, platform.right)
             max_bottom = max(max_bottom, platform.bottom)
 
-        for character in world_state.characters.values():
+        for character in frame.characters.values():
             max_right = max(max_right, int(character.x + character.width))
             max_bottom = max(max_bottom, int(character.y + character.height))
 
-        for block in world_state.environment.destructible_blocks:
+        for block in frame.blocks:
             max_right = max(max_right, int(block.x + block.width))
             max_bottom = max(max_bottom, int(block.y + block.height))
 
-        for power_up in world_state.environment.power_ups.values():
+        for power_up in frame.power_ups.values():
             max_right = max(max_right, int(power_up.x + power_up.width))
             max_bottom = max(max_bottom, int(power_up.y + power_up.height))
 
-        for gate in world_state.environment.cooperative_gates.values():
+        for gate in frame.gates.values():
             max_right = max(max_right, int(gate.x + gate.width))
             max_bottom = max(max_bottom, int(gate.y + gate.height))
 
-        for enemy in world_state.environment.enemies.values():
+        for enemy in frame.enemies.values():
             max_right = max(max_right, int(enemy.x + enemy.width))
             max_bottom = max(max_bottom, int(enemy.y + enemy.height))
 
@@ -237,19 +254,17 @@ class Renderer:
 
     def _camera_offset(
         self,
-        world_state: WorldState,
+        frame: RenderFrame,
         platforms: list[pygame.Rect],
-        focus_player_id: str | None,
-        world_size: tuple[int, int] | None,
     ) -> tuple[int, int]:
-        if focus_player_id is None:
+        if frame.focus_player_id is None:
             return 0, 0
 
-        focus = world_state.get_player(focus_player_id)
+        focus = frame.characters.get(frame.focus_player_id)
         if focus is None:
             return self._last_camera_offset
 
-        world_width, world_height = self._world_bounds(world_state, platforms, world_size)
+        world_width, world_height = self._world_bounds(frame, platforms)
         target_x = focus.x + focus.width / 2 - self.width / 2
         target_y = focus.y + focus.height / 2 - self.height / 2
         max_x = max(0, world_width - self.width)
@@ -440,12 +455,12 @@ class Renderer:
     def _render_powerup_collection_effects(
         self,
         screen: pygame.Surface,
-        world_state: WorldState,
+        frame: RenderFrame,
         now_ms: int,
         camera_offset: tuple[int, int],
     ) -> None:
         for powerup_id, started_at in list(self._powerup_collection_effects.items()):
-            power_up = world_state.environment.power_ups.get(powerup_id)
+            power_up = frame.power_ups.get(powerup_id)
             if power_up is None:
                 del self._powerup_collection_effects[powerup_id]
                 continue
@@ -479,13 +494,39 @@ class Renderer:
             screen.blit(ring, self._to_screen_position(ring_x, ring_y, camera_offset))
             screen.blit(sprite, self._to_screen_position(x, y, camera_offset))
 
+    def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
+        rect = DECORATION_SOURCE_RECTS.get(kind)
+        if rect is None:
+            return None
+        return self._get_asset_sprite("OverWorld.png", rect, width, height)
+
+    def _render_decorations(
+        self,
+        screen: pygame.Surface,
+        frame: RenderFrame,
+        camera_offset: tuple[int, int],
+        kinds: set[str],
+    ) -> None:
+        for decoration in frame.decorations:
+            if decoration.kind not in kinds:
+                continue
+            sprite = self._get_decoration_sprite(
+                decoration.kind, decoration.width, decoration.height
+            )
+            if sprite is None:
+                continue
+            screen.blit(
+                sprite,
+                self._to_screen_position(decoration.x, decoration.y, camera_offset),
+            )
+
     def _render_environment(
         self,
         screen: pygame.Surface,
-        world_state: WorldState,
+        frame: RenderFrame,
         camera_offset: tuple[int, int],
     ) -> None:
-        for block in world_state.environment.destructible_blocks:
+        for block in frame.blocks:
             if block.destroyed:
                 continue
             screen.blit(
@@ -495,7 +536,7 @@ class Renderer:
 
         now_ms = pygame.time.get_ticks()
         seen_powerups = set()
-        for power_up in world_state.environment.power_ups.values():
+        for power_up in frame.power_ups.values():
             seen_powerups.add(power_up.powerup_id)
             was_collected = self._powerup_collected_state.get(
                 power_up.powerup_id, power_up.collected
@@ -518,21 +559,21 @@ class Renderer:
         for powerup_id in set(self._powerup_collected_state) - seen_powerups:
             del self._powerup_collected_state[powerup_id]
             self._powerup_collection_effects.pop(powerup_id, None)
-        self._render_powerup_collection_effects(screen, world_state, now_ms, camera_offset)
+        self._render_powerup_collection_effects(screen, frame, now_ms, camera_offset)
 
-        for gate in world_state.environment.cooperative_gates.values():
+        for gate in frame.gates.values():
             screen.blit(
                 self._get_environment_sprite("gate", gate.state, gate.width, gate.height),
                 self._to_screen_position(gate.x, gate.y, camera_offset),
             )
 
-        for enemy in world_state.environment.enemies.values():
+        for enemy in frame.enemies.values():
             screen.blit(
                 self._get_environment_sprite("enemy", "default", enemy.width, enemy.height),
                 self._to_screen_position(enemy.x, enemy.y, camera_offset),
             )
 
-    def _get_player_sprite(self, character: CharacterState) -> pygame.Surface:
+    def _get_player_sprite(self, character: RenderCharacter) -> pygame.Surface:
         """Return a cached sprite frame for the given character state."""
         color = self.player_palette.get(character.player_id, (80, 80, 80))
         state = self._animation_state(character)
@@ -562,7 +603,7 @@ class Renderer:
     def _build_player_asset_sprite(
         self,
         *,
-        character: CharacterState,
+        character: RenderCharacter,
         state: str,
         frame: int,
         facing: int,
@@ -589,11 +630,11 @@ class Renderer:
             sprite = pygame.transform.flip(sprite, True, False)
         return sprite
 
-    def _sync_player_death_effects(self, world_state: WorldState, now_ms: int) -> None:
-        respawning_players = set(world_state.respawn_timers)
+    def _sync_player_death_effects(self, frame: RenderFrame, now_ms: int) -> None:
+        respawning_players = frame.respawning_player_ids
 
         for player_id in respawning_players:
-            if player_id in world_state.characters or player_id in self._death_effects:
+            if player_id in frame.characters or player_id in self._death_effects:
                 continue
             last_seen = self._last_rendered_characters.get(player_id)
             if last_seen is None:
@@ -604,7 +645,7 @@ class Renderer:
             )
 
         for player_id in list(self._death_effects):
-            if player_id in world_state.characters and player_id not in respawning_players:
+            if player_id in frame.characters and player_id not in respawning_players:
                 del self._death_effects[player_id]
 
     def _render_player_death_effects(
@@ -626,10 +667,9 @@ class Renderer:
             sprite = self._get_player_sprite(character).copy()
             sprite.set_alpha(max(0, min(255, round(255 * (1 - progress)))))
 
-            vertical_offset = (
-                -PLAYER_DEATH_RISE_PX * (1 - (2 * progress - 1) ** 2)
-                + PLAYER_DEATH_FALL_PX * (progress**2)
-            )
+            vertical_offset = -PLAYER_DEATH_RISE_PX * (
+                1 - (2 * progress - 1) ** 2
+            ) + PLAYER_DEATH_FALL_PX * (progress**2)
             screen.blit(
                 sprite,
                 self._to_screen_position(
@@ -639,24 +679,75 @@ class Renderer:
                 ),
             )
 
-    def _remember_rendered_characters(self, world_state: WorldState) -> None:
+    def _remember_rendered_characters(self, frame: RenderFrame) -> None:
         self._last_rendered_characters = {
-            player_id: deepcopy(character)
-            for player_id, character in world_state.characters.items()
+            player_id: deepcopy(character) for player_id, character in frame.characters.items()
         }
 
-    def _render_coin_counter(self, screen: pygame.Surface, world_state: WorldState) -> None:
+    def _render_coin_counter(self, screen: pygame.Surface, frame: RenderFrame) -> None:
         font = pygame.font.SysFont(None, 22)
-        text = f"Coins: {world_state.coins_collected}/{world_state.coins_to_win}"
-        label_surface = font.render(text, True, (255, 255, 255))
-        panel_width = label_surface.get_width() + 24
-        panel_height = label_surface.get_height() + 12
+        lines = [
+            f"Coins: {frame.coins_collected}/{frame.coins_to_win}",
+            f"Blocks: {frame.blocks_destroyed}/{frame.blocks_to_win}",
+            f"Enemies: {frame.enemies_defeated}/{frame.enemies_to_win}",
+        ]
+        label_surfaces = [font.render(line, True, (255, 255, 255)) for line in lines]
+        panel_width = max(surface.get_width() for surface in label_surfaces) + 24
+        line_height = label_surfaces[0].get_height() + 4
+        panel_height = line_height * len(label_surfaces) + 8
         panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
         panel.fill((0, 0, 0, 160))
         x = self.width - panel_width - 16
         y = 16
         screen.blit(panel, (x, y))
-        screen.blit(label_surface, (x + 12, y + 6))
+        for index, label_surface in enumerate(label_surfaces):
+            screen.blit(label_surface, (x + 12, y + 6 + index * line_height))
+
+    @staticmethod
+    def _character_touches_gate(character: RenderCharacter, gate) -> bool:
+        return (
+            character.x < gate.x + gate.width
+            and character.x + character.width > gate.x
+            and character.y < gate.y + gate.height
+            and character.y + character.height > gate.y
+        )
+
+    def _sync_checkpoint_toasts(self, frame: RenderFrame, now_ms: int) -> None:
+        for gate in frame.gates.values():
+            already_shown = gate.gate_id in self._checkpoint_toast_shown
+            if gate.is_final or gate.state != "open" or already_shown:
+                continue
+            if any(self._character_touches_gate(c, gate) for c in frame.characters.values()):
+                self._checkpoint_toasts[gate.gate_id] = now_ms
+                self._checkpoint_toast_shown.add(gate.gate_id)
+
+    def _render_checkpoint_toasts(self, screen: pygame.Surface, now_ms: int) -> None:
+        if not self._checkpoint_toasts:
+            return
+
+        font = pygame.font.SysFont(None, 40)
+        text_surface = font.render("Checkpoint raggiunto!", True, (255, 230, 120))
+        panel_width = text_surface.get_width() + 40
+        panel_height = text_surface.get_height() + 20
+
+        for gate_id, started_at in list(self._checkpoint_toasts.items()):
+            progress = (now_ms - started_at) / CHECKPOINT_TOAST_MS
+            if progress >= 1:
+                del self._checkpoint_toasts[gate_id]
+                continue
+
+            alpha = 255
+            if progress > CHECKPOINT_TOAST_FADE_START:
+                fade_progress = (progress - CHECKPOINT_TOAST_FADE_START) / (
+                    1 - CHECKPOINT_TOAST_FADE_START
+                )
+                alpha = round(255 * (1 - fade_progress))
+
+            panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+            panel.fill((0, 0, 0, 170))
+            panel.blit(text_surface, (20, 10))
+            panel.set_alpha(alpha)
+            screen.blit(panel, panel.get_rect(center=(self.width // 2, 60)))
 
     def _render_victory_overlay(self, screen: pygame.Surface) -> None:
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
@@ -678,42 +769,34 @@ class Renderer:
             body_surface, body_surface.get_rect(center=(self.width // 2, self.height // 2 + 20))
         )
 
-    def render(
-        self,
-        screen: pygame.Surface,
-        world_state: WorldState,
-        platforms: list[pygame.Rect],
-        focus_player_id: str | None = None,
-        world_size: tuple[int, int] | None = None,
-    ) -> None:
+    def render(self, screen: pygame.Surface, frame: RenderFrame) -> None:
         """Render one frame of the game world."""
         screen.fill(self.background_color)
         now_ms = pygame.time.get_ticks()
-        self._sync_player_death_effects(world_state, now_ms)
-        camera_offset = self._camera_offset(
-            world_state,
-            platforms,
-            focus_player_id=focus_player_id,
-            world_size=world_size,
-        )
+        self._sync_player_death_effects(frame, now_ms)
+        platform_rects = [pygame.Rect(p.x, p.y, p.width, p.height) for p in frame.platforms]
+        camera_offset = self._camera_offset(frame, platform_rects)
         self._last_camera_offset = camera_offset
 
-        self._render_platforms(screen, platforms, camera_offset)
-        self._render_environment(screen, world_state, camera_offset)
+        self._render_decorations(screen, frame, camera_offset, BACKGROUND_DECORATION_KINDS)
+        self._render_platforms(screen, platform_rects, camera_offset)
+        self._render_decorations(screen, frame, camera_offset, FOREGROUND_DECORATION_KINDS)
+        self._render_environment(screen, frame, camera_offset)
         self._render_player_death_effects(screen, now_ms, camera_offset)
 
-        for character in sorted(world_state.characters.values(), key=lambda c: (c.y, c.player_id)):
+        for character in sorted(frame.characters.values(), key=lambda c: (c.y, c.player_id)):
             screen.blit(
                 self._get_player_sprite(character),
                 self._to_screen_position(character.x, character.y, camera_offset),
             )
 
-        self._remember_rendered_characters(world_state)
-        self._render_coin_counter(screen, world_state)
+        self._remember_rendered_characters(frame)
+        self._render_coin_counter(screen, frame)
 
-        if world_state.victory:
+        self._sync_checkpoint_toasts(frame, now_ms)
+        self._render_checkpoint_toasts(screen, now_ms)
+
+        if frame.victory:
             self._render_victory_overlay(screen)
 
         pygame.display.flip()
-
-
