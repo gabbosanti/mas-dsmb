@@ -28,6 +28,7 @@ class CharacterState:
     prev_x: float = 0.0
     prev_y: float = 0.0
     join_index: int = 0
+    powerup_effect_expires_at: float | None = None
 
 
 @dataclass(slots=True)

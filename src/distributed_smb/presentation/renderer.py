@@ -573,6 +573,12 @@ class Renderer:
                 self._to_screen_position(enemy.x, enemy.y, camera_offset),
             )
 
+    def _player_blink_alpha(self, character: RenderCharacter, now_ms: int) -> int:
+        if not character.powerup_effect_active:
+            return 255
+        blink_period_ms = 180
+        return 255 if (now_ms // blink_period_ms) % 2 == 0 else 90
+
     def _get_player_sprite(self, character: RenderCharacter) -> pygame.Surface:
         """Return a cached sprite frame for the given character state."""
         color = self.player_palette.get(character.player_id, (80, 80, 80))
@@ -785,8 +791,12 @@ class Renderer:
         self._render_player_death_effects(screen, now_ms, camera_offset)
 
         for character in sorted(frame.characters.values(), key=lambda c: (c.y, c.player_id)):
+            sprite = self._get_player_sprite(character)
+            if character.powerup_effect_active:
+                sprite = sprite.copy()
+                sprite.set_alpha(self._player_blink_alpha(character, now_ms))
             screen.blit(
-                self._get_player_sprite(character),
+                sprite,
                 self._to_screen_position(character.x, character.y, camera_offset),
             )
 

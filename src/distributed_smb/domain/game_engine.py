@@ -71,6 +71,7 @@ class GameEngine:
             player.prev_x = player.x
             player.prev_y = player.y
 
+        self._expire_powerup_effects(time.time())
         self.apply_inputs(inputs)
         for player in self.world_state.characters.values():
             apply_physics(player, dt)
@@ -142,6 +143,30 @@ class GameEngine:
             self.world_state.initial_enemy_count - len(self.world_state.environment.enemies),
         )
 
+    @staticmethod
+    def _is_star_powerup(power_up) -> bool:
+        return power_up.powerup_id.startswith("star") or power_up.powerup_id == "star"
+
+    def _expire_powerup_effects(self, now: float | None = None) -> None:
+        if now is None:
+            now = time.time()
+        for player in self.world_state.characters.values():
+            if (
+                player.powerup_effect_expires_at is not None
+                and player.powerup_effect_expires_at <= now
+            ):
+                player.powerup_effect_expires_at = None
+
+    def _has_active_powerup_effect(self, player: CharacterState, now: float | None = None) -> bool:
+        if now is None:
+            now = time.time()
+        if player.powerup_effect_expires_at is None:
+            return False
+        if player.powerup_effect_expires_at <= now:
+            player.powerup_effect_expires_at = None
+            return False
+        return True
+
     def handle_powerup_collisions(self) -> None:
         if not self.is_authoritative:
             return
@@ -162,6 +187,9 @@ class GameEngine:
             winner = min(colliding_players, key=lambda p: p.join_index)
             event = power_up.collect(winner.player_id)
             self.events.append(event)
+
+            if self._is_star_powerup(power_up):
+                winner.powerup_effect_expires_at = time.time() + 10.0
 
     def handle_gate_collisions(self) -> None:
         for gate in self.world_state.environment.cooperative_gates.values():
@@ -244,6 +272,10 @@ class GameEngine:
             for player in list(self.world_state.characters.values()):
                 if not check_collision(player, enemy):
                     continue
+                if self._has_active_powerup_effect(player):
+                    del self.world_state.environment.enemies[enemy.enemy_id]
+                    player.vy = JUMP_FORCE * 0.6
+                    break
                 if self._is_stomp(player, enemy):
                     del self.world_state.environment.enemies[enemy.enemy_id]
                     player.vy = JUMP_FORCE * 0.6

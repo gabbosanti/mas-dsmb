@@ -1,5 +1,6 @@
 """Render-only DTOs decoupling presentation from domain."""
 
+import time
 from dataclasses import dataclass, field
 
 from distributed_smb.domain.entity import Platform
@@ -20,6 +21,7 @@ class RenderCharacter:
     on_ground: bool = False
     is_crouching: bool = False
     join_index: int = 0
+    powerup_effect_active: bool = False
 
 
 @dataclass(slots=True)
@@ -124,6 +126,10 @@ def build_render_frame(
                 on_ground=character.on_ground,
                 is_crouching=character.is_crouching,
                 join_index=character.join_index,
+                powerup_effect_active=(
+                    character.powerup_effect_expires_at is not None
+                    and character.powerup_effect_expires_at > time.time()
+                ),
             )
             for player_id, character in world_state.characters.items()
         },

@@ -1,4 +1,6 @@
-from distributed_smb.domain.entity import ExclusivePowerUp
+import time
+
+from distributed_smb.domain.entity import Enemy, ExclusivePowerUp
 from distributed_smb.domain.game_engine import GameEngine, VOID_DEATH_CAUSE
 from distributed_smb.shared.input import InputState
 from src.distributed_smb.domain.entity import CooperativeGate, DestructibleBlock
@@ -196,6 +198,32 @@ def test_non_authoritative_engine_does_not_mutate_coin_counter():
 
     assert power_up.collected is False
     assert engine.world_state.coins_collected == 0
+
+
+def test_collecting_power_up_grants_temporary_enemy_kill_effect():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    player = engine.world_state.get_player("player1")
+    power_up = ExclusivePowerUp(powerup_id="star-custom", x=player.x + 10, y=player.y - 10)
+    engine.world_state.add_power_up(power_up)
+
+    player.x = power_up.x
+    player.y = power_up.y
+    player.prev_x = player.x
+    player.prev_y = player.y
+
+    engine.handle_powerup_collisions()
+
+    assert player.powerup_effect_expires_at is not None
+    assert player.powerup_effect_expires_at >= time.time() + 9.5
+
+    enemy = Enemy(enemy_id="enemy-1", x=player.x, y=player.y, width=10, height=10)
+    engine.world_state.environment.enemies[enemy.enemy_id] = enemy
+
+    engine._handle_enemy_collisions()
+
+    assert enemy.enemy_id not in engine.world_state.environment.enemies
+    assert engine.world_state.get_player("player1") is player
 
 
 def test_head_bump_destroys_destructible_block():
