@@ -1,7 +1,7 @@
 import time
 
 from distributed_smb.domain.entity import Enemy, ExclusivePowerUp
-from distributed_smb.domain.game_engine import GameEngine, VOID_DEATH_CAUSE
+from distributed_smb.domain.game_engine import VOID_DEATH_CAUSE, GameEngine
 from distributed_smb.shared.input import InputState
 from src.distributed_smb.domain.entity import CooperativeGate, DestructibleBlock
 from src.distributed_smb.domain.world import EnvironmentalState, WorldState
@@ -336,9 +336,7 @@ def test_gates_open_independently_based_on_their_own_thresholds():
 
 def test_non_final_gate_does_not_trigger_victory():
     engine = GameEngine()
-    checkpoint = CooperativeGate(
-        x=100, y=100, gate_id="checkpoint", state="open", is_final=False
-    )
+    checkpoint = CooperativeGate(x=100, y=100, gate_id="checkpoint", state="open", is_final=False)
     engine.world_state.environment.cooperative_gates = {"checkpoint": checkpoint}
     engine.spawn_player("player1", x=100, y=100)
 
