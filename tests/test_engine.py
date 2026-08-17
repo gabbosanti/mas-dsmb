@@ -355,6 +355,61 @@ def test_final_gate_triggers_victory_when_open_and_touched():
 
     assert engine.world_state.victory is True
     assert engine.world_state.victory_player_id == "player1"
+    assert engine.world_state.victory_at is not None
+
+
+def test_victory_does_not_reset_before_delay_elapses():
+    engine = GameEngine()
+    engine.spawn_player("player1")
+    engine.world_state.victory = True
+    engine.world_state.victory_player_id = "player1"
+    engine.world_state.victory_at = time.time()
+
+    engine.tick(1 / 60, {})
+
+    assert engine.world_state.victory is True
+    assert engine.events == []
+
+
+def test_victory_resets_run_in_place_after_delay():
+    engine = GameEngine()
+    engine.spawn_player("player1", join_index=0)
+    block = engine.world_state.environment.destructible_blocks[0]
+    block.destroyed = True
+    power_up = next(iter(engine.world_state.environment.power_ups.values()))
+    power_up.collected = True
+    player = engine.world_state.get_player("player1")
+    player.x, player.y = 999, 999
+
+    engine.world_state.victory = True
+    engine.world_state.victory_player_id = "player1"
+    engine.world_state.victory_at = time.time() - 999
+
+    engine.tick(1 / 60, {})
+
+    assert engine.world_state.victory is False
+    assert engine.world_state.victory_player_id is None
+    assert engine.world_state.victory_at is None
+    assert engine.world_state.environment.destructible_blocks[0].destroyed is False
+    assert next(iter(engine.world_state.environment.power_ups.values())).collected is False
+    reset_player = engine.world_state.get_player("player1")
+    assert (reset_player.x, reset_player.y) == engine.spawn_position_for(0)
+    assert len(engine.events) == 1
+    assert type(engine.events[0]).__name__ == "LevelResetEvent"
+
+
+def test_reset_for_new_run_is_noop_on_non_authoritative_client():
+    engine = GameEngine(is_authoritative=False)
+    engine.spawn_player("player1")
+    engine.world_state.victory = True
+    engine.world_state.victory_at = time.time() - 999
+
+    engine.tick(1 / 60, {})
+
+    # Non-authoritative clients never self-trigger a reset; they wait for the
+    # host's LevelResetMessage (applied directly via engine.reset_for_new_run()).
+    assert engine.world_state.victory is True
+    assert engine.events == []
 
 
 def test_level_dimensions_match_tiled_map():

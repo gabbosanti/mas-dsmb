@@ -85,3 +85,10 @@ class PlayerDeathMessage:
         validate_player_id(self.player_id)
         if not self.enemy_id or not isinstance(self.enemy_id, str):
             raise MessageValidationError(f"Invalid enemy_id: {self.enemy_id}")
+
+
+@dataclass(slots=True)
+class LevelResetMessage:
+    """Broadcast by the host when it restarts the current run after a victory."""
+
+    message_type: MessageType = field(init=False, default=MessageType.LEVEL_RESET_MESSAGE)

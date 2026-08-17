@@ -23,3 +23,8 @@ class GateStateChangedEvent:
 class PlayerDeathEvent:
     player_id: str
     enemy_id: str
+
+
+@dataclass(slots=True)
+class LevelResetEvent:
+    """Signals that the host restarted the current run after a victory."""

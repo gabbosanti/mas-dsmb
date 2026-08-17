@@ -28,6 +28,7 @@ from distributed_smb.shared.enums import PlayerRole
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
+    LevelResetMessage,
     PlayerLeft,
     PowerUpCollectedMessage,
 )
@@ -318,3 +319,28 @@ def test_client_applies_powerup_collected_event():
 
     assert pu.collected
     assert pu.owner == "player1"
+
+
+def test_client_applies_level_reset_event():
+    """Client restores its local blocks/power-ups and respawns players on LevelResetMessage."""
+    client = _make_post_lobby_client()
+    client.game_event_handler = _ge_handler(client.local_player_id)
+
+    client.engine.world_state.environment.destructible_blocks[0].destroyed = True
+    next(iter(client.engine.world_state.environment.power_ups.values())).collected = True
+    player = client.engine.world_state.get_player("player1")
+    player.x, player.y = 999, 999
+
+    payload = json.dumps(_serializer.encode_ws_message(LevelResetMessage())).encode()
+    send_game_event(payload)
+    time.sleep(0.2)
+
+    client._drain_game_events()
+    client.game_event_handler.close()
+
+    # reset_for_new_run() rebuilds the environment from the level template,
+    # so the pre-reset block/power_up objects are stale; re-fetch them.
+    assert client.engine.world_state.environment.destructible_blocks[0].destroyed is False
+    assert next(iter(client.engine.world_state.environment.power_ups.values())).collected is False
+    reset_player = client.engine.world_state.get_player("player1")
+    assert (reset_player.x, reset_player.y) == client.engine.spawn_position_for(0)

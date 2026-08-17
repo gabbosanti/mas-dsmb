@@ -134,6 +134,10 @@ class PlayerDeathMessageSchema(BaseModel):
     message_type: str = Field(default="player_death_message")
 
 
+class LevelResetMessageSchema(BaseModel):
+    message_type: str = Field(default="level_reset_message")
+
+
 class NewHostClaimSchema(BaseModel):
     claimer_ip: str = Field(..., min_length=1)
     claimer_join_index: int = Field(..., ge=0)

@@ -15,6 +15,7 @@ from distributed_smb.shared.messages.election import (
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
     GateStateChangedMessage,
+    LevelResetMessage,
     PlayerDeathMessage,
     PlayerLeft,
     PowerUpCollectedMessage,
@@ -103,6 +104,9 @@ class GameEventMixin:
                     )
                 except Exception:
                     pass
+            elif isinstance(msg, LevelResetMessage):
+                LOGGER.info("game event applied: level reset (new run)")
+                self.engine.reset_for_new_run()
             elif isinstance(msg, NewHostClaim):
                 LOGGER.info(
                     "election: NewHostClaim from %s (join_index=%d)",

@@ -10,6 +10,15 @@ from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
 from distributed_smb.shared.paths import TILESETS_DIR
 
 MARIO_FRAME_SIZE = 32
+V2_CHARACTER_FRAME_SIZE = 160
+# (sheet filename, frame cell size, base_frame) per join_index % 4. All four sheets
+# share the same 26-frame layout: base_frame is idle, +1/+2/+3 walk, +5 jump, +6 duck.
+PLAYER_SPRITE_SHEETS = {
+    0: ("Mario.png", MARIO_FRAME_SIZE, 8),
+    1: ("Mario.png", MARIO_FRAME_SIZE, 17),
+    2: ("v2_mario_luigi.png", V2_CHARACTER_FRAME_SIZE, 8),
+    3: ("v2_mario_waluigi.png", V2_CHARACTER_FRAME_SIZE, 8),
+}
 TILE_SIZE = 16
 DISPLAY_TILE_SIZE = 30
 POWERUP_COLLECTION_EFFECT_MS = 420
@@ -184,6 +193,14 @@ class Renderer:
 
         try:
             sheet = pygame.image.load(str(path))
+            if sheet.get_masks()[3] == 0:
+                # No native alpha channel (e.g. the v2_mario_* sheets): their "black"
+                # background isn't pure (0,0,0) everywhere (compression noise), so
+                # snap near-black pixels before keying them out as transparent.
+                pixels = pygame.PixelArray(sheet)
+                pixels.replace((0, 0, 0), (0, 0, 0), distance=0.08)
+                del pixels
+                sheet.set_colorkey((0, 0, 0))
             try:
                 sheet = sheet.convert_alpha()
             except pygame.error:
@@ -614,7 +631,7 @@ class Renderer:
         frame: int,
         facing: int,
     ) -> pygame.Surface | None:
-        base_frame = 8 if character.join_index % 2 == 0 else 17
+        filename, frame_size, base_frame = PLAYER_SPRITE_SHEETS[character.join_index % 4]
         if state == "jump":
             frame_index = base_frame + 5
         elif state == "duck":
@@ -625,8 +642,8 @@ class Renderer:
             frame_index = base_frame
 
         sprite = self._get_asset_sprite(
-            "Mario.png",
-            (frame_index * MARIO_FRAME_SIZE, 0, MARIO_FRAME_SIZE, MARIO_FRAME_SIZE),
+            filename,
+            (frame_index * frame_size, 0, frame_size, frame_size),
             int(character.width),
             int(character.height),
         )

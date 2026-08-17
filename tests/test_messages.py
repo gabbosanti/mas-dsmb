@@ -6,6 +6,7 @@ import pytest
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
     GateStateChangedMessage,
+    LevelResetMessage,
     MessageValidationError,
     PlayerDisconnected,
     PlayerLeft,
@@ -117,6 +118,12 @@ def test_gate_state_changed_message():
 
     assert msg.message_type.value == "gate_state_changed_message"
     assert msg.new_state == "open"
+
+
+def test_level_reset_message():
+    msg = LevelResetMessage()
+
+    assert msg.message_type.value == "level_reset_message"
 
 
 def test_host_discovery_probe_message():

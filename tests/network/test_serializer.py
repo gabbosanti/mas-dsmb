@@ -5,7 +5,7 @@ from distributed_smb.domain.world import CharacterState, WorldState
 from distributed_smb.network.serializer import Serializer
 from distributed_smb.shared.enums import ConnectionStatus
 from distributed_smb.shared.input import InputState
-from distributed_smb.shared.messages.gameplay import PlayerInputPacket
+from distributed_smb.shared.messages.gameplay import LevelResetMessage, PlayerInputPacket
 from distributed_smb.shared.messages.recovery import (
     HostDiscoveryProbe,
     HostIdentityResponse,
@@ -183,6 +183,13 @@ def test_ws_initial_state_sync_roundtrip():
     assert decoded.world_state.environment.destructible_blocks[0].x == 5
     assert "boost" in decoded.world_state.environment.power_ups
     assert decoded.world_state.environment.cooperative_gates["gate-a"].state == "closed"
+
+
+def test_ws_level_reset_roundtrip():
+    s = Serializer()
+    msg = LevelResetMessage()
+    decoded = s.decode_ws_message(s.encode_ws_message(msg))
+    assert isinstance(decoded, LevelResetMessage)
 
 
 def test_ws_decode_unknown_type_raises():

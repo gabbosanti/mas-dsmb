@@ -78,6 +78,7 @@ ENEMY_WIDTH = int(34 * WORLD_SCALE)
 MAX_PLAYERS = 4
 
 RESPAWN_DELAY_S = 3.0
+VICTORY_RESET_DELAY_S = 5.0
 
 # DIVERGENCE_THRESHOLD: positional error (px) above which the client rolls
 # back to the authoritative state and replays buffered inputs. Lower values

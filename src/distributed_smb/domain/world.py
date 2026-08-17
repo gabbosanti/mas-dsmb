@@ -1,5 +1,6 @@
 """World state definitions."""
 
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 
 from distributed_smb.domain.entity import (
@@ -55,13 +56,24 @@ class WorldState:
     initial_enemy_count: int = 0
     victory: bool = False
     victory_player_id: str | None = None
+    victory_at: float | None = None
     respawn_timers: dict[str, float] = field(default_factory=dict)
 
     def load_level(self, level: Level) -> None:
-        self.environment.destructible_blocks = list(level.blocks)
-        self.environment.power_ups = {powerup.powerup_id: powerup for powerup in level.powerups}
-        self.environment.enemies = {enemy.enemy_id: enemy for enemy in level.enemies}
-        self.environment.cooperative_gates = {gate.gate_id: gate for gate in level.gates}
+        """Populate the environment from a level template.
+
+        Deep-copies every entity: level.blocks/powerups/enemies/gates is a
+        reusable template (kept alive on GameEngine._level for mid-session
+        resets), and gameplay mutates entity state in place (block.destroyed,
+        power_up.collected, ...) — aliasing the template's objects here would
+        let a run's mutations leak into the "fresh" state of the next one.
+        """
+        self.environment.destructible_blocks = deepcopy(level.blocks)
+        self.environment.power_ups = {
+            powerup.powerup_id: powerup for powerup in deepcopy(level.powerups)
+        }
+        self.environment.enemies = {enemy.enemy_id: enemy for enemy in deepcopy(level.enemies)}
+        self.environment.cooperative_gates = {gate.gate_id: gate for gate in deepcopy(level.gates)}
         self.coins_collected = 0
         self.coins_to_win = level.coins_to_win
         self.blocks_destroyed = 0
@@ -71,6 +83,7 @@ class WorldState:
         self.initial_enemy_count = len(level.enemies)
         self.victory = False
         self.victory_player_id = None
+        self.victory_at = None
 
     def add_player(self, character: CharacterState):
         self.characters[character.player_id] = character
@@ -154,5 +167,6 @@ class WorldState:
             initial_enemy_count=data.get("initial_enemy_count", len(enemies)),
             victory=data.get("victory", False),
             victory_player_id=data.get("victory_player_id"),
+            victory_at=data.get("victory_at"),
             respawn_timers=data.get("respawn_timers", {}),
         )

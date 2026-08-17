@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
 from distributed_smb.domain.entity import DestructibleBlock, Enemy
-from distributed_smb.domain.events import PlayerDeathEvent
-from distributed_smb.domain.level import TiledLevel
+from distributed_smb.domain.events import LevelResetEvent, PlayerDeathEvent
+from distributed_smb.domain.level import Level, TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
-from distributed_smb.shared.config import RESPAWN_DELAY_S
+from distributed_smb.shared.config import RESPAWN_DELAY_S, VICTORY_RESET_DELAY_S
 from distributed_smb.shared.input import InputState
 
 BLOCK_SIZE = 36
@@ -33,6 +33,7 @@ class GameEngine:
     spawn_points: list = field(default_factory=list)
     decorations: list = field(default_factory=list)
     _respawn_join_index: dict = field(default_factory=dict, init=False)
+    _level: Level | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         level = TiledLevel("assets/levels/level.tmx").build()
@@ -42,6 +43,7 @@ class GameEngine:
         self.spawn_points = level.spawn_points
         self.decorations = level.decorations
         self.world_state.load_level(level)
+        self._level = level
 
     def apply_inputs(self, inputs: dict[str, InputState]) -> None:
         for player_id, input_state in inputs.items():
@@ -65,6 +67,9 @@ class GameEngine:
     def tick(self, dt, inputs: dict[str, InputState]):
         if self.world_state.victory:
             self.world_state.sequence_number += 1
+            if self.is_authoritative and self._victory_reset_due():
+                self.reset_for_new_run()
+                self.events.append(LevelResetEvent())
             return
 
         for player in self.world_state.characters.values():
@@ -224,7 +229,29 @@ class GameEngine:
                 if check_collision(player, gate):
                     self.world_state.victory = True
                     self.world_state.victory_player_id = player.player_id
+                    self.world_state.victory_at = time.time()
                     return
+
+    def _victory_reset_due(self) -> bool:
+        return (
+            self.world_state.victory_at is not None
+            and time.time() - self.world_state.victory_at >= VICTORY_RESET_DELAY_S
+        )
+
+    def reset_for_new_run(self) -> None:
+        """Restart the current session in place: fresh level state (blocks,
+        power-ups, enemies, gates, counters), every connected player respawned.
+        Same session/roster, no lobby round-trip."""
+        self.world_state.load_level(self._level)
+        self._respawn_join_index.clear()
+        self.world_state.respawn_timers.clear()
+        for player in self.world_state.characters.values():
+            player.x, player.y = self.spawn_position_for(player.join_index)
+            player.vx = 0.0
+            player.vy = 0.0
+            player.on_ground = False
+            player.is_crouching = False
+            player.powerup_effect_expires_at = None
 
     def _is_head_bump(self, player: CharacterState, block: DestructibleBlock) -> bool:
         previous_top = player.prev_y

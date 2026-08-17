@@ -1,12 +1,14 @@
 from distributed_smb.domain.events import (
     BlockDestroyedEvent,
     GateStateChangedEvent,
+    LevelResetEvent,
     PlayerDeathEvent,
     PowerUpCollectedEvent,
 )
 from distributed_smb.shared.messages.gameplay import (
     BlockDestroyedMessage,
     GateStateChangedMessage,
+    LevelResetMessage,
     PlayerDeathMessage,
     PowerUpCollectedMessage,
 )
@@ -21,3 +23,5 @@ def event_to_message(event):
         return GateStateChangedMessage(gate_id=event.gate_id, new_state=event.new_state)
     if isinstance(event, PlayerDeathEvent):
         return PlayerDeathMessage(player_id=event.player_id, enemy_id=event.enemy_id)
+    if isinstance(event, LevelResetEvent):
+        return LevelResetMessage()
