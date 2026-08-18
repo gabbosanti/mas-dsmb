@@ -161,8 +161,12 @@ class SpriteFactory:
         highlight = (224, 160, 98)
         pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
         pygame.draw.rect(surface, mortar, surface.get_rect(), width=max(2, width // 9))
-        pygame.draw.line(surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12))
-        pygame.draw.line(surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12))
+        pygame.draw.line(
+            surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12)
+        )
+        pygame.draw.line(
+            surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12)
+        )
         pygame.draw.line(surface, highlight, (5, 5), (width - 5, 5), max(1, height // 14))
 
     def _draw_powerup_surface(self, surface: pygame.Surface) -> None:
@@ -186,7 +190,9 @@ class SpriteFactory:
             (width * 0.40, height * 0.38),
         ]
         pygame.draw.polygon(surface, star, [(round(x), round(y)) for x, y in points])
-        pygame.draw.circle(surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10))
+        pygame.draw.circle(
+            surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10)
+        )
 
     def _draw_gate_surface(self, surface: pygame.Surface, state: str) -> None:
         width, height = surface.get_size()
@@ -199,9 +205,13 @@ class SpriteFactory:
         pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
         inner = surface.get_rect().inflate(-max(4, width // 5), -max(4, height // 8))
         pygame.draw.rect(surface, fill, inner, border_radius=max(2, width // 12))
-        pygame.draw.rect(surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12))
+        pygame.draw.rect(
+            surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12)
+        )
         if state == "open":
-            opening = pygame.Rect(inner.centerx - panel_width // 2, inner.y, panel_width, inner.height)
+            opening = pygame.Rect(
+                inner.centerx - panel_width // 2, inner.y, panel_width, inner.height
+            )
             pygame.draw.rect(surface, (30, 30, 30, 0), opening)
             pygame.draw.rect(surface, (35, 45, 58), opening.inflate(-2, 0))
         else:
@@ -262,9 +272,13 @@ class SpriteFactory:
         height: int,
     ) -> pygame.Surface | None:
         if sprite_kind == "block":
-            return self._get_asset_sprite("OverWorld.png", (TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE), width, height)
+            return self._get_asset_sprite(
+                "OverWorld.png", (TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE), width, height
+            )
         if sprite_kind == "powerup":
-            return self._get_asset_sprite("Items.png", self._powerup_source_rect(state), width, height)
+            return self._get_asset_sprite(
+                "Items.png", self._powerup_source_rect(state), width, height
+            )
         if sprite_kind == "gate":
             sprite = self._get_asset_sprite("Castle.png", (0, 0, 80, 80), width, height)
             if sprite is None:
@@ -317,7 +331,9 @@ class SpriteFactory:
         key = (color, state, frame, character.width, character.height, facing)
         sprite = self.owner._sprite_cache.get(key)
         if sprite is None:
-            sprite = self._build_player_asset_sprite(character=character, state=state, frame=frame, facing=facing)
+            sprite = self._build_player_asset_sprite(
+                character=character, state=state, frame=frame, facing=facing
+            )
             if sprite is None:
                 sprite = self._build_sprite(
                     body_color=color,
@@ -336,11 +352,18 @@ class SpriteFactory:
         platforms: list[pygame.Rect],
         camera_offset: tuple[int, int],
     ) -> None:
-        tile = self._get_asset_sprite("OverWorld.png", (TILE_SIZE, 0, TILE_SIZE, TILE_SIZE), DISPLAY_TILE_SIZE, DISPLAY_TILE_SIZE)
+        tile = self._get_asset_sprite(
+            "OverWorld.png",
+            (TILE_SIZE, 0, TILE_SIZE, TILE_SIZE),
+            DISPLAY_TILE_SIZE,
+            DISPLAY_TILE_SIZE,
+        )
         camera_x, camera_y = camera_offset
         if tile is None:
             for platform in platforms:
-                pygame.draw.rect(screen, self.owner.platform_color, platform.move(-camera_x, -camera_y))
+                pygame.draw.rect(
+                    screen, self.owner.platform_color, platform.move(-camera_x, -camera_y)
+                )
             return
 
         for platform in platforms:
@@ -364,10 +387,14 @@ class SpriteFactory:
         for decoration in frame.decorations:
             if decoration.kind not in kinds:
                 continue
-            sprite = self._get_decoration_sprite(decoration.kind, decoration.width, decoration.height)
+            sprite = self._get_decoration_sprite(
+                decoration.kind, decoration.width, decoration.height
+            )
             if sprite is None:
                 continue
-            screen.blit(sprite, self.owner._to_screen_position(decoration.x, decoration.y, camera_offset))
+            screen.blit(
+                sprite, self.owner._to_screen_position(decoration.x, decoration.y, camera_offset)
+            )
 
     def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
         rect = DECORATION_SOURCE_RECTS.get(kind)
@@ -392,7 +419,9 @@ class SpriteFactory:
         seen = set()
         for power_up in frame.power_ups.values():
             seen.add(power_up.powerup_id)
-            was_collected = self.owner._powerup_collected_state.get(power_up.powerup_id, power_up.collected)
+            was_collected = self.owner._powerup_collected_state.get(
+                power_up.powerup_id, power_up.collected
+            )
             if power_up.collected and not was_collected:
                 self.owner._powerup_collection_effects[power_up.powerup_id] = now_ms
             self.owner._powerup_collected_state[power_up.powerup_id] = power_up.collected
@@ -463,7 +492,9 @@ class EffectRenderer:
             height = max(1, round(power_up.height * scale))
             x = round(power_up.x + power_up.width / 2 - width / 2)
             y = round(power_up.y - progress * 34)
-            sprite = self.owner._sprite_system._get_environment_sprite("powerup", sprite_name, width, height).copy()
+            sprite = self.owner._sprite_system._get_environment_sprite(
+                "powerup", sprite_name, width, height
+            ).copy()
             sprite.set_alpha(alpha)
 
             ring_radius = round(max(power_up.width, power_up.height) * (0.55 + progress * 0.8))

@@ -5,7 +5,10 @@ from __future__ import annotations
 import pygame
 
 from distributed_smb.application.dto import RenderCharacter, RenderFrame
-from distributed_smb.presentation.renderer_support import CHECKPOINT_TOAST_FADE_START, CHECKPOINT_TOAST_MS
+from distributed_smb.presentation.renderer_support import (
+    CHECKPOINT_TOAST_FADE_START,
+    CHECKPOINT_TOAST_MS,
+)
 
 
 class UiRenderer:
@@ -45,7 +48,10 @@ class UiRenderer:
             already_shown = gate.gate_id in self.owner._checkpoint_toast_shown
             if gate.is_final or gate.state != "open" or already_shown:
                 continue
-            if any(self._character_touches_gate(character, gate) for character in frame.characters.values()):
+            if any(
+                self._character_touches_gate(character, gate)
+                for character in frame.characters.values()
+            ):
                 self.owner._checkpoint_toasts[gate.gate_id] = now_ms
                 self.owner._checkpoint_toast_shown.add(gate.gate_id)
 

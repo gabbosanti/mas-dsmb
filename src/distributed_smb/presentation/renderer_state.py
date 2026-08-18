@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from distributed_smb.application.dto import RenderCharacter, RenderFrame
+from distributed_smb.application.dto import RenderFrame
 from distributed_smb.presentation.renderer_support import PlayerDeathEffect
 
 
@@ -31,6 +31,5 @@ class RenderStateTracker:
 
     def remember_rendered_characters(self, frame: RenderFrame) -> None:
         self.owner._last_rendered_characters = {
-            player_id: deepcopy(character)
-            for player_id, character in frame.characters.items()
+            player_id: deepcopy(character) for player_id, character in frame.characters.items()
         }

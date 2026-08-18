@@ -13,7 +13,9 @@ class CameraController:
 
     def world_bounds(self, frame: RenderFrame, platforms: list[pygame.Rect]) -> tuple[int, int]:
         if frame.world_width and frame.world_height:
-            return max(self.owner.width, frame.world_width), max(self.owner.height, frame.world_height)
+            return max(self.owner.width, frame.world_width), max(
+                self.owner.height, frame.world_height
+            )
 
         max_right = self.owner.width
         max_bottom = self.owner.height

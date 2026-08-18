@@ -1,6 +1,5 @@
 """Rendering abstractions for the game client."""
 
-from copy import deepcopy
 from dataclasses import dataclass, field
 
 import pygame
@@ -149,7 +148,9 @@ class Renderer:
         now_ms: int,
         camera_offset: tuple[int, int],
     ) -> None:
-        self._effect_renderer.render_powerup_collection_effects(screen, frame, now_ms, camera_offset)
+        self._effect_renderer.render_powerup_collection_effects(
+            screen, frame, now_ms, camera_offset
+        )
 
     def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
         return self._sprite_system._get_decoration_sprite(kind, width, height)
