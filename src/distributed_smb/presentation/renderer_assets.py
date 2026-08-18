@@ -1,8 +1,11 @@
 """Low-level sprite and environment asset helpers."""
 
 from __future__ import annotations
+
 from typing import Any
+
 import pygame
+
 from distributed_smb.application.dto import RenderCharacter
 from distributed_smb.shared.paths import TILESETS_DIR
 
@@ -140,8 +143,12 @@ class AssetSpriteFactory:
         highlight = (224, 160, 98)
         pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
         pygame.draw.rect(surface, mortar, surface.get_rect(), width=max(2, width // 9))
-        pygame.draw.line(surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12))
-        pygame.draw.line(surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12))
+        pygame.draw.line(
+            surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12)
+        )
+        pygame.draw.line(
+            surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12)
+        )
         pygame.draw.line(surface, highlight, (5, 5), (width - 5, 5), max(1, height // 14))
 
     def _draw_powerup_surface(self, surface: pygame.Surface) -> None:
@@ -165,7 +172,9 @@ class AssetSpriteFactory:
             (width * 0.40, height * 0.38),
         ]
         pygame.draw.polygon(surface, star, [(round(x), round(y)) for x, y in points])
-        pygame.draw.circle(surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10))
+        pygame.draw.circle(
+            surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10)
+        )
 
     def _draw_gate_surface(self, surface: pygame.Surface, state: str) -> None:
         width, height = surface.get_size()
@@ -178,9 +187,13 @@ class AssetSpriteFactory:
         pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
         inner = surface.get_rect().inflate(-max(4, width // 5), -max(4, height // 8))
         pygame.draw.rect(surface, fill, inner, border_radius=max(2, width // 12))
-        pygame.draw.rect(surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12))
+        pygame.draw.rect(
+            surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12)
+        )
         if state == "open":
-            opening = pygame.Rect(inner.centerx - panel_width // 2, inner.y, panel_width, inner.height)
+            opening = pygame.Rect(
+                inner.centerx - panel_width // 2, inner.y, panel_width, inner.height
+            )
             pygame.draw.rect(surface, (30, 30, 30, 0), opening)
             pygame.draw.rect(surface, (35, 45, 58), opening.inflate(-2, 0))
         else:
@@ -245,7 +258,9 @@ class AssetSpriteFactory:
                 "OverWorld.png", (TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE), width, height
             )
         if sprite_kind == "powerup":
-            return self._get_asset_sprite("Items.png", self._powerup_source_rect(state), width, height)
+            return self._get_asset_sprite(
+                "Items.png", self._powerup_source_rect(state), width, height
+            )
         if sprite_kind == "gate":
             sprite = self._get_asset_sprite("Castle.png", (0, 0, 80, 80), width, height)
             if sprite is None:

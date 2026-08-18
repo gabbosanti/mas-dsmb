@@ -8,10 +8,10 @@ import pygame
 
 from distributed_smb.application.dto import RenderFrame
 from distributed_smb.presentation.renderer_assets import (
-    AssetSpriteFactory,
     DECORATION_SOURCE_RECTS,
     DISPLAY_TILE_SIZE,
     TILE_SIZE,
+    AssetSpriteFactory,
 )
 
 
@@ -84,7 +84,9 @@ class WorldRenderer:
                 height,
             )
         if sprite_kind == "gate":
-            sprite = self.sprite_factory._get_asset_sprite("Castle.png", (0, 0, 80, 80), width, height)
+            sprite = self.sprite_factory._get_asset_sprite(
+                "Castle.png", (0, 0, 80, 80), width, height
+            )
             if sprite is None:
                 return None
             sprite = sprite.copy()
@@ -94,7 +96,9 @@ class WorldRenderer:
                 pygame.draw.rect(sprite, (36, 24, 18), door, width=max(1, width // 18))
             return sprite
         if sprite_kind == "enemy":
-            return self.sprite_factory._get_asset_sprite("Enemies.png", (100, 6, 18, 25), width, height)
+            return self.sprite_factory._get_asset_sprite(
+                "Enemies.png", (100, 6, 18, 25), width, height
+            )
         return None
 
     def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
@@ -118,7 +122,9 @@ class WorldRenderer:
         camera_x, camera_y = camera_offset
         if tile is None:
             for platform in platforms:
-                pygame.draw.rect(screen, self.owner.platform_color, platform.move(-camera_x, -camera_y))
+                pygame.draw.rect(
+                    screen, self.owner.platform_color, platform.move(-camera_x, -camera_y)
+                )
             return
 
         for platform in platforms:
@@ -142,10 +148,14 @@ class WorldRenderer:
         for decoration in frame.decorations:
             if decoration.kind not in kinds:
                 continue
-            sprite = self._get_decoration_sprite(decoration.kind, decoration.width, decoration.height)
+            sprite = self._get_decoration_sprite(
+                decoration.kind, decoration.width, decoration.height
+            )
             if sprite is None:
                 continue
-            screen.blit(sprite, self.owner._to_screen_position(decoration.x, decoration.y, camera_offset))
+            screen.blit(
+                sprite, self.owner._to_screen_position(decoration.x, decoration.y, camera_offset)
+            )
 
     def render_environment(
         self,
@@ -164,7 +174,9 @@ class WorldRenderer:
         seen = set()
         for power_up in frame.power_ups.values():
             seen.add(power_up.powerup_id)
-            previous = self.owner._powerup_collected_state.get(power_up.powerup_id, power_up.collected)
+            previous = self.owner._powerup_collected_state.get(
+                power_up.powerup_id, power_up.collected
+            )
             if power_up.collected and not previous:
                 self.owner._powerup_collection_effects[power_up.powerup_id] = now_ms
             self.owner._powerup_collected_state[power_up.powerup_id] = power_up.collected
