@@ -37,15 +37,11 @@ class PlayerDeathEffect:
     started_at_ms: int
 
 
-class RendererSpriteSystem:
-    """Contains all asset and sprite generation logic used by Renderer."""
+class SpriteFactory:
+    """Build sprites and environment art from the game assets."""
 
     def __init__(self, owner: Any) -> None:
         self.owner = owner
-        self._sprite_cache: dict[tuple[tuple[int, int, int], str, int, int, int, int], pygame.Surface] = {}
-        self._environment_sprite_cache: dict[tuple[str, str, int, int], pygame.Surface] = {}
-        self._asset_sheets: dict[str, pygame.Surface | None] = {}
-        self._asset_sprite_cache: dict[tuple[str, tuple[int, int, int, int], int, int], pygame.Surface] = {}
 
     @staticmethod
     def _shade(color: tuple[int, int, int], delta: int) -> tuple[int, int, int]:
@@ -82,8 +78,8 @@ class RendererSpriteSystem:
         arm_offset = -0.04 if state == "walk" and frame == 1 else 0.04 if state == "walk" else 0.0
         jump_raise = -0.03 if state == "jump" else 0.0
         duck_drop = 0.18 if state == "duck" else 0.0
-
         y = jump_raise + duck_drop
+
         rect(0.28, 0.07 + y, 0.44, 0.12, hat)
         rect(0.23, 0.17 + y, 0.54, 0.06, hat)
         rect(0.32, 0.23 + y, 0.36, 0.18, skin)
@@ -143,8 +139,8 @@ class RendererSpriteSystem:
         width: int,
         height: int,
     ) -> pygame.Surface | None:
-        cache_key = (filename, rect, width, height)
-        cached = self.owner._asset_sprite_cache.get(cache_key)
+        key = (filename, rect, width, height)
+        cached = self.owner._asset_sprite_cache.get(key)
         if cached is not None:
             return cached
 
@@ -155,7 +151,7 @@ class RendererSpriteSystem:
         sprite = pygame.Surface((rect[2], rect[3]), pygame.SRCALPHA)
         sprite.blit(sheet, (0, 0), pygame.Rect(rect))
         scaled = pygame.transform.scale(sprite, (width, height))
-        self.owner._asset_sprite_cache[cache_key] = scaled
+        self.owner._asset_sprite_cache[key] = scaled
         return scaled
 
     def _draw_block_surface(self, surface: pygame.Surface) -> None:
@@ -165,22 +161,18 @@ class RendererSpriteSystem:
         highlight = (224, 160, 98)
         pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
         pygame.draw.rect(surface, mortar, surface.get_rect(), width=max(2, width // 9))
-        pygame.draw.line(
-            surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12)
-        )
-        pygame.draw.line(
-            surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12)
-        )
+        pygame.draw.line(surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12))
+        pygame.draw.line(surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12))
         pygame.draw.line(surface, highlight, (5, 5), (width - 5, 5), max(1, height // 14))
 
     def _draw_powerup_surface(self, surface: pygame.Surface) -> None:
         width, height = surface.get_size()
-        glow_color = (255, 227, 107, 90)
-        star_color = (255, 217, 52)
+        glow = (255, 227, 107, 90)
+        star = (255, 217, 52)
         shine = (255, 247, 205)
         center = (width // 2, height // 2)
         radius = max(6, min(width, height) // 2 - 3)
-        pygame.draw.circle(surface, glow_color, center, radius)
+        pygame.draw.circle(surface, glow, center, radius)
         points = [
             (width * 0.50, height * 0.12),
             (width * 0.60, height * 0.38),
@@ -193,29 +185,23 @@ class RendererSpriteSystem:
             (width * 0.12, height * 0.38),
             (width * 0.40, height * 0.38),
         ]
-        pygame.draw.polygon(surface, star_color, [(round(x), round(y)) for x, y in points])
-        pygame.draw.circle(
-            surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10)
-        )
+        pygame.draw.polygon(surface, star, [(round(x), round(y)) for x, y in points])
+        pygame.draw.circle(surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10))
 
     def _draw_gate_surface(self, surface: pygame.Surface, state: str) -> None:
         width, height = surface.get_size()
-        frame = (92, 65, 40)
+        body = (92, 65, 40)
         closed_fill = (79, 127, 173)
         open_fill = (116, 195, 122)
         accent = (212, 233, 248) if state == "closed" else (215, 255, 220)
         fill = open_fill if state == "open" else closed_fill
         panel_width = max(4, width // 5)
-        pygame.draw.rect(surface, frame, surface.get_rect(), border_radius=max(2, width // 10))
+        pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
         inner = surface.get_rect().inflate(-max(4, width // 5), -max(4, height // 8))
         pygame.draw.rect(surface, fill, inner, border_radius=max(2, width // 12))
-        pygame.draw.rect(
-            surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12)
-        )
+        pygame.draw.rect(surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12))
         if state == "open":
-            opening = pygame.Rect(
-                inner.centerx - panel_width // 2, inner.y, panel_width, inner.height
-            )
+            opening = pygame.Rect(inner.centerx - panel_width // 2, inner.y, panel_width, inner.height)
             pygame.draw.rect(surface, (30, 30, 30, 0), opening)
             pygame.draw.rect(surface, (35, 45, 58), opening.inflate(-2, 0))
         else:
@@ -252,9 +238,9 @@ class RendererSpriteSystem:
         height: int,
     ) -> pygame.Surface:
         cache_key = (sprite_kind, state, width, height)
-        sprite = self.owner._environment_sprite_cache.get(cache_key)
-        if sprite is not None:
-            return sprite
+        cached = self.owner._environment_sprite_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         sprite = self._build_environment_asset_sprite(sprite_kind, state, width, height)
         if sprite is None:
@@ -276,19 +262,9 @@ class RendererSpriteSystem:
         height: int,
     ) -> pygame.Surface | None:
         if sprite_kind == "block":
-            return self._get_asset_sprite(
-                "OverWorld.png",
-                (TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE),
-                width,
-                height,
-            )
+            return self._get_asset_sprite("OverWorld.png", (TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE), width, height)
         if sprite_kind == "powerup":
-            return self._get_asset_sprite(
-                "Items.png",
-                self._powerup_source_rect(state),
-                width,
-                height,
-            )
+            return self._get_asset_sprite("Items.png", self._powerup_source_rect(state), width, height)
         if sprite_kind == "gate":
             sprite = self._get_asset_sprite("Castle.png", (0, 0, 80, 80), width, height)
             if sprite is None:
@@ -300,39 +276,8 @@ class RendererSpriteSystem:
                 pygame.draw.rect(sprite, (36, 24, 18), door, width=max(1, width // 18))
             return sprite
         if sprite_kind == "enemy":
-            return self._get_asset_sprite(
-                "Enemies.png",
-                (100, 6, 18, 25),
-                width,
-                height,
-            )
+            return self._get_asset_sprite("Enemies.png", (100, 6, 18, 25), width, height)
         return None
-
-    def get_player_sprite(self, character: RenderCharacter) -> pygame.Surface:
-        color = self.owner.player_palette.get(character.player_id, (80, 80, 80))
-        state = self.owner._animation_state(character)
-        frame = self.owner._animation_frame(state)
-        facing = self.owner._resolve_facing(character)
-        cache_key = (color, state, frame, character.width, character.height, facing)
-        sprite = self.owner._sprite_cache.get(cache_key)
-        if sprite is None:
-            sprite = self._build_player_asset_sprite(
-                character=character,
-                state=state,
-                frame=frame,
-                facing=facing,
-            )
-            if sprite is None:
-                sprite = self._build_sprite(
-                    body_color=color,
-                    state=state,
-                    frame=frame,
-                    width=int(character.width),
-                    height=int(character.height),
-                    facing=facing,
-                )
-            self.owner._sprite_cache[cache_key] = sprite
-        return sprite
 
     def _build_player_asset_sprite(
         self,
@@ -364,18 +309,34 @@ class RendererSpriteSystem:
             sprite = pygame.transform.flip(sprite, True, False)
         return sprite
 
+    def get_player_sprite(self, character: RenderCharacter) -> pygame.Surface:
+        color = self.owner.player_palette.get(character.player_id, (80, 80, 80))
+        state = self.owner._animation_state(character)
+        frame = self.owner._animation_frame(state)
+        facing = self.owner._resolve_facing(character)
+        key = (color, state, frame, character.width, character.height, facing)
+        sprite = self.owner._sprite_cache.get(key)
+        if sprite is None:
+            sprite = self._build_player_asset_sprite(character=character, state=state, frame=frame, facing=facing)
+            if sprite is None:
+                sprite = self._build_sprite(
+                    body_color=color,
+                    state=state,
+                    frame=frame,
+                    width=int(character.width),
+                    height=int(character.height),
+                    facing=facing,
+                )
+            self.owner._sprite_cache[key] = sprite
+        return sprite
+
     def render_platforms(
         self,
         screen: pygame.Surface,
         platforms: list[pygame.Rect],
         camera_offset: tuple[int, int],
     ) -> None:
-        tile = self._get_asset_sprite(
-            "OverWorld.png",
-            (TILE_SIZE, 0, TILE_SIZE, TILE_SIZE),
-            DISPLAY_TILE_SIZE,
-            DISPLAY_TILE_SIZE,
-        )
+        tile = self._get_asset_sprite("OverWorld.png", (TILE_SIZE, 0, TILE_SIZE, TILE_SIZE), DISPLAY_TILE_SIZE, DISPLAY_TILE_SIZE)
         camera_x, camera_y = camera_offset
         if tile is None:
             for platform in platforms:
@@ -421,20 +382,17 @@ class RendererSpriteSystem:
         camera_offset: tuple[int, int],
     ) -> None:
         for block in frame.blocks:
-            if block.destroyed:
-                continue
-            screen.blit(
-                self._get_environment_sprite("block", "intact", block.width, block.height),
-                self.owner._to_screen_position(block.x, block.y, camera_offset),
-            )
+            if not block.destroyed:
+                screen.blit(
+                    self._get_environment_sprite("block", "intact", block.width, block.height),
+                    self.owner._to_screen_position(block.x, block.y, camera_offset),
+                )
 
         now_ms = pygame.time.get_ticks()
-        seen_powerups = set()
+        seen = set()
         for power_up in frame.power_ups.values():
-            seen_powerups.add(power_up.powerup_id)
-            was_collected = self.owner._powerup_collected_state.get(
-                power_up.powerup_id, power_up.collected
-            )
+            seen.add(power_up.powerup_id)
+            was_collected = self.owner._powerup_collected_state.get(power_up.powerup_id, power_up.collected)
             if power_up.collected and not was_collected:
                 self.owner._powerup_collection_effects[power_up.powerup_id] = now_ms
             self.owner._powerup_collected_state[power_up.powerup_id] = power_up.collected
@@ -450,10 +408,10 @@ class RendererSpriteSystem:
                 ),
                 self.owner._to_screen_position(power_up.x, power_up.y, camera_offset),
             )
-        for powerup_id in set(self.owner._powerup_collected_state) - seen_powerups:
+
+        for powerup_id in set(self.owner._powerup_collected_state) - seen:
             del self.owner._powerup_collected_state[powerup_id]
             self.owner._powerup_collection_effects.pop(powerup_id, None)
-        self.render_powerup_collection_effects(screen, frame, now_ms, camera_offset)
 
         for gate in frame.gates.values():
             screen.blit(
@@ -466,6 +424,19 @@ class RendererSpriteSystem:
                 self._get_environment_sprite("enemy", "default", enemy.width, enemy.height),
                 self.owner._to_screen_position(enemy.x, enemy.y, camera_offset),
             )
+
+
+class EffectRenderer:
+    """Draw transient effects like power-up blooms and death animations."""
+
+    def __init__(self, owner: Any) -> None:
+        self.owner = owner
+
+    def player_blink_alpha(self, character: RenderCharacter, now_ms: int) -> int:
+        if not character.powerup_effect_active:
+            return 255
+        blink_period_ms = 180
+        return 255 if (now_ms // blink_period_ms) % 2 == 0 else 90
 
     def render_powerup_collection_effects(
         self,
@@ -485,14 +456,14 @@ class RendererSpriteSystem:
                 del self.owner._powerup_collection_effects[powerup_id]
                 continue
 
-            state = self._powerup_sprite_state(power_up.powerup_id)
+            sprite_name = self.owner._sprite_system._powerup_sprite_state(power_up.powerup_id)
             scale = 1 + progress * 0.55
             alpha = max(0, min(255, round(255 * (1 - progress))))
             width = max(1, round(power_up.width * scale))
             height = max(1, round(power_up.height * scale))
             x = round(power_up.x + power_up.width / 2 - width / 2)
             y = round(power_up.y - progress * 34)
-            sprite = self._get_environment_sprite("powerup", state, width, height).copy()
+            sprite = self.owner._sprite_system._get_environment_sprite("powerup", sprite_name, width, height).copy()
             sprite.set_alpha(alpha)
 
             ring_radius = round(max(power_up.width, power_up.height) * (0.55 + progress * 0.8))
@@ -525,7 +496,7 @@ class RendererSpriteSystem:
             character.vx = 0
             character.vy = 0
             character.on_ground = False
-            sprite = self.get_player_sprite(character).copy()
+            sprite = self.owner._sprite_system.get_player_sprite(character).copy()
             sprite.set_alpha(max(0, min(255, round(255 * (1 - progress)))))
 
             vertical_offset = -PLAYER_DEATH_RISE_PX * (
@@ -540,8 +511,5 @@ class RendererSpriteSystem:
                 ),
             )
 
-    def player_blink_alpha(self, character: RenderCharacter, now_ms: int) -> int:
-        if not character.powerup_effect_active:
-            return 255
-        blink_period_ms = 180
-        return 255 if (now_ms // blink_period_ms) % 2 == 0 else 90
+
+RendererSpriteSystem = SpriteFactory
