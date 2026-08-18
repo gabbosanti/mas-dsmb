@@ -1,11 +1,8 @@
 """Low-level sprite and environment asset helpers."""
 
 from __future__ import annotations
-
 from typing import Any
-
 import pygame
-
 from distributed_smb.application.dto import RenderCharacter
 from distributed_smb.shared.paths import TILESETS_DIR
 
@@ -268,6 +265,44 @@ class AssetSpriteFactory:
         if rect is None:
             return None
         return self._get_asset_sprite("OverWorld.png", rect, width, height)
+
+    def get_player_sprite(self, character: RenderCharacter) -> pygame.Surface:
+        body_color = self.owner.player_palette.get(
+            character.player_id,
+            self.owner.player_palette["player1"],
+        )
+        state = self.owner._animation_state(character)
+        frame = self.owner._animation_frame(state)
+        facing = self.owner._resolve_facing(character)
+        cache_key = (
+            body_color,
+            state,
+            frame,
+            int(character.width),
+            int(character.height),
+            facing,
+        )
+        cached = self.owner._sprite_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        sprite = self._build_player_asset_sprite(
+            character=character,
+            state=state,
+            frame=frame,
+            facing=facing,
+        )
+        if sprite is None:
+            sprite = self._build_sprite(
+                body_color,
+                state,
+                frame,
+                int(character.width),
+                int(character.height),
+                facing,
+            )
+        self.owner._sprite_cache[cache_key] = sprite
+        return sprite
 
     def _build_player_asset_sprite(
         self,

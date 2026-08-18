@@ -9,12 +9,8 @@ from typing import Any
 import pygame
 
 from distributed_smb.application.dto import RenderCharacter, RenderFrame
-from distributed_smb.presentation.renderer_assets import (
-    AssetSpriteFactory,
-    DECORATION_SOURCE_RECTS,
-    DISPLAY_TILE_SIZE,
-    TILE_SIZE,
-)
+from distributed_smb.presentation.renderer_assets import AssetSpriteFactory
+from distributed_smb.presentation.renderer_world import WorldRenderer
 
 POWERUP_COLLECTION_EFFECT_MS = 420
 PLAYER_DEATH_EFFECT_MS = 900
@@ -33,7 +29,35 @@ class PlayerDeathEffect:
 
 
 class SpriteFactory(AssetSpriteFactory):
-    """Thin compatibility layer over the extracted sprite asset factory."""
+    """Compatibility wrapper for extracted asset and world render logic."""
+
+    def __init__(self, owner: Any) -> None:
+        super().__init__(owner)
+        self.world_renderer = WorldRenderer(owner, self)
+
+    def render_platforms(self, screen, platforms, camera_offset):
+        self.world_renderer.render_platforms(screen, platforms, camera_offset)
+
+    def render_decoration_layer(self, screen, frame, camera_offset, kinds):
+        self.world_renderer.render_decoration_layer(screen, frame, camera_offset, kinds)
+
+    def render_environment(self, screen, frame, camera_offset):
+        self.world_renderer.render_environment(screen, frame, camera_offset)
+
+    def _get_environment_sprite(self, sprite_kind, state, width, height):
+        return self.world_renderer._get_environment_sprite(sprite_kind, state, width, height)
+
+    def _powerup_sprite_state(self, powerup_id: str) -> str:
+        return self.world_renderer._powerup_sprite_state(powerup_id)
+
+    def _get_decoration_sprite(self, kind: str, width: int, height: int):
+        return self.world_renderer._get_decoration_sprite(kind, width, height)
+
+    def _powerup_source_rect(self, state: str):
+        return self.world_renderer._powerup_source_rect(state)
+
+    def get_player_sprite(self, character: RenderCharacter) -> pygame.Surface:
+        return super().get_player_sprite(character)
 
 
 class EffectRenderer:
