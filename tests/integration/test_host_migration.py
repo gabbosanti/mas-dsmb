@@ -1,26 +1,7 @@
-"""Integration tests for fault tolerance and host migration (M8).
+"""Integration tests for fault tolerance and host migration."""
 
-These tests validate the full fault-tolerance chain:
-  host crash → timeout detection → election → role promotion → reconnect → resume
-
-Prerequisites (Persona 2):
-  - ElectionMixin._promote_to_host() implemented in NodeController
-  - game_event_broker.reconnect() / promote_to_server() wired
-  - ReconnectionAck broadcast from new host to surviving clients
-
-Until Persona 2 delivers, tests marked with @pytest.mark.skip are stubs
-that define the acceptance criteria. Remove the skip decorator to activate.
-
-Architecture note — why no explicit state transfer:
-  Each client holds an up-to-date WorldState via the UDP snapshot stream.
-  EnvironmentalStateBuffer keeps the last snapshot. On promotion, the new
-  host calls bootstrap_from_snapshot(env_state_buffer.get_last()) and the
-  world state is immediately authoritative — no extra protocol needed.
-"""
-
+import json
 import time
-
-import pytest
 
 from distributed_smb.application.election import (
     ElectionCoordinator,
@@ -30,13 +11,18 @@ from distributed_smb.application.election import (
     HostTimeoutWatcher,
     SelfElected,
 )
+from distributed_smb.application.node_controller import NodeController
+from distributed_smb.domain.world import WorldState
 from distributed_smb.shared.config import (
     HOST_TIMEOUT_S,
     T_ELECTION_BASE_S,
     T_ELECTION_DELTA_S,
 )
-from distributed_smb.shared.messages.election import ReconnectionAck
+from distributed_smb.shared.enums import MessageType, PlayerRole
+from distributed_smb.shared.messages.election import ElectionAck, ReconnectionAck
+from distributed_smb.shared.messages.session import SessionCreated, SessionRecreate
 from distributed_smb.shared.messages.sync import WorldStateSnapshot
+from distributed_smb.shared.roster import GlobalRoster, RosterEntry
 
 # ---------------------------------------------------------------------------
 # Unit-level integration: timeout watcher + election coordinator together
@@ -166,55 +152,237 @@ class TestReconnectionAckValidation:
 
 
 # ---------------------------------------------------------------------------
-# End-to-end process-level tests (require Persona 2 ElectionMixin)
+# End-to-end process-level tests (Persona 2 migration + election logic)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Requires Persona 2 ElectionMixin + promote_to_host()")
+class SpyBroker:
+    def __init__(self):
+        self.sent: list[dict] = []
+        self.promoted_port: int | None = None
+        self.reconnected_to: tuple[str, int] | None = None
+
+    def send(self, payload: bytes) -> None:
+        self.sent.append(json.loads(payload.decode()))
+
+    def get_disconnected_player(self) -> str | None:
+        return None
+
+    def launch(self, host: str = "0.0.0.0", port: int = 0) -> None:
+        pass
+
+    def reconnect(self, host: str, port: int) -> None:
+        self.reconnected_to = (host, port)
+
+    def promote_to_server(self, port: int) -> None:
+        self.promoted_port = port
+
+
+class SpyWsHandler:
+    def __init__(self):
+        self.sent: list[object] = []
+        self._queue: list[object] = []
+
+    def connect(self, timeout: float = 10.0) -> None:
+        pass
+
+    def send(self, message) -> None:
+        self.sent.append(message)
+        if isinstance(message, SessionRecreate):
+            self._queue.append(SessionCreated(session_id=message.session_id, join_index=0))
+
+    def poll(self):
+        return self._queue.pop(0) if self._queue else None
+
+    def close(self) -> None:
+        pass
+
+
+def _make_controller(
+    *,
+    local_ip: str,
+    local_player_id: str,
+    join_index: int,
+    peers: list[tuple[str, str, int, int]],
+    old_host_ip: str | None = None,
+) -> tuple[NodeController, SpyBroker]:
+    broker = SpyBroker()
+    controller = NodeController(game_event_broker=broker).bootstrap(role=PlayerRole.CLIENT)
+    controller.local_ip = local_ip
+    controller.local_player_id = local_player_id
+    controller.join_index = join_index
+    controller.session_id = "migration-session"
+    controller.roster = GlobalRoster()
+    if old_host_ip is not None:
+        controller.roster.add_player(
+            RosterEntry(
+                player_id="player1",
+                host=old_host_ip,
+                udp_port=50010,
+                join_index=0,
+                is_host=True,
+            )
+        )
+    for remote_player_id, remote_ip, remote_udp_port, remote_join_index in peers:
+        controller.roster.add_player(
+            RosterEntry(
+                player_id=remote_player_id,
+                host=remote_ip,
+                udp_port=remote_udp_port,
+                join_index=remote_join_index,
+                is_host=False,
+            )
+        )
+    controller.roster.add_player(
+        RosterEntry(
+            player_id=local_player_id,
+            host=local_ip,
+            udp_port=50011 + join_index,
+            join_index=join_index,
+            is_host=False,
+        )
+    )
+    controller.election_coordinator = ElectionCoordinator(
+        join_index=join_index,
+        my_ip=local_ip,
+        timeout_base_s=T_ELECTION_BASE_S,
+        timeout_delta_s=T_ELECTION_DELTA_S,
+    )
+    controller.timeout_watcher = HostTimeoutWatcher(timeout_s=HOST_TIMEOUT_S)
+    controller.env_state_buffer = EnvironmentalStateBuffer()
+    controller.ws_handler = SpyWsHandler()
+    controller._make_lobby_ws_client = lambda host, port: setattr(
+        controller, "ws_handler", SpyWsHandler()
+    )
+    controller._reconnect_game_event_handler = lambda *args, **kwargs: None
+    return controller, broker
+
+
 class TestHostMigration3Players:
-    """Kill the host process → session resumes on surviving client."""
+    """Host crash followed by a surviving client election and state bootstrap."""
 
     MIGRATION_TIMEOUT_S = HOST_TIMEOUT_S + T_ELECTION_BASE_S + 1.0
 
     def test_crash_and_resume(self):
-        """One host + two clients on loopback. Kill host → session continues."""
-        # TODO: spawn 1 host + 2 client subprocesses via subprocess.Popen
-        # TODO: wait for lobby phase to complete (monitor logs or use IPC)
-        # TODO: os.kill(host_proc.pid, signal.SIGKILL)
-        # TODO: assert one of the two clients transitions to HOST within MIGRATION_TIMEOUT_S
-        # TODO: assert the other client reconnects and resumes sending input packets
-        raise NotImplementedError
+        """A surviving client becomes host and broadcasts a ReconnectionAck."""
+        candidate, broker = _make_controller(
+            local_ip="10.0.0.2",
+            local_player_id="player2",
+            join_index=1,
+            peers=[("player3", "10.0.0.3", 50012, 2)],
+            old_host_ip="10.0.0.1",
+        )
+        candidate.timeout_watcher.reset(time.time() - HOST_TIMEOUT_S - 0.1)
+        candidate._tick_election_state()
+        assert candidate.election_triggered is True
+
+        candidate.election_coordinator.start_election({"10.0.0.3"})
+        candidate.election_coordinator.set_election_timer(time.time())
+        event = candidate.election_coordinator.tick(
+            time.time() + T_ELECTION_BASE_S + T_ELECTION_DELTA_S + 0.1
+        )
+        assert isinstance(event, SelfElected)
+
+        candidate._on_self_elected(event)
+        assert candidate._pending_election_acks == {"10.0.0.3"}
+        candidate._on_election_ack(ElectionAck(from_ip="10.0.0.3", session_id="migration-session"))
+
+        assert candidate._promotion_done is True
+        assert candidate.role is PlayerRole.HOST
+        assert candidate.engine.is_authoritative is True
+        assert any(msg["message_type"] == MessageType.RECONNECTION_ACK.value for msg in broker.sent)
 
     def test_environmental_state_preserved(self):
-        """Block destroyed before crash is still destroyed after migration."""
-        # TODO: spawn 1 host + 2 clients
-        # TODO: trigger a block destruction event via WebSocket
-        # TODO: kill host
-        # TODO: after migration, query the new host's world state
-        # TODO: assert the destroyed block is still marked destroyed
-        raise NotImplementedError
+        """Destroyed blocks in the last snapshot survive host promotion."""
+        candidate, _ = _make_controller(
+            local_ip="10.0.0.2",
+            local_player_id="player2",
+            join_index=1,
+            peers=[("player3", "10.0.0.3", 50012, 2)],
+            old_host_ip="10.0.0.1",
+        )
+        world = WorldState()
+        world.environment.destructible_blocks.append(
+            type("Block", (), {"x": 100, "y": 200, "destroyed": False})()
+        )
+        world.environment.destructible_blocks[0].destroyed = True
+        snapshot = WorldStateSnapshot(sequence_number=7, world_state=world)
+        candidate.env_state_buffer.update(snapshot)
+
+        candidate._promote_to_host()
+
+        assert candidate.engine.world_state is world
+        assert candidate.engine.world_state.environment.destructible_blocks[0].destroyed is True
+        assert candidate.last_snapshot_sequence == 7
 
 
-@pytest.mark.skip(reason="Requires Persona 2 ElectionMixin + promote_to_host()")
 class TestHostMigration4Players:
-    """Same as 3-player test but with 3 clients."""
+    """Multiple surviving peers all reconnect to the promoted host."""
 
     def test_all_clients_reconnect(self):
-        """Kill host with 3 clients → all 3 reconnect to new host."""
-        # TODO: spawn 1 host + 3 client subprocesses
-        # TODO: kill host
-        # TODO: assert 1 client becomes host, 2 clients reconnect
-        raise NotImplementedError
+        """After a host crash, each remaining client receives a ReconnectionAck."""
+        promoted, broker = _make_controller(
+            local_ip="10.0.0.2",
+            local_player_id="player2",
+            join_index=1,
+            peers=[
+                ("player3", "10.0.0.3", 50013, 2),
+                ("player4", "10.0.0.4", 50014, 3),
+            ],
+            old_host_ip="10.0.0.1",
+        )
+
+        promoted._promote_to_host()
+
+        assert promoted.role is PlayerRole.HOST
+        assert any(msg["message_type"] == MessageType.RECONNECTION_ACK.value for msg in broker.sent)
+
+        for peer_ip in ("10.0.0.3", "10.0.0.4"):
+            peer = NodeController(game_event_broker=SpyBroker()).bootstrap(role=PlayerRole.CLIENT)
+            peer.local_ip = peer_ip
+            peer.reconnected = False
+            peer.remote_host = ""
+            peer.remote_port = 0
+            peer._on_reconnection_ack(
+                ReconnectionAck(
+                    new_host_ip="10.0.0.2",
+                    udp_port=50010,
+                    game_events_port=50003,
+                    session_id="migration-session",
+                )
+            )
+            assert peer.reconnected is True
+            assert peer.remote_host == "10.0.0.2"
 
 
-@pytest.mark.skip(reason="Requires Persona 2 ElectionMixin + promote_to_host()")
 class TestCascadingFallback:
-    """Crash of elected candidate triggers re-election of next candidate."""
+    """A second candidate promotes after the first candidate crashes during election."""
 
     def test_primary_candidate_crash_elects_secondary(self):
-        """JoinIndex=0 crashes during election → JoinIndex=1 becomes host."""
-        # TODO: spawn 1 host (join_index=-1, the original) + 2 clients (join_index=0, 1)
-        # TODO: kill original host to trigger election
-        # TODO: before join_index=0 self-elects, kill its process too
-        # TODO: assert join_index=1 eventually self-elects via cascading fallback
-        raise NotImplementedError
+        """JoinIndex=1 becomes host when join_index=0 candidate disappears mid-election."""
+        primary, _ = _make_controller(
+            local_ip="10.0.0.1",
+            local_player_id="player1",
+            join_index=0,
+            peers=[("player2", "10.0.0.2", 50011, 1)],
+        )
+        secondary, _ = _make_controller(
+            local_ip="10.0.0.2",
+            local_player_id="player2",
+            join_index=1,
+            peers=[("player1", "10.0.0.1", 50010, 0)],
+        )
+
+        # Simulate the lower-index candidate crashing before it can finish its timer.
+        secondary.timeout_watcher.reset(time.time() - HOST_TIMEOUT_S - 0.1)
+        secondary._tick_election_state()
+        assert secondary.election_triggered is True
+
+        secondary.election_coordinator.start_election({"10.0.0.1"})
+        secondary.election_coordinator.set_election_timer(time.time())
+        cascade_event = secondary.election_coordinator.tick(
+            time.time() + T_ELECTION_BASE_S + T_ELECTION_DELTA_S + 0.1
+        )
+
+        assert isinstance(cascade_event, SelfElected)
+        assert cascade_event.my_ip == "10.0.0.2"
