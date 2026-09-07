@@ -8,6 +8,7 @@ from distributed_smb.application.dto import (
     RenderPowerUp,
 )
 from distributed_smb.presentation.renderer import Renderer
+from distributed_smb.presentation.renderer_ui import UiRenderer
 
 
 def test_renderer_loads_mario_asset_pack():
@@ -272,3 +273,33 @@ def test_renderer_keeps_last_camera_offset_during_death_effect(monkeypatch):
     renderer.render(screen=screen, frame=dead_frame)
 
     assert renderer._last_camera_offset == (225, 70)
+
+
+def test_character_touches_gate_requires_aabb_overlap():
+    gate = RenderGate(x=100, y=100, width=40, height=60, gate_id="checkpoint-1", is_final=False)
+    far_character = RenderCharacter(player_id="player1", x=0, y=0, width=50, height=50)
+    overlapping_character = RenderCharacter(player_id="player1", x=110, y=110, width=50, height=50)
+
+    assert UiRenderer._character_touches_gate(far_character, gate) is False
+    assert UiRenderer._character_touches_gate(overlapping_character, gate) is True
+
+
+def test_checkpoint_toast_triggers_only_on_physical_touch():
+    renderer = Renderer(width=200, height=150)
+    gate = RenderGate(
+        x=500, y=500, width=40, height=60, gate_id="checkpoint-1", state="open", is_final=False
+    )
+
+    far_frame = RenderFrame(
+        characters={"player1": RenderCharacter(player_id="player1", x=0, y=0)},
+        gates={"checkpoint-1": gate},
+    )
+    renderer._ui_renderer.sync_checkpoint_toasts(far_frame, now_ms=0)
+    assert "checkpoint-1" not in renderer._checkpoint_toasts
+
+    touching_frame = RenderFrame(
+        characters={"player1": RenderCharacter(player_id="player1", x=505, y=505)},
+        gates={"checkpoint-1": gate},
+    )
+    renderer._ui_renderer.sync_checkpoint_toasts(touching_frame, now_ms=100)
+    assert "checkpoint-1" in renderer._checkpoint_toasts

@@ -10,8 +10,19 @@ from distributed_smb.application.dto import RenderCharacter
 from distributed_smb.shared.paths import TILESETS_DIR
 
 MARIO_FRAME_SIZE = 32
+V2_CHARACTER_FRAME_SIZE = 160
 TILE_SIZE = 16
 DISPLAY_TILE_SIZE = 30
+
+# (sheet filename, frame cell size, base_frame) per join_index % 4. Each sheet
+# shares the same 26-frame layout (base_frame=idle, +1..+3 walk, +5 jump,
+# +6 duck); base_frame=17 is a white/fire recolor, deliberately unused here.
+PLAYER_SPRITE_SHEETS = {
+    0: ("Mario.png", MARIO_FRAME_SIZE, 8),
+    1: ("v2_mario_luigi.png", V2_CHARACTER_FRAME_SIZE, 8),
+    2: ("v2_mario_wario.png", V2_CHARACTER_FRAME_SIZE, 8),
+    3: ("v2_mario_waluigi.png", V2_CHARACTER_FRAME_SIZE, 8),
+}
 
 DECORATION_SOURCE_RECTS = {
     "cloud": (89, 32, 37, 22),
@@ -105,6 +116,14 @@ class AssetSpriteFactory:
 
         try:
             sheet = pygame.image.load(str(path))
+            if sheet.get_masks()[3] == 0:
+                # No native alpha channel (e.g. the v2_mario_* sheets): their "black"
+                # background isn't pure (0,0,0) everywhere (compression noise), so
+                # snap near-black pixels before keying them out as transparent.
+                pixels = pygame.PixelArray(sheet)
+                pixels.replace((0, 0, 0), (0, 0, 0), distance=0.08)
+                del pixels
+                sheet.set_colorkey((0, 0, 0))
             try:
                 sheet = sheet.convert_alpha()
             except pygame.error:
@@ -327,7 +346,7 @@ class AssetSpriteFactory:
         frame: int,
         facing: int,
     ) -> pygame.Surface | None:
-        base_frame = 8 if character.join_index % 2 == 0 else 17
+        filename, frame_size, base_frame = PLAYER_SPRITE_SHEETS[character.join_index % 4]
         if state == "jump":
             frame_index = base_frame + 5
         elif state == "duck":
@@ -338,8 +357,8 @@ class AssetSpriteFactory:
             frame_index = base_frame
 
         sprite = self._get_asset_sprite(
-            "Mario.png",
-            (frame_index * MARIO_FRAME_SIZE, 0, MARIO_FRAME_SIZE, MARIO_FRAME_SIZE),
+            filename,
+            (frame_index * frame_size, 0, frame_size, frame_size),
             int(character.width),
             int(character.height),
         )

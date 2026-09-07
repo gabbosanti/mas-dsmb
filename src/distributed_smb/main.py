@@ -279,50 +279,61 @@ def main(
                 roster=roster,
             )
 
-        try:
-            controller.lobby_phase(
-                session_id=session_id,
-                on_update=update_lobby_screen,
-                start_requested=lambda: lobby_screen.start_requested,
-            )
-            if role is PlayerRole.CLIENT:
-                controller.game_event_handler.connect()
-            if not lobby_screen.play_game_start_transition(
-                role=role,
-                roster=controller.roster,
-            ):
-                logging.info("Gameplay start cancelled during transition")
-                controller.ws_handler.close()
-                controller.udp_handler.close_socket()
-                controller.lobby_container_manager.stop()
-                delete_session_metadata()
-                return controller
-        except LobbyCancelledError:
-            logging.info("Lobby closed before game start")
+        def teardown() -> None:
             controller.ws_handler.close()
             controller.udp_handler.close_socket()
             controller.lobby_container_manager.stop()
             delete_session_metadata()
-            return controller
-        except Exception as exc:
-            logging.exception("Lobby failed before game start")
-            controller.ws_handler.close()
-            controller.udp_handler.close_socket()
-            controller.lobby_container_manager.stop()
-            delete_session_metadata()
-            lobby_screen.show_error(
-                title="Lobby connection failed",
-                message=str(exc),
-            )
-            return controller
-        finally:
-            lobby_screen.close()
 
-        try:
-            controller.run()
-        finally:
-            controller.lobby_container_manager.stop()
-            delete_session_metadata()
+        def enter_lobby_and_transition(*, is_replay: bool) -> bool:
+            """Run lobby_phase()/replay_lobby_phase() plus the start
+            transition. Returns False if main() should return early."""
+            try:
+                if is_replay:
+                    controller.replay_lobby_phase(
+                        on_update=update_lobby_screen,
+                        start_requested=lambda: lobby_screen.start_requested,
+                    )
+                else:
+                    controller.lobby_phase(
+                        session_id=session_id,
+                        on_update=update_lobby_screen,
+                        start_requested=lambda: lobby_screen.start_requested,
+                    )
+                    if role is PlayerRole.CLIENT:
+                        controller.game_event_handler.connect()
+                if not lobby_screen.play_game_start_transition(
+                    role=role,
+                    roster=controller.roster,
+                ):
+                    logging.info("Gameplay start cancelled during transition")
+                    teardown()
+                    return False
+            except LobbyCancelledError:
+                logging.info("Lobby closed before game start")
+                teardown()
+                return False
+            except Exception as exc:
+                logging.exception("Lobby failed before game start")
+                teardown()
+                lobby_screen.show_error(title="Lobby connection failed", message=str(exc))
+                return False
+            finally:
+                lobby_screen.close()
+            return True
+
+        if not enter_lobby_and_transition(is_replay=False):
+            return controller
+
+        outcome = controller.run()
+        while outcome == "victory":
+            lobby_screen = LobbyScreen()
+            if not enter_lobby_and_transition(is_replay=True):
+                return controller
+            outcome = controller.run()
+
+        controller.lobby_container_manager.stop()
+        delete_session_metadata()
     elif role is PlayerRole.CLIENT and not use_discovery:
         controller.remote_host = host_ip or DEFAULT_HOST
         controller.ws_handler = WsHandler(host=host_ip or DEFAULT_HOST, port=LOBBY_WS_PORT)

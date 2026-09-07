@@ -4,7 +4,7 @@ import json
 import logging
 import time
 
-from distributed_smb.shared.config import RESPAWN_DELAY_S, UDP_INPUT_TIMEOUT
+from distributed_smb.shared.config import UDP_INPUT_TIMEOUT
 from distributed_smb.shared.mappers.gameplay_mapper import event_to_message
 from distributed_smb.shared.messages.election import (
     ElectionAck,
@@ -96,14 +96,7 @@ class GameEventMixin:
                 self._evict_player(msg.player_id)
             elif isinstance(msg, PlayerDeathMessage):
                 LOGGER.info("Player died (received): %s by enemy %s", msg.player_id, msg.enemy_id)
-                # remove player locally and set client's respawn timer
-                try:
-                    self.engine.world_state.remove_player(msg.player_id)
-                    self.engine.world_state.respawn_timers[msg.player_id] = (
-                        time.time() + RESPAWN_DELAY_S
-                    )
-                except Exception:
-                    pass
+                self.engine.world_state.remove_player(msg.player_id)
             elif isinstance(msg, LevelResetMessage):
                 LOGGER.info("game event applied: level reset (new run)")
                 self.engine.reset_for_new_run()

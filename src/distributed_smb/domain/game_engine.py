@@ -9,7 +9,7 @@ from distributed_smb.domain.events import LevelResetEvent, PlayerDeathEvent
 from distributed_smb.domain.level import Level, TiledLevel
 from distributed_smb.domain.physics import JUMP_FORCE, MOVE_SPEED, apply_physics
 from distributed_smb.domain.world import CharacterState, WorldState
-from distributed_smb.shared.config import RESPAWN_DELAY_S, VICTORY_RESET_DELAY_S
+from distributed_smb.shared.config import RESPAWN_DELAY_S
 from distributed_smb.shared.input import InputState
 
 BLOCK_SIZE = 36
@@ -67,9 +67,6 @@ class GameEngine:
     def tick(self, dt, inputs: dict[str, InputState]):
         if self.world_state.victory:
             self.world_state.sequence_number += 1
-            if self.is_authoritative and self._victory_reset_due():
-                self.reset_for_new_run()
-                self.events.append(LevelResetEvent())
             return
 
         for player in self.world_state.characters.values():
@@ -229,19 +226,11 @@ class GameEngine:
                 if check_collision(player, gate):
                     self.world_state.victory = True
                     self.world_state.victory_player_id = player.player_id
-                    self.world_state.victory_at = time.time()
                     return
 
-    def _victory_reset_due(self) -> bool:
-        return (
-            self.world_state.victory_at is not None
-            and time.time() - self.world_state.victory_at >= VICTORY_RESET_DELAY_S
-        )
-
     def reset_for_new_run(self) -> None:
-        """Restart the current session in place: fresh level state (blocks,
-        power-ups, enemies, gates, counters), every connected player respawned.
-        Same session/roster, no lobby round-trip."""
+        """Queues a LevelResetEvent so clients, which predict blocks/power-ups/
+        gates locally, discard their stale local copies too."""
         self.world_state.load_level(self._level)
         self._respawn_join_index.clear()
         self.world_state.respawn_timers.clear()
@@ -252,6 +241,7 @@ class GameEngine:
             player.on_ground = False
             player.is_crouching = False
             player.powerup_effect_expires_at = None
+        self.events.append(LevelResetEvent())
 
     def _is_head_bump(self, player: CharacterState, block: DestructibleBlock) -> bool:
         previous_top = player.prev_y

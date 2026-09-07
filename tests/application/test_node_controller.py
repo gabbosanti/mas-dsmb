@@ -330,6 +330,65 @@ def test_main_plays_transition_before_game_run():
     assert calls.index("run") < calls.index("containers_stop")
 
 
+def test_main_loops_back_to_lobby_after_victory_outcome():
+    from distributed_smb.main import main
+
+    calls = []
+
+    class FakeConnection:
+        def close(self):
+            calls.append("close")
+
+    class FakeContainerManager:
+        def stop(self):
+            calls.append("containers_stop")
+
+    class FakeController:
+        def __init__(self):
+            self.roster = object()
+            self.ws_handler = FakeConnection()
+            self.udp_handler = FakeConnection()
+            self.lobby_container_manager = FakeContainerManager()
+            self._run_outcomes = iter(["victory", "quit"])
+
+        def lobby_phase(self, *, session_id, on_update, start_requested):
+            calls.append("lobby")
+            return self.roster
+
+        def replay_lobby_phase(self, *, on_update, start_requested):
+            calls.append("replay_lobby")
+            return self.roster
+
+        def run(self):
+            return next(self._run_outcomes)
+
+    class FakeLobbyScreen:
+        def __init__(self):
+            self.start_requested = True
+
+        def render(self, **kwargs):
+            return True
+
+        def play_game_start_transition(self, **kwargs):
+            calls.append("transition")
+            return True
+
+        def close(self):
+            calls.append("screen_close")
+
+    fake_controller = FakeController()
+
+    with patch("distributed_smb.main.build_controller", return_value=fake_controller):
+        with patch("distributed_smb.main.LobbyScreen", FakeLobbyScreen):
+            controller = main(run_app=True, role=PlayerRole.HOST)
+
+    assert controller is fake_controller
+    assert calls.count("lobby") == 1
+    assert calls.count("replay_lobby") == 1
+    assert calls.count("transition") == 2
+    assert calls.count("containers_stop") == 1
+
+
 def test_client_snapshot_updates_characters_preserves_environment():
     """UDP snapshot updates character positions but must NOT override environment state.
 

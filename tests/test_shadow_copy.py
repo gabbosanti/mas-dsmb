@@ -1,5 +1,6 @@
 from math import isclose
 
+from distributed_smb.application.reconciliation.shadow_copy import InterpolatedShadowCopy
 from distributed_smb.domain.shadow_copy import ShadowCopy
 from distributed_smb.domain.world import CharacterState
 
@@ -69,3 +70,17 @@ def test_shadow_copy_ignores_out_of_order_snapshots():
     assert shadow_copy.target is not None
     assert isclose(shadow_copy.target.x, 5.0)
     assert shadow_copy.last_sequence_number == 2
+
+
+def test_interpolated_shadow_copy_forwards_the_real_sequence_number():
+    """InterpolatedShadowCopy must pass through the snapshot's own
+    sequence_number instead of a locally-generated one, otherwise the
+    domain ShadowCopy's out-of-order rejection can never trigger."""
+    domain_copy = ShadowCopy(snapshot_timeout=0.1, max_extrapolation_time=0.3)
+    adapter = InterpolatedShadowCopy(time_provider=lambda: 0.1, shadow_copy=domain_copy)
+
+    adapter.update(_character(x=5.0), sequence_number=5)
+    adapter.update(_character(x=1.0), sequence_number=2)  # stale: arrived out of order
+
+    assert domain_copy.last_sequence_number == 5
+    assert adapter.get_display_state().x == 5.0

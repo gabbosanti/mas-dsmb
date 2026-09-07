@@ -317,7 +317,7 @@ class ClientGameplayMixin:
             if shadow is None:
                 shadow = self.shadow_copy_factory()
                 self.shadow_copies[pid] = shadow
-            shadow.update(char_state)
+            shadow.update(char_state, snapshot.sequence_number)
 
     def _send_input_packet(self, local_input: InputState) -> None:
         """Send the local client's input packet to the authoritative host."""

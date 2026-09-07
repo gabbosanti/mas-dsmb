@@ -18,8 +18,8 @@ from distributed_smb.domain.world import CharacterState
 class ShadowCopyProtocol(Protocol):
     """Manages the display state for one remote entity."""
 
-    def update(self, state: CharacterState) -> None:
-        """Record a new authoritative state from an incoming snapshot."""
+    def update(self, state: CharacterState, sequence_number: int) -> None:
+        """Record a new authoritative state, ordered by the snapshot's sequence_number."""
 
     def get_display_state(self) -> CharacterState | None:
         """Return the state to render, potentially interpolated or extrapolated.
@@ -34,7 +34,7 @@ class NoopShadowCopy:
     def __init__(self) -> None:
         self._state: CharacterState | None = None
 
-    def update(self, state: CharacterState) -> None:
+    def update(self, state: CharacterState, sequence_number: int) -> None:
         self._state = state
 
     def get_display_state(self) -> CharacterState | None:
@@ -52,13 +52,11 @@ class InterpolatedShadowCopy:
     ) -> None:
         self._time_provider = time_provider
         self._shadow_copy = shadow_copy or DomainShadowCopy()
-        self._sequence_number = -1
 
-    def update(self, state: CharacterState) -> None:
-        self._sequence_number += 1
+    def update(self, state: CharacterState, sequence_number: int) -> None:
         self._shadow_copy.update(
             state,
-            sequence_number=self._sequence_number,
+            sequence_number=sequence_number,
             received_at=self._time_provider(),
         )
 

@@ -258,8 +258,9 @@ class NodeController(
             world_height=self.engine.world_height,
         )
 
-    def run(self) -> bool:
-        """Run the application if the presentation runtime is available."""
+    def run(self) -> str | bool:
+        """Returns "quit"/"victory" (see GameApp.run()), or False if the
+        presentation runtime module isn't available."""
         if not self.is_bootstrapped:
             self.bootstrap()
 
@@ -277,9 +278,10 @@ class NodeController(
             renderer=self.renderer,
             local_player_id=self.local_player_id,
         )
-        app.run()
-        self.udp_handler.close_socket()
-        return True
+        outcome = app.run()
+        if outcome != "victory":
+            self.udp_handler.close_socket()
+        return outcome
 
     def _configure_role(self, *, packet_drop_rate: float, artificial_latency_ms: int = 0) -> None:
         """Configure ports and player identities for host or client mode."""

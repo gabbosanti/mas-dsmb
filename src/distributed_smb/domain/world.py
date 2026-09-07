@@ -56,18 +56,12 @@ class WorldState:
     initial_enemy_count: int = 0
     victory: bool = False
     victory_player_id: str | None = None
-    victory_at: float | None = None
     respawn_timers: dict[str, float] = field(default_factory=dict)
 
     def load_level(self, level: Level) -> None:
-        """Populate the environment from a level template.
-
-        Deep-copies every entity: level.blocks/powerups/enemies/gates is a
-        reusable template (kept alive on GameEngine._level for mid-session
-        resets), and gameplay mutates entity state in place (block.destroyed,
-        power_up.collected, ...) — aliasing the template's objects here would
-        let a run's mutations leak into the "fresh" state of the next one.
-        """
+        """Deep-copies every entity: level is a reusable template kept alive
+        for mid-session resets, and gameplay mutates entities in place —
+        aliasing would leak one run's mutations into the next run's "fresh" state."""
         self.environment.destructible_blocks = deepcopy(level.blocks)
         self.environment.power_ups = {
             powerup.powerup_id: powerup for powerup in deepcopy(level.powerups)
@@ -83,7 +77,6 @@ class WorldState:
         self.initial_enemy_count = len(level.enemies)
         self.victory = False
         self.victory_player_id = None
-        self.victory_at = None
 
     def add_player(self, character: CharacterState):
         self.characters[character.player_id] = character
@@ -167,6 +160,5 @@ class WorldState:
             initial_enemy_count=data.get("initial_enemy_count", len(enemies)),
             victory=data.get("victory", False),
             victory_player_id=data.get("victory_player_id"),
-            victory_at=data.get("victory_at"),
             respawn_timers=data.get("respawn_timers", {}),
         )

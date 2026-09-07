@@ -2,6 +2,7 @@ import time
 
 from distributed_smb.domain.entity import Enemy, ExclusivePowerUp
 from distributed_smb.domain.game_engine import VOID_DEATH_CAUSE, GameEngine
+from distributed_smb.domain.physics import GRAVITY, JUMP_FORCE, MOVE_SPEED
 from distributed_smb.shared.input import InputState
 from src.distributed_smb.domain.entity import CooperativeGate, DestructibleBlock
 from src.distributed_smb.domain.world import EnvironmentalState, WorldState
@@ -278,6 +279,32 @@ def test_player_dies_when_falling_below_map():
     )
 
 
+def test_void_death_is_noop_for_non_authoritative_client():
+    engine = GameEngine(is_authoritative=False)
+    engine.spawn_player("player1")
+    player = engine.world_state.get_player("player1")
+    player.y = engine.world_height + 1
+    player.prev_y = player.y
+
+    engine.tick(0.016, {"player1": InputState()})
+
+    assert engine.world_state.get_player("player1") is not None
+    assert "player1" not in engine.world_state.respawn_timers
+
+
+def test_compact_staircase_steps_are_individually_climbable():
+    """Each step of the staircase (level.tmx staircase-1..4, x=6100..6292)
+    must be within jump reach: height delta under max jump height, and
+    horizontal offset under the distance covered during a jump's hang time."""
+    staircase_steps = [(6100, 896), (6164, 864), (6228, 832), (6292, 800)]
+    max_jump_height = JUMP_FORCE**2 / (2 * GRAVITY)
+    max_jump_horizontal_reach = MOVE_SPEED * (2 * abs(JUMP_FORCE) / GRAVITY)
+
+    for (x1, y1), (x2, y2) in zip(staircase_steps, staircase_steps[1:]):
+        assert y1 - y2 <= max_jump_height
+        assert x2 - x1 <= max_jump_horizontal_reach
+
+
 def test_gate_stays_closed_when_level_requirements_are_not_met():
     engine = GameEngine()
     gate = engine.world_state.get_gate("gate-1")
@@ -355,23 +382,24 @@ def test_final_gate_triggers_victory_when_open_and_touched():
 
     assert engine.world_state.victory is True
     assert engine.world_state.victory_player_id == "player1"
-    assert engine.world_state.victory_at is not None
 
 
-def test_victory_does_not_reset_before_delay_elapses():
+def test_victory_freezes_the_game_indefinitely():
+    """tick() no longer auto-resets on a timer — the app layer owns the
+    victory -> return-to-lobby transition; the engine just holds state."""
     engine = GameEngine()
     engine.spawn_player("player1")
     engine.world_state.victory = True
     engine.world_state.victory_player_id = "player1"
-    engine.world_state.victory_at = time.time()
 
-    engine.tick(1 / 60, {})
+    for _ in range(120):
+        engine.tick(1 / 60, {})
 
     assert engine.world_state.victory is True
     assert engine.events == []
 
 
-def test_victory_resets_run_in_place_after_delay():
+def test_reset_for_new_run_reloads_level_and_respawns_players():
     engine = GameEngine()
     engine.spawn_player("player1", join_index=0)
     block = engine.world_state.environment.destructible_blocks[0]
@@ -380,36 +408,19 @@ def test_victory_resets_run_in_place_after_delay():
     power_up.collected = True
     player = engine.world_state.get_player("player1")
     player.x, player.y = 999, 999
-
     engine.world_state.victory = True
     engine.world_state.victory_player_id = "player1"
-    engine.world_state.victory_at = time.time() - 999
 
-    engine.tick(1 / 60, {})
+    engine.reset_for_new_run()
 
     assert engine.world_state.victory is False
     assert engine.world_state.victory_player_id is None
-    assert engine.world_state.victory_at is None
     assert engine.world_state.environment.destructible_blocks[0].destroyed is False
     assert next(iter(engine.world_state.environment.power_ups.values())).collected is False
     reset_player = engine.world_state.get_player("player1")
     assert (reset_player.x, reset_player.y) == engine.spawn_position_for(0)
     assert len(engine.events) == 1
     assert type(engine.events[0]).__name__ == "LevelResetEvent"
-
-
-def test_reset_for_new_run_is_noop_on_non_authoritative_client():
-    engine = GameEngine(is_authoritative=False)
-    engine.spawn_player("player1")
-    engine.world_state.victory = True
-    engine.world_state.victory_at = time.time() - 999
-
-    engine.tick(1 / 60, {})
-
-    # Non-authoritative clients never self-trigger a reset; they wait for the
-    # host's LevelResetMessage (applied directly via engine.reset_for_new_run()).
-    assert engine.world_state.victory is True
-    assert engine.events == []
 
 
 def test_level_dimensions_match_tiled_map():

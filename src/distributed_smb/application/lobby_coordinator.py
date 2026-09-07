@@ -60,6 +60,63 @@ class LobbyMixin:
         self._notify_lobby_update("Starting game", on_update)
         return self.roster
 
+    def replay_lobby_phase(
+        self,
+        *,
+        on_update: LobbyUpdateCallback | None = None,
+        start_requested: StartRequestedCallback | None = None,
+    ) -> GlobalRoster:
+        """Wait for the host to start a new run, reusing the existing session
+        instead of recreating it — unlike lobby_phase()."""
+        self.lifecycle.move_to_lobby()
+        self._notify_lobby_update("Waiting for players", on_update)
+        if self.role is PlayerRole.HOST:
+            self._host_replay_wait(on_update=on_update, start_requested=start_requested)
+        else:
+            self._client_replay_wait(on_update=on_update)
+        self.engine.reset_for_new_run()
+        self._rebuild_world_from_roster()
+        self._init_shadow_copies()
+        self.lifecycle.move_to_game()
+        if hasattr(self, "_write_session_metadata"):
+            self._write_session_metadata()
+        self._notify_lobby_update("Starting game", on_update)
+        return self.roster
+
+    def _host_replay_wait(
+        self,
+        *,
+        on_update: LobbyUpdateCallback | None = None,
+        start_requested: StartRequestedCallback | None = None,
+    ) -> None:
+        while True:
+            msg = self.ws_handler.poll()
+            if isinstance(msg, RosterUpdate):
+                self.roster = msg.roster
+            self._notify_lobby_update("Waiting for players", on_update)
+            if start_requested is not None and start_requested() and self.roster.players:
+                break
+            time.sleep(0.05)
+
+        self._broadcast_game_start(on_update)
+
+    def _client_replay_wait(
+        self,
+        *,
+        on_update: LobbyUpdateCallback | None = None,
+    ) -> None:
+        while True:
+            msg = self.ws_handler.poll()
+            if isinstance(msg, RosterUpdate):
+                self.roster = msg.roster
+                self._notify_lobby_update("Waiting for game to restart", on_update)
+            elif isinstance(msg, GameStart):
+                self._notify_lobby_update("Starting game", on_update)
+                break
+            else:
+                self._notify_lobby_update("Waiting for game to restart", on_update)
+            time.sleep(0.05)
+
     def _notify_lobby_update(
         self,
         status: str,
@@ -131,19 +188,22 @@ class LobbyMixin:
             time.sleep(LOBBY_STARTUP_WAIT)
         if self.use_discovery and hasattr(self.discovery_service, "set_allowed_ips"):
             self.discovery_service.set_allowed_ips(self._discovery_allowed_ips())
+        self._broadcast_game_start(on_update)
+        LOGGER.info("Lobby phase complete: %d players", len(self.roster.players))
+
+    def _broadcast_game_start(self, on_update: LobbyUpdateCallback | None) -> None:
         self._notify_lobby_update("Broadcasting game start", on_update)
         self.ws_handler.send(GameStart(session_id=self.session_id))
         self._poll_lobby(GameStart)
         # Drain any RosterUpdate messages that arrived concurrently with GameStart
         # (e.g., a player joined at the exact moment the host sent GameStart).
-        _drain_until = time.time() + 0.1
-        while time.time() < _drain_until:
+        drain_until = time.time() + 0.1
+        while time.time() < drain_until:
             msg = self.ws_handler.poll()
             if msg is None:
                 time.sleep(0.01)
             elif isinstance(msg, RosterUpdate):
                 self.roster = msg.roster
-        LOGGER.info("Lobby phase complete: %d players", len(self.roster.players))
 
     def _client_lobby_phase(
         self,

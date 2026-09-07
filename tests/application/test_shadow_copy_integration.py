@@ -35,7 +35,7 @@ def test_noop_shadow_copy_returns_none_before_first_update():
 def test_noop_shadow_copy_returns_last_state_after_update():
     sc = NoopShadowCopy()
     state = CharacterState(player_id="p1", x=5, y=10)
-    sc.update(state)
+    sc.update(state, sequence_number=1)
     assert sc.get_display_state() is state
 
 
@@ -43,8 +43,8 @@ def test_noop_shadow_copy_overwrites_on_subsequent_updates():
     sc = NoopShadowCopy()
     s1 = CharacterState(player_id="p1", x=0, y=0)
     s2 = CharacterState(player_id="p1", x=99, y=42)
-    sc.update(s1)
-    sc.update(s2)
+    sc.update(s1, sequence_number=1)
+    sc.update(s2, sequence_number=2)
     assert sc.get_display_state() is s2
 
 
@@ -87,7 +87,7 @@ def test_shadow_copy_factory_is_used_for_instantiation():
     created = []
 
     class SpyShadowCopy:
-        def update(self, state):
+        def update(self, state, sequence_number):
             pass
 
         def get_display_state(self):
@@ -151,7 +151,7 @@ def test_display_world_state_uses_shadow_copy_state():
     ctrl._init_shadow_copies()
 
     interpolated = CharacterState(player_id=ctrl.remote_player_id, x=150, y=100)
-    ctrl.shadow_copies[ctrl.remote_player_id].update(interpolated)
+    ctrl.shadow_copies[ctrl.remote_player_id].update(interpolated, sequence_number=1)
 
     display = ctrl._build_visual_world_state()
     assert display.characters[ctrl.remote_player_id].x == interpolated.x
@@ -164,7 +164,7 @@ def test_display_world_state_does_not_mutate_engine():
 
     original_chars = dict(ctrl.engine.world_state.characters)
     interpolated = CharacterState(player_id=ctrl.remote_player_id, x=999, y=999)
-    ctrl.shadow_copies[ctrl.remote_player_id].update(interpolated)
+    ctrl.shadow_copies[ctrl.remote_player_id].update(interpolated, sequence_number=1)
 
     ctrl._build_visual_world_state()
 

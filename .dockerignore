@@ -10,3 +10,4 @@ tests/
 .claude/
 .github/
 *.md
+!README.md

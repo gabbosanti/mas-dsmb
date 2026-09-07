@@ -118,3 +118,72 @@ def test_host_solo_world_has_only_one_player():
         host.lobby_phase(start_requested=lambda: True)
 
     assert set(host.engine.world_state.characters) == {"player1"}
+
+
+# ---------------------------------------------------------------------------
+# replay_lobby_phase(): re-entering the waiting room after a victory, without
+# recreating the session (host and client are already connected).
+# ---------------------------------------------------------------------------
+
+
+def test_replay_lobby_phase_resets_engine_without_new_session():
+    host = _make_host()
+    client = _make_client()
+
+    errors = []
+
+    def run_host():
+        try:
+            with patch("distributed_smb.application.lobby_coordinator.time.sleep"):
+                host.lobby_phase(start_requested=lambda: len(host.roster.players) >= 2)
+        except Exception as exc:
+            errors.append(exc)
+
+    def run_client():
+        deadline = time.time() + 5.0
+        while not host.session_id and time.time() < deadline:
+            time.sleep(0.05)
+        try:
+            client.lobby_phase(session_id=host.session_id)
+        except Exception as exc:
+            errors.append(exc)
+
+    t_host = threading.Thread(target=run_host)
+    t_client = threading.Thread(target=run_client)
+    t_host.start()
+    t_client.start()
+    t_host.join(timeout=10.0)
+    t_client.join(timeout=10.0)
+    assert not errors, errors
+
+    original_session_id = host.session_id
+    host.engine.world_state.victory = True
+    host.engine.world_state.victory_player_id = "player1"
+    host.engine.world_state.environment.destructible_blocks[0].destroyed = True
+
+    def replay_host():
+        try:
+            with patch("distributed_smb.application.lobby_coordinator.time.sleep"):
+                host.replay_lobby_phase(start_requested=lambda: True)
+        except Exception as exc:
+            errors.append(exc)
+
+    def replay_client():
+        try:
+            client.replay_lobby_phase()
+        except Exception as exc:
+            errors.append(exc)
+
+    t_host = threading.Thread(target=replay_host)
+    t_client = threading.Thread(target=replay_client)
+    t_host.start()
+    t_client.start()
+    t_host.join(timeout=10.0)
+    t_client.join(timeout=10.0)
+
+    assert not errors, errors
+    assert host.session_id == original_session_id
+    assert client.session_id == original_session_id
+    assert host.engine.world_state.victory is False
+    assert host.engine.world_state.environment.destructible_blocks[0].destroyed is False
+    assert set(host.engine.world_state.characters) == {"player1", "player2"}
