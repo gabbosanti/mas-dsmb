@@ -1,9 +1,10 @@
 [project]
-name = "distributed-smb"
+name = "mas-dsmb"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Ludovico Nollino",email = "ludovico.nollino@studio.unibo.it"}
+    {name = "Filippo Badioli",email = "filippo.badioli@studio.unibo.it"},
+    {name = "Gabriele Santi", email "gabriele.santi6@studio.unibo.it"}
 ]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,7 +14,8 @@ dependencies = [
     "uvicorn[standard] (>=0.46.0,<0.47.0)",
     "websockets (>=16.0,<17.0)",
     "httpx (>=0.28.1,<0.29.0)",
-    "pytmx (>=3.32,<4.0)"
+    "pytmx (>=3.32,<4.0)",
+    "spade_bdi (>=0.3.3)"
 ]
 
 
