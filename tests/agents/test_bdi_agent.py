@@ -13,6 +13,7 @@ import pytest
 
 from distributed_smb.domain.game_engine import GameEngine
 
+
 @pytest.fixture
 def bdi():
     try:
@@ -32,6 +33,7 @@ def bdi():
             f"running these behavioral tests: {exc}",
             pytrace=False,
         )
+
 
 @pytest.fixture
 def objectives(bdi):
@@ -63,6 +65,7 @@ def objectives(bdi):
     ]
     return [pursue_mario, patrol], plans
 
+
 @pytest.mark.skip(reason="Feature not implemented yet")
 def test_observations_initialise_and_refresh_beliefs(bdi, objectives):
     goals, plans = objectives
@@ -80,6 +83,7 @@ def test_observations_initialise_and_refresh_beliefs(bdi, objectives):
 
     assert agent.beliefs["mario_visible"] is False
     assert agent.beliefs["mario_x"] == 180
+
 
 @pytest.mark.skip(reason="Feature not implemented yet")
 def test_deliberation_selects_a_goal_and_revises_the_intention(bdi, objectives):
@@ -169,6 +173,7 @@ def test_execution_reports_when_the_intention_has_no_executable_plan(bdi):
 
     assert agent.execute_intention() == []
 
+
 @pytest.mark.skip(reason="Feature not implemented yet")
 def test_action_boundary_rejects_unsupported_actions_without_changing_game_state(bdi):
     engine = GameEngine()
@@ -185,6 +190,7 @@ def test_action_boundary_rejects_unsupported_actions_without_changing_game_state
         boundary.submit(unsupported)
 
     assert engine.world_state == original_state
+
 
 @pytest.mark.skip(reason="Feature not implemented yet")
 def test_received_messages_update_relevant_beliefs_once(bdi, objectives):
@@ -209,6 +215,7 @@ def test_received_messages_update_relevant_beliefs_once(bdi, objectives):
     assert agent.beliefs["mario_visible"] is True
     assert agent.beliefs["mario_x"] == 200
     assert agent.processed_message_ids == {"sighting-1"}
+
 
 @pytest.mark.skip(reason="Feature not implemented yet")
 def test_missing_or_irrelevant_message_information_does_not_corrupt_beliefs(
@@ -239,6 +246,7 @@ def test_missing_or_irrelevant_message_information_does_not_corrupt_beliefs(
     agent.receive(irrelevant)
 
     assert agent.beliefs == {"mario_visible": False, "mario_x": 10}
+
 
 @pytest.mark.skip(reason="Feature not implemented yet")
 def test_revoking_autonomous_control_stops_future_action_submissions(bdi, objectives):
