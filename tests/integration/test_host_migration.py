@@ -31,6 +31,14 @@ pytestmark = pytest.mark.usefixtures("no_real_lobby_relaunch")
 SESSION = "migration-session"
 
 
+@pytest.fixture
+def close_udp_sockets():
+    nodes: list[NodeController] = []
+    yield nodes
+    for node in nodes:
+        node.udp_handler.close_socket()
+
+
 class SpyBroker:
     """The WS relay: records what the promoted node broadcast to the others."""
 
@@ -74,7 +82,11 @@ class SpyWsHandler:
 
 
 def _client(
-    local_ip: str, player_id: str, join_index: int, peers: list[tuple]
+    local_ip: str,
+    player_id: str,
+    join_index: int,
+    peers: list[tuple],
+    nodes: list[NodeController],
 ) -> NodeController:
     """A client mid-session: crashed host plus `peers` in its roster."""
     node = NodeController(game_event_broker=SpyBroker()).bootstrap(
@@ -120,12 +132,19 @@ def _client(
     )
     node._reconnect_game_event_handler = lambda *a, **kw: None
     node._reconnect_lobby_ws_handler = lambda *a, **kw: None
+    nodes.append(node)
     return node
 
 
-def test_a_crashed_host_is_verified_then_replaced_and_its_world_survives():
+def test_a_crashed_host_is_verified_then_replaced_and_its_world_survives(
+    close_udp_sockets,
+):
     candidate = _client(
-        "10.0.0.2", "player2", 1, peers=[("player3", "10.0.0.3", 50012, 2)]
+        "10.0.0.2",
+        "player2",
+        1,
+        peers=[("player3", "10.0.0.3", 50012, 2)],
+        nodes=close_udp_sockets,
     )
     # The last snapshot seen before the crash, with a block already destroyed.
     world = WorldState()
@@ -163,12 +182,13 @@ def test_a_crashed_host_is_verified_then_replaced_and_its_world_survives():
         candidate.udp_handler.close_socket()
 
 
-def test_every_survivor_follows_the_ack_the_new_host_broadcast():
+def test_every_survivor_follows_the_ack_the_new_host_broadcast(close_udp_sockets):
     promoted = _client(
         "10.0.0.2",
         "player2",
         1,
         peers=[("player3", "10.0.0.3", 50013, 2), ("player4", "10.0.0.4", 50014, 3)],
+        nodes=close_udp_sockets,
     )
 
     try:
@@ -188,7 +208,13 @@ def test_every_survivor_follows_the_ack_the_new_host_broadcast():
         ("10.0.0.3", "player3", 2),
         ("10.0.0.4", "player4", 3),
     ):
-        survivor = _client(peer_ip, peer_id, peer_index, peers=[])
+        survivor = _client(
+            peer_ip,
+            peer_id,
+            peer_index,
+            peers=[],
+            nodes=close_udp_sockets,
+        )
         survivor._on_reconnection_ack(ack)
 
         assert survivor.reconnected is True
