@@ -80,7 +80,9 @@ class SessionJoinRejected:
 
     session_id: str
     reason: str
-    message_type: MessageType = field(init=False, default=MessageType.SESSION_JOIN_REJECTED)
+    message_type: MessageType = field(
+        init=False, default=MessageType.SESSION_JOIN_REJECTED
+    )
 
 
 @dataclass(slots=True)
@@ -121,12 +123,16 @@ class SessionRecreate:
         if not self.session_id or not isinstance(self.session_id, str):
             raise MessageValidationError(f"Invalid session_id: {self.session_id}")
         if self.next_join_index < 0:
-            raise MessageValidationError(f"Invalid next_join_index: {self.next_join_index}")
+            raise MessageValidationError(
+                f"Invalid next_join_index: {self.next_join_index}"
+            )
         if not self.host_ip or not isinstance(self.host_ip, str):
             raise MessageValidationError(f"Invalid host_ip: {self.host_ip}")
         validate_port(self.host_udp_port)
         if self.host_join_index < 0:
-            raise MessageValidationError(f"Invalid host_join_index: {self.host_join_index}")
+            raise MessageValidationError(
+                f"Invalid host_join_index: {self.host_join_index}"
+            )
 
 
 @dataclass(slots=True)

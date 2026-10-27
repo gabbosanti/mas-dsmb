@@ -114,7 +114,9 @@ def test_following_a_claim_acks_it_on_both_transports_and_arms_the_fallback():
     """The claimer needs the ack for its quorum — over the relay and directly
     over UDP, since the relay may have died with the crashed host — and the
     follower needs the deadline in case the ReconnectionAck never arrives."""
-    nc, broker = make_controller(local_ip="10.0.0.3", local_player_id="player3", join_index=2)
+    nc, broker = make_controller(
+        local_ip="10.0.0.3", local_player_id="player3", join_index=2
+    )
     nc.roster.add_player(peer("player2", "10.0.0.2", 50012, 1))
     nc.election_coordinator.start_election({"10.0.0.2"})
     nc.election_coordinator.set_election_timer(time.time())
@@ -146,7 +148,9 @@ def test_the_reconnection_ack_reaches_the_survivors_and_nobody_else(monkeypatch)
 
     nc._promote_to_host()
 
-    to_survivor = [nc.serializer.decode_message(p) for p, host in sent if host == "10.0.0.3"]
+    to_survivor = [
+        nc.serializer.decode_message(p) for p, host in sent if host == "10.0.0.3"
+    ]
     acks = [msg for msg in to_survivor if isinstance(msg, ReconnectionAck)]
     assert len(acks) == 1
     assert acks[0].new_host_ip == "10.0.0.2"
@@ -191,7 +195,9 @@ def test_the_promoted_host_re_registers_the_session_for_rejoining_nodes(monkeypa
 
 def _following_a_new_host() -> NodeController:
     """Node C, after A crashed and B claimed: B is still is_host=False here."""
-    nc, _ = make_controller(local_ip="10.0.0.3", local_player_id="player3", join_index=2)
+    nc, _ = make_controller(
+        local_ip="10.0.0.3", local_player_id="player3", join_index=2
+    )
     nc.roster.add_player(peer("player2", "10.0.0.2", 50011, 1))
     nc.election_triggered = True
     return nc

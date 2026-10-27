@@ -1,7 +1,10 @@
 import pytest
 
 from distributed_smb.shared.messages.gameplay import MessageValidationError
-from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.recovery import (
+    HostDiscoveryProbe,
+    HostIdentityResponse,
+)
 from distributed_smb.shared.messages.session import SessionCreate, SessionJoin
 
 

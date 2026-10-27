@@ -15,7 +15,11 @@ from distributed_smb.shared.config import (
     LOBBY_WS_PORT,
 )
 from distributed_smb.shared.enums import PlayerRole
-from distributed_smb.shared.messages.election import ElectionAck, NewHostClaim, ReconnectionAck
+from distributed_smb.shared.messages.election import (
+    ElectionAck,
+    NewHostClaim,
+    ReconnectionAck,
+)
 from distributed_smb.shared.messages.session import SessionCreated, SessionRecreate
 
 LOGGER = logging.getLogger(__name__)
@@ -26,7 +30,9 @@ class ElectionMixin:
     # Election handlers (override stubs in ClientGameplayMixin)
     # ------------------------------------------------------------------
 
-    def _send_election_message_udp(self, message, *, only_hosts: set[str] | None = None) -> None:
+    def _send_election_message_udp(
+        self, message, *, only_hosts: set[str] | None = None
+    ) -> None:
         """Send an election message over UDP too: the WS relay may have died with the host."""
         payload = self.serializer.encode_message(message)
         for entry in self.roster.get_all_players():
@@ -155,7 +161,9 @@ class ElectionMixin:
         # Broadcast ReconnectionAck via relay and direct UDP — the relay may
         # already be down if it ran on the crashed host's own machine.
         surviving_peers = [
-            e for e in self.roster.get_all_players() if e.player_id != self.local_player_id
+            e
+            for e in self.roster.get_all_players()
+            if e.player_id != self.local_player_id
         ]
         if surviving_peers:
             ack_msg = ReconnectionAck(
@@ -167,7 +175,10 @@ class ElectionMixin:
             payload = json.dumps(self.serializer.encode_ws_message(ack_msg)).encode()
             self.game_event_broker.send(payload)
             self._send_election_message_udp(ack_msg)
-            LOGGER.info("election: ReconnectionAck broadcast to %d peer(s)", len(surviving_peers))
+            LOGGER.info(
+                "election: ReconnectionAck broadcast to %d peer(s)",
+                len(surviving_peers),
+            )
 
         # Own game event server: in-process mode launches the FastAPI server
         # synchronously here (fast); Docker/LAN mode brings up containers in
@@ -208,7 +219,9 @@ class ElectionMixin:
             deadline = time.time() + 2.0
             while time.time() < deadline:
                 if isinstance(lobby_ws.poll(), SessionCreated):
-                    LOGGER.info("election: lobby ready for rejoin (session=%s)", self.session_id)
+                    LOGGER.info(
+                        "election: lobby ready for rejoin (session=%s)", self.session_id
+                    )
                     got_ack = True
                     break
                 time.sleep(0.05)

@@ -32,7 +32,9 @@ class WsHandler:
     _connection_error: Exception | None = field(default=None, init=False, repr=False)
 
     def _url(self) -> str:
-        return LOBBY_WS_URL_TEMPLATE.format(host=self.host, port=self.port, path=self.path)
+        return LOBBY_WS_URL_TEMPLATE.format(
+            host=self.host, port=self.port, path=self.path
+        )
 
     def connect(self, timeout: float = 10.0) -> None:
         """Open the connection in a background daemon thread."""
@@ -64,7 +66,9 @@ class WsHandler:
                         msg = _serializer.decode_ws_message(json.loads(raw))
                         self.inbox.put(msg)
                     except Exception as exc:
-                        LOGGER.debug("WsHandler: failed to decode %r: %s", raw[:120], exc)
+                        LOGGER.debug(
+                            "WsHandler: failed to decode %r: %s", raw[:120], exc
+                        )
         except Exception as exc:
             LOGGER.warning("WsHandler: receive loop ended for %s: %s", self._url(), exc)
             self._connection_error = exc
@@ -112,5 +116,7 @@ def connect_with_retries(
         except (ConnectionError, TimeoutError, OSError):
             if attempt == attempts:
                 raise
-            LOGGER.info("%s not ready yet (attempt %d/%d), retrying…", label, attempt, attempts)
+            LOGGER.info(
+                "%s not ready yet (attempt %d/%d), retrying…", label, attempt, attempts
+            )
             time.sleep(delay)

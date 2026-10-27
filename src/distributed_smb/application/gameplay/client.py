@@ -34,7 +34,10 @@ from distributed_smb.shared.messages.election import (
     ReconnectionAck,
 )
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
-from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.recovery import (
+    HostDiscoveryProbe,
+    HostIdentityResponse,
+)
 from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 from distributed_smb.shared.session_metadata import CachedPeer
 
@@ -103,7 +106,9 @@ class ClientGameplayMixin:
 
         if self._host_verify_deadline == 0.0:
             if not self.election_triggered and self.timeout_watcher.tick(now):
-                LOGGER.warning("host timeout suspected — verifying before starting election")
+                LOGGER.warning(
+                    "host timeout suspected — verifying before starting election"
+                )
                 self._send_host_verify_probe(now)
         else:
             self._tick_host_verify(now)
@@ -124,7 +129,9 @@ class ClientGameplayMixin:
 
     def _resend_host_verify_probe(self, now: float) -> None:
         self._host_verify_next_probe = now + HOST_VERIFY_RESEND_INTERVAL_S
-        probe = HostDiscoveryProbe(session_id=self.session_id, requester_ip=self.local_ip)
+        probe = HostDiscoveryProbe(
+            session_id=self.session_id, requester_ip=self.local_ip
+        )
         self.udp_handler.send_packet_nowait(
             self.serializer.encode_message(probe), self.remote_host, self.remote_port
         )
@@ -151,7 +158,9 @@ class ClientGameplayMixin:
             return
         if msg.session_id != self.session_id:
             return
-        LOGGER.info("election: host verify probe answered — host alive, election cancelled")
+        LOGGER.info(
+            "election: host verify probe answered — host alive, election cancelled"
+        )
         self._host_verify_deadline = 0.0
         if self.timeout_watcher is not None:
             self.timeout_watcher.reset(time.time())
@@ -181,7 +190,8 @@ class ClientGameplayMixin:
         )
         if found_ip is None:
             LOGGER.warning(
-                "election: direct probe to %s got no response — will retry", candidate_ip
+                "election: direct probe to %s got no response — will retry",
+                candidate_ip,
             )
             return
         self._following_host_ip = None
@@ -234,7 +244,9 @@ class ClientGameplayMixin:
         if last is None:
             return
         environment = self.engine.world_state.environment
-        environment.destructible_blocks = last.world_state.environment.destructible_blocks
+        environment.destructible_blocks = (
+            last.world_state.environment.destructible_blocks
+        )
         environment.power_ups = last.world_state.environment.power_ups
         environment.cooperative_gates = last.world_state.environment.cooperative_gates
 
@@ -244,7 +256,12 @@ class ClientGameplayMixin:
         if old_host is not None:
             self._evict_player(old_host.player_id)
         new_host = next(
-            (entry for entry in self.roster.get_all_players() if entry.host == new_host_ip), None
+            (
+                entry
+                for entry in self.roster.get_all_players()
+                if entry.host == new_host_ip
+            ),
+            None,
         )
         if new_host is not None:
             self.roster.promote_host(new_host.player_id)
@@ -254,7 +271,9 @@ class ClientGameplayMixin:
         self.election_triggered = False
         self._pending_election_acks = set()
         self._election_claim_deadline = 0.0
-        self.election_coordinator = None  # lazily re-created in _ensure_election_components
+        self.election_coordinator = (
+            None  # lazily re-created in _ensure_election_components
+        )
         self.timeout_watcher = HostTimeoutWatcher(timeout_s=HOST_TIMEOUT_S)
         self._host_verify_deadline = 0.0
 
@@ -333,7 +352,9 @@ class ClientGameplayMixin:
 
         self.prediction_lead_baseline = baseline
 
-    def _smoothed_local_visual_state(self, pre_reconcile_pos: tuple[float, float] | None):
+    def _smoothed_local_visual_state(
+        self, pre_reconcile_pos: tuple[float, float] | None
+    ):
         """Absorb the reconciliation correction gradually instead of snapping."""
         player = self.engine.world_state.get_player(self.local_player_id)
         if player is None or pre_reconcile_pos is None:

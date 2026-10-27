@@ -4,7 +4,11 @@ import logging
 import subprocess
 import time
 
-from distributed_smb.shared.config import GAME_EVENT_WS_PORT, LOBBY_STARTUP_WAIT, LOBBY_WS_PORT
+from distributed_smb.shared.config import (
+    GAME_EVENT_WS_PORT,
+    LOBBY_STARTUP_WAIT,
+    LOBBY_WS_PORT,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,13 +36,25 @@ class LobbyContainerManager:
                 continue
             self._wait_until_removed(name)
             result = subprocess.run(
-                ["docker", "run", "-d", "--rm", "-p", f"{port}:{port}", "--name", name, image],
+                [
+                    "docker",
+                    "run",
+                    "-d",
+                    "--rm",
+                    "-p",
+                    f"{port}:{port}",
+                    "--name",
+                    name,
+                    image,
+                ],
                 capture_output=True,
             )
             if result.returncode != 0:
                 stderr = result.stderr.decode(errors="replace")
                 LOGGER.error("failed to start container %s: %s", name, stderr)
-                raise subprocess.CalledProcessError(result.returncode, result.args, result.stderr)
+                raise subprocess.CalledProcessError(
+                    result.returncode, result.args, result.stderr
+                )
         time.sleep(LOBBY_STARTUP_WAIT)
 
     def stop(self) -> None:

@@ -69,7 +69,8 @@ def test_falling_into_the_void_kills_only_on_the_authoritative_engine():
     assert host.world_state.get_player("player1") is None
     assert "player1" in host.world_state.respawn_timers
     assert any(
-        event.player_id == "player1" and event.enemy_id == VOID_DEATH_CAUSE for event in host.events
+        event.player_id == "player1" and event.enemy_id == VOID_DEATH_CAUSE
+        for event in host.events
     )
 
     client = GameEngine(is_authoritative=False)

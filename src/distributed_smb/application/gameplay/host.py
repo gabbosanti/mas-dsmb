@@ -7,7 +7,10 @@ import time
 from distributed_smb.shared.config import TICK_INTERVAL
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
-from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.recovery import (
+    HostDiscoveryProbe,
+    HostIdentityResponse,
+)
 from distributed_smb.shared.messages.session import RosterUpdate
 from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 
@@ -25,7 +28,9 @@ class HostGameplayMixin:
         """Apply an incoming snapshot as the authoritative starting state."""
         self.engine.world_state = snapshot.world_state
         self.last_snapshot_sequence = snapshot.sequence_number
-        LOGGER.info("bootstrapped world state from snapshot seq=%d", snapshot.sequence_number)
+        LOGGER.info(
+            "bootstrapped world state from snapshot seq=%d", snapshot.sequence_number
+        )
 
     def _drain_remote_input_packets(self) -> int:
         """Poll incoming client input packets and cache the latest valid ones."""
@@ -98,7 +103,9 @@ class HostGameplayMixin:
             if entry.join_index not in known:
                 x, y = self._spawn_position_for(entry.join_index)
                 self.roster.add_player(entry)
-                self.engine.spawn_player(entry.player_id, x=x, y=y, join_index=entry.join_index)
+                self.engine.spawn_player(
+                    entry.player_id, x=x, y=y, join_index=entry.join_index
+                )
                 self.last_input_time[entry.player_id] = time.time()
                 LOGGER.info(
                     "rejoin: %s (join_index=%d) re-entered the game",
@@ -109,7 +116,10 @@ class HostGameplayMixin:
         if new_entries:
             sync = InitialStateSync(world_state=self.engine.world_state.to_dict())
             self.ws_handler.send(sync)
-            LOGGER.info("rejoin: sent InitialStateSync to %d rejoining player(s)", len(new_entries))
+            LOGGER.info(
+                "rejoin: sent InitialStateSync to %d rejoining player(s)",
+                len(new_entries),
+            )
 
     def _process_host_frame(self, local_input: InputState) -> object:
         """Run one authoritative host frame: drain inputs, tick, broadcast snapshot."""

@@ -76,7 +76,9 @@ def test_domain_depends_on_no_other_layer(code, layers):
 
 
 def test_network_does_not_depend_on_application_or_presentation(code, layers):
-    _forbid(layers, "network", ["application", "dto", "presentation"]).assert_applies(code)
+    _forbid(layers, "network", ["application", "dto", "presentation"]).assert_applies(
+        code
+    )
 
 
 def test_application_does_not_depend_on_presentation(code, layers):
@@ -87,7 +89,9 @@ def test_application_does_not_depend_on_presentation(code, layers):
 
 def test_presentation_takes_nothing_but_the_dto(code, layers):
     """The renderer draws a RenderFrame and knows nothing else."""
-    _forbid(layers, "presentation", ["domain", "network", "application"]).assert_applies(code)
+    _forbid(
+        layers, "presentation", ["domain", "network", "application"]
+    ).assert_applies(code)
 
 
 def test_every_noop_stub_satisfies_the_protocol_it_stands_in_for():

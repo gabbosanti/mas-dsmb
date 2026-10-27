@@ -9,7 +9,11 @@ import pygame
 from distributed_smb.application.dto import RenderFrame
 from distributed_smb.presentation.input_handler import InputHandler
 from distributed_smb.presentation.renderer import Renderer
-from distributed_smb.shared.config import VICTORY_OVERLAY_DURATION_S, WINDOW_HEIGHT, WINDOW_WIDTH
+from distributed_smb.shared.config import (
+    VICTORY_OVERLAY_DURATION_S,
+    WINDOW_HEIGHT,
+    WINDOW_WIDTH,
+)
 from distributed_smb.shared.input import InputState
 
 
@@ -58,7 +62,9 @@ class GameApp:
         outcome = "quit"
         victory_since: float | None = None
         while running:
-            self.clock.tick(self.fps)  # caps the frame rate; the simulation step is fixed
+            self.clock.tick(
+                self.fps
+            )  # caps the frame rate; the simulation step is fixed
             if self._should_quit():
                 break
             local_input = self.input_handler.read_input()

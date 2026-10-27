@@ -110,7 +110,9 @@ class Serializer:
         """Encode the given payload to JSON."""
         if is_dataclass(payload):
             payload = asdict(payload)
-        return json.dumps(payload, default=lambda o: list(o) if isinstance(o, set) else o)
+        return json.dumps(
+            payload, default=lambda o: list(o) if isinstance(o, set) else o
+        )
 
     def decode(self, payload: str | bytes) -> Any:
         """Decode JSON data into a Python object."""
@@ -192,7 +194,9 @@ class Serializer:
 
             if message_type == MessageType.ELECTION_ACK:
                 validated = ElectionAckSchema(**data)
-                return ElectionAck(from_ip=validated.from_ip, session_id=validated.session_id)
+                return ElectionAck(
+                    from_ip=validated.from_ip, session_id=validated.session_id
+                )
 
             if message_type == MessageType.RECONNECTION_ACK:
                 validated = ReconnectionAckSchema(**data)
@@ -268,7 +272,9 @@ class Serializer:
 
             if message_type == MessageType.SESSION_JOIN_REJECTED:
                 validated = SessionJoinRejectedSchema(**data)
-                return SessionJoinRejected(session_id=validated.session_id, reason=validated.reason)
+                return SessionJoinRejected(
+                    session_id=validated.session_id, reason=validated.reason
+                )
 
             if message_type == MessageType.SESSION_JOINED:
                 validated = SessionJoinedSchema(**data)
@@ -346,7 +352,9 @@ class Serializer:
 
             if message_type == MessageType.ELECTION_ACK:
                 validated = ElectionAckSchema(**data)
-                return ElectionAck(from_ip=validated.from_ip, session_id=validated.session_id)
+                return ElectionAck(
+                    from_ip=validated.from_ip, session_id=validated.session_id
+                )
 
             if message_type == MessageType.RECONNECTION_ACK:
                 validated = ReconnectionAckSchema(**data)
@@ -357,7 +365,9 @@ class Serializer:
                     session_id=validated.session_id,
                 )
 
-            raise DeserializationError(f"Unsupported WebSocket message type: {message_type}")
+            raise DeserializationError(
+                f"Unsupported WebSocket message type: {message_type}"
+            )
 
         except ValidationError as e:
             raise DeserializationError(

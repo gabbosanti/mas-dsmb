@@ -4,7 +4,10 @@ from distributed_smb.network.serializer import Serializer
 from distributed_smb.shared.config import TICK_INTERVAL
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
-from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.recovery import (
+    HostDiscoveryProbe,
+    HostIdentityResponse,
+)
 from distributed_smb.shared.messages.session import RosterUpdate
 from distributed_smb.shared.roster import GlobalRoster, RosterEntry
 
@@ -60,7 +63,9 @@ def test_the_host_answers_a_discovery_probe_only_for_its_own_session():
 def _input_packet(player_id: str = "player2", sequence_number: int = 1) -> tuple:
     payload = Serializer().encode_message(
         PlayerInputPacket(
-            player_id=player_id, sequence_number=sequence_number, input_state=InputState(left=True)
+            player_id=player_id,
+            sequence_number=sequence_number,
+            input_state=InputState(left=True),
         )
     )
     return payload, ("127.0.0.5", 50010)
@@ -71,12 +76,16 @@ def test_a_probe_in_the_queue_does_not_swallow_the_input_behind_it():
     controller = NodeController()
     controller.session_id = "session-abc"
     controller.local_ip = "10.0.0.1"
-    controller.udp_handler = FakeUdpHandler([_probe_packet("session-abc"), _input_packet()])
+    controller.udp_handler = FakeUdpHandler(
+        [_probe_packet("session-abc"), _input_packet()]
+    )
 
     assert controller._drain_remote_input_packets() == 1
 
     payload, _, _ = controller.udp_handler.sent[0]
-    assert isinstance(controller.serializer.decode_message(payload), HostIdentityResponse)
+    assert isinstance(
+        controller.serializer.decode_message(payload), HostIdentityResponse
+    )
     assert controller.cached_remote_inputs["player2"].left is True
     assert controller.last_remote_input_sequence["player2"] == 1
 
@@ -112,7 +121,9 @@ def test_a_rejoining_player_is_added_once_however_often_the_lobby_says_so():
     controller = NodeController()
     controller.session_id = "session-abc"
     controller.local_player_id = "player2"
-    new_entry = RosterEntry(player_id="player3", host="10.0.0.3", udp_port=49500, join_index=2)
+    new_entry = RosterEntry(
+        player_id="player3", host="10.0.0.3", udp_port=49500, join_index=2
+    )
     controller.ws_handler = FakeWsHandler(
         [_roster_update_with(new_entry), _roster_update_with(new_entry)]
     )

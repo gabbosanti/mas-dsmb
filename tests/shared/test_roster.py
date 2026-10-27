@@ -1,6 +1,10 @@
 import pytest
 
-from distributed_smb.shared.roster import GlobalRoster, RosterEntry, RosterValidationError
+from distributed_smb.shared.roster import (
+    GlobalRoster,
+    RosterEntry,
+    RosterValidationError,
+)
 
 
 def test_roster_keeps_players_ordered_by_join_index_and_knows_its_host():

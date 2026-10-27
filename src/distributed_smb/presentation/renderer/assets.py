@@ -51,7 +51,9 @@ class AssetSpriteFactory:
         boots = (102, 68, 32)
         eye = (20, 20, 20)
 
-        def rect(rx: float, ry: float, rw: float, rh: float, color: tuple[int, int, int]) -> None:
+        def rect(
+            rx: float, ry: float, rw: float, rh: float, color: tuple[int, int, int]
+        ) -> None:
             pygame.draw.rect(
                 surface,
                 color,
@@ -63,8 +65,20 @@ class AssetSpriteFactory:
                 ),
             )
 
-        leg_offset = 0.04 if state == "walk" and frame == 1 else -0.04 if state == "walk" else 0.0
-        arm_offset = -0.04 if state == "walk" and frame == 1 else 0.04 if state == "walk" else 0.0
+        leg_offset = (
+            0.04
+            if state == "walk" and frame == 1
+            else -0.04
+            if state == "walk"
+            else 0.0
+        )
+        arm_offset = (
+            -0.04
+            if state == "walk" and frame == 1
+            else 0.04
+            if state == "walk"
+            else 0.0
+        )
         jump_raise = -0.03 if state == "jump" else 0.0
         duck_drop = 0.18 if state == "duck" else 0.0
         y = jump_raise + duck_drop
@@ -93,7 +107,10 @@ class AssetSpriteFactory:
     ) -> pygame.Surface:
         sprite = pygame.Surface((width, height), pygame.SRCALPHA)
         shadow = pygame.Rect(
-            width // 5, height - max(4, height // 10), width * 3 // 5, max(4, height // 12)
+            width // 5,
+            height - max(4, height // 10),
+            width * 3 // 5,
+            max(4, height // 12),
         )
         pygame.draw.ellipse(sprite, (0, 0, 0, 60), shadow)
         self._draw_sprite_frame(sprite, state, frame, body_color)
@@ -156,15 +173,27 @@ class AssetSpriteFactory:
         body = (177, 100, 46)
         mortar = (118, 62, 28)
         highlight = (224, 160, 98)
-        pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
+        pygame.draw.rect(
+            surface, body, surface.get_rect(), border_radius=max(2, width // 10)
+        )
         pygame.draw.rect(surface, mortar, surface.get_rect(), width=max(2, width // 9))
         pygame.draw.line(
-            surface, mortar, (width // 2, 3), (width // 2, height - 3), max(2, width // 12)
+            surface,
+            mortar,
+            (width // 2, 3),
+            (width // 2, height - 3),
+            max(2, width // 12),
         )
         pygame.draw.line(
-            surface, mortar, (3, height // 2), (width - 3, height // 2), max(2, height // 12)
+            surface,
+            mortar,
+            (3, height // 2),
+            (width - 3, height // 2),
+            max(2, height // 12),
         )
-        pygame.draw.line(surface, highlight, (5, 5), (width - 5, 5), max(1, height // 14))
+        pygame.draw.line(
+            surface, highlight, (5, 5), (width - 5, 5), max(1, height // 14)
+        )
 
     def _draw_powerup_surface(self, surface: pygame.Surface) -> None:
         width, height = surface.get_size()
@@ -188,7 +217,10 @@ class AssetSpriteFactory:
         ]
         pygame.draw.polygon(surface, star, [(round(x), round(y)) for x, y in points])
         pygame.draw.circle(
-            surface, shine, (round(width * 0.43), round(height * 0.32)), max(2, width // 10)
+            surface,
+            shine,
+            (round(width * 0.43), round(height * 0.32)),
+            max(2, width // 10),
         )
 
     def _draw_gate_surface(self, surface: pygame.Surface, state: str) -> None:
@@ -199,11 +231,17 @@ class AssetSpriteFactory:
         accent = (212, 233, 248) if state == "closed" else (215, 255, 220)
         fill = open_fill if state == "open" else closed_fill
         panel_width = max(4, width // 5)
-        pygame.draw.rect(surface, body, surface.get_rect(), border_radius=max(2, width // 10))
+        pygame.draw.rect(
+            surface, body, surface.get_rect(), border_radius=max(2, width // 10)
+        )
         inner = surface.get_rect().inflate(-max(4, width // 5), -max(4, height // 8))
         pygame.draw.rect(surface, fill, inner, border_radius=max(2, width // 12))
         pygame.draw.rect(
-            surface, accent, inner, width=max(2, width // 12), border_radius=max(2, width // 12)
+            surface,
+            accent,
+            inner,
+            width=max(2, width // 12),
+            border_radius=max(2, width // 12),
         )
         if state == "open":
             opening = pygame.Rect(
@@ -265,7 +303,9 @@ class AssetSpriteFactory:
         frame: int,
         facing: int,
     ) -> pygame.Surface | None:
-        filename, frame_size, base_frame = PLAYER_SPRITE_SHEETS[character.join_index % 4]
+        filename, frame_size, base_frame = PLAYER_SPRITE_SHEETS[
+            character.join_index % 4
+        ]
         if state == "jump":
             frame_index = base_frame + 5
         elif state == "duck":

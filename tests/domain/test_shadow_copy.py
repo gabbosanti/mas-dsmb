@@ -1,6 +1,8 @@
 from math import isclose
 
-from distributed_smb.application.reconciliation.shadow_copy import InterpolatedShadowCopy
+from distributed_smb.application.reconciliation.shadow_copy import (
+    InterpolatedShadowCopy,
+)
 from distributed_smb.domain.entity import Player
 from distributed_smb.domain.shadow_copy import ShadowCopy
 
@@ -57,7 +59,9 @@ def test_out_of_order_snapshots_are_ignored_using_the_real_sequence_number():
     assert domain_copy.last_sequence_number == 2
 
     through_adapter = ShadowCopy(snapshot_timeout=0.1, max_extrapolation_time=0.3)
-    adapter = InterpolatedShadowCopy(time_provider=lambda: 0.1, shadow_copy=through_adapter)
+    adapter = InterpolatedShadowCopy(
+        time_provider=lambda: 0.1, shadow_copy=through_adapter
+    )
     adapter.update(_character(x=5.0), sequence_number=5)
     adapter.update(_character(x=1.0), sequence_number=2)
 

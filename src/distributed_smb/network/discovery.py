@@ -59,7 +59,10 @@ class DiscoveryService:
                     data, addr = sock.recvfrom(256)
                     if data != query:
                         continue
-                    if self._allowed_ips is not None and addr[0] not in self._allowed_ips:
+                    if (
+                        self._allowed_ips is not None
+                        and addr[0] not in self._allowed_ips
+                    ):
                         LOGGER.debug(
                             "[discovery] ignoring query from unauthorized IP %s",
                             addr[0],
@@ -77,7 +80,9 @@ class DiscoveryService:
                 except OSError:
                     break
 
-        self._thread = threading.Thread(target=_listen, name="discovery-announce", daemon=True)
+        self._thread = threading.Thread(
+            target=_listen, name="discovery-announce", daemon=True
+        )
         self._thread.start()
 
     def discover(self, session_id: str, timeout: float = 5.0) -> tuple[str, int]:
@@ -104,7 +109,9 @@ class DiscoveryService:
                 continue
 
             lobby_port = int(data.decode())
-            LOGGER.info("[discovery] found host at %s, lobby port %d", host_ip, lobby_port)
+            LOGGER.info(
+                "[discovery] found host at %s, lobby port %d", host_ip, lobby_port
+            )
             return host_ip, lobby_port
 
         raise TimeoutError("discovery timed out on all local interfaces")

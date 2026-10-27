@@ -45,7 +45,9 @@ class FollowingHost(ElectionEvent):
 class ElectionCoordinator:
     """Staggered timer election coordinator."""
 
-    def __init__(self, join_index: int, my_ip: str, timeout_base_s: float, timeout_delta_s: float):
+    def __init__(
+        self, join_index: int, my_ip: str, timeout_base_s: float, timeout_delta_s: float
+    ):
         """Initialize the election coordinator."""
         self.join_index = join_index
         self.my_ip = my_ip
@@ -85,7 +87,9 @@ class ElectionCoordinator:
                 return SelfElected(my_ip=self.my_ip)
         return None
 
-    def on_new_host_claim(self, claimer_join_index: int, claimer_ip: str) -> ElectionEvent | None:
+    def on_new_host_claim(
+        self, claimer_join_index: int, claimer_ip: str
+    ) -> ElectionEvent | None:
         """Process incoming NewHostClaim from a peer."""
         if claimer_join_index >= self.join_index:
             # Claimer has higher or equal JoinIndex: we are the rightful host, ignore.
@@ -96,4 +100,6 @@ class ElectionCoordinator:
         self.current_host_ip = claimer_ip
         self.current_host_join_index = claimer_join_index
         self.election_timer_expiry = None
-        return FollowingHost(claimer_ip=claimer_ip, claimer_join_index=claimer_join_index)
+        return FollowingHost(
+            claimer_ip=claimer_ip, claimer_join_index=claimer_join_index
+        )

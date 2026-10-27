@@ -27,21 +27,29 @@ class Renderer:
     background_color: tuple[int, int, int] = (135, 206, 235)
     platform_color: tuple[int, int, int] = (90, 60, 40)
     player_palette: dict[str, tuple[int, int, int]] = None
-    _sprite_cache: dict[tuple[tuple[int, int, int], str, int, int, int, int], pygame.Surface] = (
-        field(init=False, default_factory=dict)
-    )
+    _sprite_cache: dict[
+        tuple[tuple[int, int, int], str, int, int, int, int], pygame.Surface
+    ] = field(init=False, default_factory=dict)
     _environment_sprite_cache: dict[tuple[str, str, int, int], pygame.Surface] = field(
         init=False, default_factory=dict
     )
-    _asset_sheets: dict[str, pygame.Surface | None] = field(init=False, default_factory=dict)
-    _asset_sprite_cache: dict[tuple[str, tuple[int, int, int, int], int, int], pygame.Surface] = (
-        field(init=False, default_factory=dict)
+    _asset_sheets: dict[str, pygame.Surface | None] = field(
+        init=False, default_factory=dict
     )
+    _asset_sprite_cache: dict[
+        tuple[str, tuple[int, int, int, int], int, int], pygame.Surface
+    ] = field(init=False, default_factory=dict)
     _facing_by_player: dict[str, int] = field(init=False, default_factory=dict)
     _powerup_collected_state: dict[str, bool] = field(init=False, default_factory=dict)
-    _powerup_collection_effects: dict[str, int] = field(init=False, default_factory=dict)
-    _last_rendered_characters: dict[str, RenderCharacter] = field(init=False, default_factory=dict)
-    _death_effects: dict[str, PlayerDeathEffect] = field(init=False, default_factory=dict)
+    _powerup_collection_effects: dict[str, int] = field(
+        init=False, default_factory=dict
+    )
+    _last_rendered_characters: dict[str, RenderCharacter] = field(
+        init=False, default_factory=dict
+    )
+    _death_effects: dict[str, PlayerDeathEffect] = field(
+        init=False, default_factory=dict
+    )
     _last_camera_offset: tuple[int, int] = field(init=False, default=(0, 0))
     _checkpoint_toasts: dict[str, int] = field(init=False, default_factory=dict)
     _checkpoint_toast_shown: set[str] = field(init=False, default_factory=set)
@@ -89,11 +97,15 @@ class Renderer:
             return (pygame.time.get_ticks() // 140) % 2
         return 0
 
-    def _camera_offset(self, frame: RenderFrame, platforms: list[pygame.Rect]) -> tuple[int, int]:
+    def _camera_offset(
+        self, frame: RenderFrame, platforms: list[pygame.Rect]
+    ) -> tuple[int, int]:
         return self._camera_controller.camera_offset(frame, platforms)
 
     @staticmethod
-    def _to_screen_position(x: float, y: float, camera_offset: tuple[int, int]) -> tuple[int, int]:
+    def _to_screen_position(
+        x: float, y: float, camera_offset: tuple[int, int]
+    ) -> tuple[int, int]:
         camera_x, camera_y = camera_offset
         return round(x) - camera_x, round(y) - camera_y
 
@@ -130,7 +142,9 @@ class Renderer:
         width: int,
         height: int,
     ) -> pygame.Surface:
-        return self._sprite_system._get_environment_sprite(sprite_kind, state, width, height)
+        return self._sprite_system._get_environment_sprite(
+            sprite_kind, state, width, height
+        )
 
     def _powerup_sprite_state(self, powerup_id: str) -> str:
         return self._sprite_system._powerup_sprite_state(powerup_id)
@@ -149,7 +163,9 @@ class Renderer:
             screen, frame, now_ms, camera_offset
         )
 
-    def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
+    def _get_decoration_sprite(
+        self, kind: str, width: int, height: int
+    ) -> pygame.Surface | None:
         return self._sprite_system._get_decoration_sprite(kind, width, height)
 
     def _render_decorations(
@@ -205,18 +221,26 @@ class Renderer:
         screen.fill(self.background_color)
         now_ms = pygame.time.get_ticks()
         self._sync_player_death_effects(frame, now_ms)
-        platform_rects = [pygame.Rect(p.x, p.y, p.width, p.height) for p in frame.platforms]
+        platform_rects = [
+            pygame.Rect(p.x, p.y, p.width, p.height) for p in frame.platforms
+        ]
         camera_offset = self._camera_offset(frame, platform_rects)
         self._last_camera_offset = camera_offset
 
-        self._render_decorations(screen, frame, camera_offset, BACKGROUND_DECORATION_KINDS)
+        self._render_decorations(
+            screen, frame, camera_offset, BACKGROUND_DECORATION_KINDS
+        )
         self._render_platforms(screen, platform_rects, camera_offset)
-        self._render_decorations(screen, frame, camera_offset, FOREGROUND_DECORATION_KINDS)
+        self._render_decorations(
+            screen, frame, camera_offset, FOREGROUND_DECORATION_KINDS
+        )
         self._render_environment(screen, frame, camera_offset)
         self._render_powerup_collection_effects(screen, frame, now_ms, camera_offset)
         self._render_player_death_effects(screen, now_ms, camera_offset)
 
-        for character in sorted(frame.characters.values(), key=lambda c: (c.y, c.player_id)):
+        for character in sorted(
+            frame.characters.values(), key=lambda c: (c.y, c.player_id)
+        ):
             sprite = self._get_player_sprite(character)
             if character.powerup_effect_active:
                 sprite = sprite.copy()

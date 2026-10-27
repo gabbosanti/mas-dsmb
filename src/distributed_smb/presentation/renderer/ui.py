@@ -98,9 +98,13 @@ class UiRenderer:
         )
         screen.blit(
             title_surface,
-            title_surface.get_rect(center=(self.owner.width // 2, self.owner.height // 2 - 20)),
+            title_surface.get_rect(
+                center=(self.owner.width // 2, self.owner.height // 2 - 20)
+            ),
         )
         screen.blit(
             body_surface,
-            body_surface.get_rect(center=(self.owner.width // 2, self.owner.height // 2 + 20)),
+            body_surface.get_rect(
+                center=(self.owner.width // 2, self.owner.height // 2 + 20)
+            ),
         )

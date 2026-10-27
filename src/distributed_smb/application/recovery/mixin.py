@@ -13,7 +13,9 @@ from distributed_smb.shared.session_metadata import (
 class RecoveryMixin:
     def _write_session_metadata(self) -> None:
         peers = [
-            CachedPeer(player_id=entry.player_id, ip=entry.host, join_index=entry.join_index)
+            CachedPeer(
+                player_id=entry.player_id, ip=entry.host, join_index=entry.join_index
+            )
             for entry in self.roster.get_all_players()
             if entry.player_id != self.local_player_id
         ]

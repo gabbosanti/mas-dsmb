@@ -15,13 +15,19 @@ def _world_state() -> WorldState:
     return WorldState(
         sequence_number=7,
         characters={
-            "player1": Player(player_id="player1", x=10.0, y=20.0, vx=1.0, vy=2.0, join_index=0)
+            "player1": Player(
+                player_id="player1", x=10.0, y=20.0, vx=1.0, vy=2.0, join_index=0
+            )
         },
         environment=EnvironmentalState(
             destructible_blocks=[DestructibleBlock(x=1, y=2, destroyed=True)],
-            power_ups={"pu-a": ExclusivePowerUp(x=3, y=4, powerup_id="pu-a", collected=True)},
+            power_ups={
+                "pu-a": ExclusivePowerUp(x=3, y=4, powerup_id="pu-a", collected=True)
+            },
             enemies={"enemy-a": Enemy(enemy_id="enemy-a", x=5.0, y=6.0)},
-            cooperative_gates={"gate-a": CooperativeGate(x=7, y=8, gate_id="gate-a", state="open")},
+            cooperative_gates={
+                "gate-a": CooperativeGate(x=7, y=8, gate_id="gate-a", state="open")
+            },
         ),
         coins_collected=3,
         coins_to_win=5,

@@ -27,7 +27,8 @@ def test_recovery_gives_up_and_cleans_up_when_it_cannot_find_the_session(monkeyp
         controller = NodeController()
         controller.recovery_prober = _SpyRecoveryProber(host_ip=host_ip)
         monkeypatch.setattr(
-            "distributed_smb.application.recovery.mixin.read_session_metadata", lambda: metadata
+            "distributed_smb.application.recovery.mixin.read_session_metadata",
+            lambda: metadata,
         )
         return controller, controller.attempt_recovery()
 
@@ -37,7 +38,9 @@ def test_recovery_gives_up_and_cleans_up_when_it_cannot_find_the_session(monkeyp
     assert controller.recovery_prober.calls == []  # nothing to probe
     assert deleted == []  # no file to remove either
 
-    without_peers = SessionMetadata(session_id="session-abc", local_player_id="player-1", peers=[])
+    without_peers = SessionMetadata(
+        session_id="session-abc", local_player_id="player-1", peers=[]
+    )
     controller, result = attempt(metadata=without_peers)
     assert result is None
     assert controller.recovery_prober.calls == []
@@ -65,7 +68,8 @@ def test_attempt_recovery_success_sets_remote_host_and_session_id(monkeypatch):
         peers=[CachedPeer(player_id="player-2", ip="127.0.0.2", join_index=1)],
     )
     monkeypatch.setattr(
-        "distributed_smb.application.recovery.mixin.read_session_metadata", lambda: metadata
+        "distributed_smb.application.recovery.mixin.read_session_metadata",
+        lambda: metadata,
     )
 
     result = controller.attempt_recovery()
@@ -99,4 +103,6 @@ def test_write_session_metadata_excludes_self(monkeypatch):
     metadata = written[0]
     assert metadata.session_id == "session-abc"
     assert metadata.local_player_id == "player-1"
-    assert metadata.peers == [CachedPeer(player_id="player-2", ip="127.0.0.2", join_index=1)]
+    assert metadata.peers == [
+        CachedPeer(player_id="player-2", ip="127.0.0.2", join_index=1)
+    ]

@@ -102,7 +102,11 @@ class GameEventMixin:
                     LOGGER.info("Player left (received): %s", msg.player_id)
                     self._evict_player(msg.player_id)
             elif isinstance(msg, PlayerDeathMessage):
-                LOGGER.info("Player died (received): %s by enemy %s", msg.player_id, msg.enemy_id)
+                LOGGER.info(
+                    "Player died (received): %s by enemy %s",
+                    msg.player_id,
+                    msg.enemy_id,
+                )
                 self.engine.world_state.remove_player(msg.player_id)
             elif isinstance(msg, LevelResetMessage):
                 LOGGER.info("game event applied: level reset (new run)")
@@ -118,7 +122,9 @@ class GameEventMixin:
                 LOGGER.info("election: ElectionAck from %s", msg.from_ip)
                 self._on_election_ack(msg)
             elif isinstance(msg, ReconnectionAck):
-                LOGGER.info("election: ReconnectionAck from new host %s", msg.new_host_ip)
+                LOGGER.info(
+                    "election: ReconnectionAck from new host %s", msg.new_host_ip
+                )
                 self._on_reconnection_ack(msg)
             elif isinstance(msg, RosterUpdate):
                 self._merge_roster(msg.roster)
@@ -130,4 +136,6 @@ class GameEventMixin:
             if entry.join_index in known or entry.player_id == self.local_player_id:
                 continue
             self.roster.add_player(entry)
-            LOGGER.info("roster: learned %s (join_index=%d)", entry.player_id, entry.join_index)
+            LOGGER.info(
+                "roster: learned %s (join_index=%d)", entry.player_id, entry.join_index
+            )

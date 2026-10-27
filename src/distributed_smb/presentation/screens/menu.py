@@ -83,7 +83,9 @@ class MenuScreen:
         join_hovered: bool,
     ) -> None:
         self._screen.fill(self.background_color)
-        self._draw_centered_text("Distributed SMB", self._title_font, self.text_color, 96)
+        self._draw_centered_text(
+            "Distributed SMB", self._title_font, self.text_color, 96
+        )
         self._draw_centered_text(
             "What do you want to do?", self._body_font, self.muted_text_color, 160
         )

@@ -12,7 +12,9 @@ class HostDiscoveryProbe:
 
     session_id: str
     requester_ip: str
-    message_type: MessageType = field(init=False, default=MessageType.HOST_DISCOVERY_PROBE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.HOST_DISCOVERY_PROBE
+    )
 
     def __post_init__(self):
         if not self.session_id or not isinstance(self.session_id, str):
@@ -27,7 +29,9 @@ class HostIdentityResponse:
 
     session_id: str
     host_ip: str
-    message_type: MessageType = field(init=False, default=MessageType.HOST_IDENTITY_RESPONSE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.HOST_IDENTITY_RESPONSE
+    )
 
     def __post_init__(self):
         if not self.session_id or not isinstance(self.session_id, str):
