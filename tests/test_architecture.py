@@ -46,6 +46,8 @@ def layers():
         LayeredArchitecture()
         .layer("domain")
         .containing_modules("distributed_smb.domain")
+        .layer("agents")
+        .containing_modules("distributed_smb.agents")
         .layer("network")
         .containing_modules("distributed_smb.network")
         .layer("application")
@@ -54,6 +56,8 @@ def layers():
         .containing_modules("distributed_smb.application.dto")
         .layer("presentation")
         .containing_modules("distributed_smb.presentation")
+        .layer("shared")
+        .containing_modules("distributed_smb.shared")
     )
 
 
@@ -71,14 +75,28 @@ def _forbid(layers, source: str, forbidden: list[str]) -> LayerRule:
 
 def test_domain_depends_on_no_other_layer(code, layers):
     """The game rules must stay playable without any networking at all."""
-    others = ["network", "application", "dto", "presentation"]
+    others = ["agents", "network", "application", "dto", "presentation"]
     _forbid(layers, "domain", others).assert_applies(code)
+
+
+def test_agents_depend_only_on_shared_definitions(code, layers):
+    """Agents use observation/action contracts, never game or infrastructure internals."""
+    _forbid(
+        layers,
+        "agents",
+        ["domain", "network", "application", "dto", "presentation"],
+    ).assert_applies(code)
 
 
 def test_network_does_not_depend_on_application_or_presentation(code, layers):
     _forbid(layers, "network", ["application", "dto", "presentation"]).assert_applies(
         code
     )
+
+
+def test_application_may_integrate_agents_without_reverse_dependencies(code, layers):
+    """The integration belongs to application; agent code stays independent of it."""
+    _forbid(layers, "agents", ["application", "dto"]).assert_applies(code)
 
 
 def test_application_does_not_depend_on_presentation(code, layers):
@@ -90,7 +108,15 @@ def test_application_does_not_depend_on_presentation(code, layers):
 def test_presentation_takes_nothing_but_the_dto(code, layers):
     """The renderer draws a RenderFrame and knows nothing else."""
     _forbid(
-        layers, "presentation", ["domain", "network", "application"]
+        layers, "presentation", ["domain", "network", "application", "agents"]
+    ).assert_applies(code)
+
+
+def test_shared_definitions_are_independent_of_implementation_layers(code, layers):
+    _forbid(
+        layers,
+        "shared",
+        ["domain", "agents", "application", "dto", "network", "presentation"],
     ).assert_applies(code)
 
 
