@@ -1,6 +1,6 @@
 """Behavioral contract for the planned BDI agent subsystem.
 
-The tests target ``mas_dsmb.agents.bdi`` and define the expected public
+The tests target ``distributed_smb.agents.bdi`` and define the expected public
 API for the implementation: Agent, Goal, Plan, AgentMessage, ActionRequest,
 ActionBoundary, and InvalidActionError.
 """
@@ -17,7 +17,7 @@ from distributed_smb.domain.game_engine import GameEngine
 @pytest.fixture
 def bdi():
     try:
-        module = import_module("mas_dsmb.agents.bdi")
+        module = import_module("distributed_smb.agents.bdi")
         return SimpleNamespace(
             Agent=module.Agent,
             Goal=module.Goal,
@@ -29,7 +29,7 @@ def bdi():
         )
     except (ImportError, AttributeError) as exc:
         pytest.fail(
-            "Implement the documented mas_dsmb.agents.bdi API before "
+            "Implement the documented distributed_smb.agents.bdi API before "
             f"running these behavioral tests: {exc}",
             pytrace=False,
         )
@@ -53,7 +53,9 @@ def objectives(bdi):
         bdi.Plan(
             goal_name="pursue_mario",
             precondition=lambda beliefs: beliefs.get("mario_visible", False),
-            actions=[bdi.ActionRequest(name="move_toward", parameters={"target": "mario"})],
+            actions=[
+                bdi.ActionRequest(name="move_toward", parameters={"target": "mario"})
+            ],
         ),
         bdi.Plan(
             goal_name="patrol",
@@ -208,7 +210,9 @@ def test_received_messages_update_relevant_beliefs_once(bdi, objectives):
     assert agent.processed_message_ids == {"sighting-1"}
 
 
-def test_missing_or_irrelevant_message_information_does_not_corrupt_beliefs(bdi, objectives):
+def test_missing_or_irrelevant_message_information_does_not_corrupt_beliefs(
+    bdi, objectives
+):
     goals, plans = objectives
     agent = bdi.Agent(
         agent_id="goomba-1",
