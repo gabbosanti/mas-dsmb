@@ -3,7 +3,7 @@ name = "mas-dsmb"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Filippo Badioli",email = "filippo.badioli@studio.unibo.it"},
+    {name = "Filippo Badioli", email = "filippo.badioli@studio.unibo.it"},
     {name = "Gabriele Santi", email = "gabriele.santi6@studio.unibo.it"}
 ]
 readme = "README.md"
@@ -17,34 +17,12 @@ dependencies = [
     "pytmx (>=3.32,<4.0)"
 ]
 
-
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
+packages = [
+    { include = "distributed_smb", from = "src" }
+]
 include = ["src/distributed_smb/assets/*/*.png"]
-
-[dependency-groups]
-dev = [
-    "pytest (>=9.0.2,<10.0.0)",
-    "ruff (>=0.14.14,<0.15.0)",
-    "pytestarch (>=4.0.1,<5.0.0)"
-]
-
-[tool.pytest.ini_options]
-filterwarnings = [
-    "ignore::DeprecationWarning:websockets",
-    "ignore::DeprecationWarning:uvicorn",
-]
-
-[tool.ruff]
-target-version = "py312"
-line-length = 100
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "W"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
