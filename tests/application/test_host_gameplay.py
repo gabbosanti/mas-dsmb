@@ -1,3 +1,9 @@
+from distributed_smb.agents.models import (
+    ActionRequest,
+    ActionStatus,
+    EnemyAction,
+    EnemyObservation,
+)
 from distributed_smb.application.node_controller import NodeController
 from distributed_smb.domain.game_engine import GameEngine
 from distributed_smb.network.serializer import Serializer
@@ -137,6 +143,11 @@ def test_a_rejoining_player_is_added_once_however_often_the_lobby_says_so():
     assert [p.player_id for p in controller.roster.get_all_players()] == ["player3"]
 
 
+class MoveEnemyLeft:
+    def decide(self, observation: EnemyObservation) -> ActionRequest:
+        return ActionRequest(observation.enemy_id, EnemyAction.MOVE_LEFT)
+
+
 def test_process_host_frame_ticks_engine_at_fixed_interval(monkeypatch):
     """Physics scales with the step, so host and client must integrate every
     tick by the same fixed amount or the replayed positions diverge."""
@@ -157,3 +168,22 @@ def test_process_host_frame_ticks_engine_at_fixed_interval(monkeypatch):
     controller._process_host_frame(InputState())
 
     assert recorded_dts == [TICK_INTERVAL]
+
+
+def test_authoritative_host_frame_applies_the_selected_agent_action():
+    controller = NodeController()
+    controller.local_player_id = "player1"
+    controller.udp_handler = FakeUdpHandler([])
+    controller.ws_handler = FakeWsHandler([])
+    enemy = controller.engine.world_state.environment.enemies["enemy-1"]
+    enemy.x = 520
+    controller.agent_integration.enabled = True
+    controller.agent_integration.control_enemy("enemy-1", MoveEnemyLeft())
+
+    controller._process_host_frame(InputState())
+
+    assert enemy.x < 520
+    assert (
+        controller.agent_integration.last_results["enemy-1"].status
+        is ActionStatus.APPLIED
+    )

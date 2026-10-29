@@ -134,7 +134,7 @@ class HostGameplayMixin:
         # used for it would diverge — proportionally to the dt gap, compounding
         # over a jump arc. Both sides must integrate every tick by the exact
         # same fixed amount for prediction and authority to ever agree.
-        self.engine.tick(TICK_INTERVAL, authoritative_inputs)
+        self.agent_integration.tick(TICK_INTERVAL, authoritative_inputs)
         for event in self.engine.events:
             self._send_game_event(event)
         self.engine.events.clear()

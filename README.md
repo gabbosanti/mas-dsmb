@@ -30,3 +30,28 @@ This mechanism provides a concrete connection between the distributed-system asp
 For the implementation of the agent system, we plan to use **SPADE-BDI**, a Python-based agent framework. This choice allows the intelligent agents to be integrated directly with the existing Python/Pygame implementation without introducing a Java/Python bridge. The game engine will remain responsible for the simulation, world state and execution of low-level actions, while the agent layer will be responsible for perception, beliefs, deliberation and communication.
 
 The resulting system will therefore be used as a concrete case study for investigating **autonomous agents, BDI reasoning, multi-agent coordination and autonomous substitution in a distributed environment**. The project will evaluate whether these techniques provide meaningful advantages over conventional rule-based behaviors, particularly in scenarios involving multiple objectives, partial information, interaction between agents and changes in the availability of human participants.
+
+## Enemy-agent integration
+
+The application exposes an optional synchronous integration point for enemy
+controllers. It is disabled by default; only the authoritative host runs it.
+To select one enemy, configure its controller by ID and enable the integration:
+
+```python
+from distributed_smb.agents import PursuitController
+from distributed_smb.application.node_controller import NodeController
+
+node = NodeController()
+node.agent_integration.control_enemy("enemy-1", PursuitController())
+node.agent_integration.enabled = True
+```
+
+An agent receives an immutable `EnemyObservation`, including the nearest active
+player (the game has multiplayer `Player` entities rather than a unique Mario),
+and platforms or non-destroyed blocks within 200 world pixels. The enemy model
+does not track whether an enemy is grounded. `MOVE_LEFT`, `MOVE_RIGHT`, and
+`STOP` are translated into commands consumed by the ordinary enemy update;
+`JUMP` is reported as unsupported and holds the selected enemy for that tick.
+Controllers make one synchronous decision per host tick. Decisions are not
+retained if a controller is removed or agent control is disabled, and unselected
+enemies continue their original patrol behavior.
