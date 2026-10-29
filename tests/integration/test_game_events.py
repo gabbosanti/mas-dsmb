@@ -57,7 +57,11 @@ def _node(role: PlayerRole) -> NodeController:
     ).bootstrap(role=role)
     node.roster.add_player(
         RosterEntry(
-            player_id="player1", host="127.0.0.1", udp_port=50000, join_index=0, is_host=True
+            player_id="player1",
+            host="127.0.0.1",
+            udp_port=50000,
+            join_index=0,
+            is_host=True,
         )
     )
     node.roster.add_player(
@@ -101,10 +105,14 @@ def test_one_event_reaches_every_connected_client():
     first, second = _subscriber("receiver-1"), _subscriber("receiver-2")
 
     send_game_event(
-        json.dumps(_serializer.encode_ws_message(BlockDestroyedMessage(position=(50, 50)))).encode()
+        json.dumps(
+            _serializer.encode_ws_message(BlockDestroyedMessage(position=(50, 50)))
+        ).encode()
     )
 
-    received = [_poll_until(handler, BlockDestroyedMessage) for handler in (first, second)]
+    received = [
+        _poll_until(handler, BlockDestroyedMessage) for handler in (first, second)
+    ]
     first.close()
     second.close()
 
@@ -166,7 +174,8 @@ def test_client_applies_environment_events_and_the_level_reset():
 
     _publish_to(client, BlockDestroyedMessage(position=(block.x, block.y)))
     _publish_to(
-        client, PowerUpCollectedMessage(powerup_id=power_up.powerup_id, player_id="player1")
+        client,
+        PowerUpCollectedMessage(powerup_id=power_up.powerup_id, player_id="player1"),
     )
 
     assert block.destroyed

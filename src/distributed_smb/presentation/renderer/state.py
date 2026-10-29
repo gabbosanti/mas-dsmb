@@ -31,5 +31,6 @@ class RenderStateTracker:
 
     def remember_rendered_characters(self, frame: RenderFrame) -> None:
         self.owner._last_rendered_characters = {
-            player_id: deepcopy(character) for player_id, character in frame.characters.items()
+            player_id: deepcopy(character)
+            for player_id, character in frame.characters.items()
         }

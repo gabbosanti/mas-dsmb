@@ -66,7 +66,9 @@ async def game_event_endpoint(ws: WebSocket, player_id: str = "") -> None:
 
 async def _broadcast(payload: bytes) -> None:
     text = payload.decode("utf-8")
-    LOGGER.info("Broadcasting game event to %d connection(s): %s", len(_connections), text)
+    LOGGER.info(
+        "Broadcasting game event to %d connection(s): %s", len(_connections), text
+    )
     dead: list[WebSocket] = []
     for ws in list(_connections):
         try:

@@ -6,7 +6,10 @@ from typing import Iterable
 
 from distributed_smb.network.serializer import Serializer
 from distributed_smb.shared.config import HOST_UDP_PORT
-from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.recovery import (
+    HostDiscoveryProbe,
+    HostIdentityResponse,
+)
 from distributed_smb.shared.session_metadata import CachedPeer
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +35,9 @@ class RecoveryProber:
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                     sock.settimeout(timeout_per_peer)
                     sock.bind(("0.0.0.0", 0))
-                    sock.sendto(serializer.encode_message(probe), (peer.ip, HOST_UDP_PORT))
+                    sock.sendto(
+                        serializer.encode_message(probe), (peer.ip, HOST_UDP_PORT)
+                    )
                     response_payload, _ = sock.recvfrom(65535)
             except (OSError, TimeoutError) as error:
                 LOGGER.debug(
@@ -45,7 +50,9 @@ class RecoveryProber:
             try:
                 response = serializer.decode_message(response_payload)
             except ValueError:
-                LOGGER.debug("[recovery] received invalid recovery response from %s", peer.ip)
+                LOGGER.debug(
+                    "[recovery] received invalid recovery response from %s", peer.ip
+                )
                 continue
 
             if not isinstance(response, HostIdentityResponse):

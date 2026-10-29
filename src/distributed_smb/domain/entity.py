@@ -48,7 +48,9 @@ class ExclusivePowerUp:
 
     def collect(self, player_id: str) -> PowerUpCollectedEvent:
         if self.collected:
-            raise ValueError(f"Power-up {self.powerup_id} is already collected by {self.owner}")
+            raise ValueError(
+                f"Power-up {self.powerup_id} is already collected by {self.owner}"
+            )
 
         self.collected = True
         self.owner = player_id

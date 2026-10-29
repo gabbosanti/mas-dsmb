@@ -86,7 +86,9 @@ class PredictionEngine:
         world_state = authoritative_snapshot.world_state
         client_seq_before = self.engine.world_state.sequence_number
         predicted_player = self.engine.world_state.get_player(self.local_player_id)
-        predicted_pos = (predicted_player.x, predicted_player.y) if predicted_player else None
+        predicted_pos = (
+            (predicted_player.x, predicted_player.y) if predicted_player else None
+        )
         predicted_vy = predicted_player.vy if predicted_player else None
         authoritative_player = world_state.get_player(self.local_player_id)
         authoritative_vy = authoritative_player.vy if authoritative_player else None
@@ -123,12 +125,17 @@ class PredictionEngine:
             world_state,
             characters=deepcopy(world_state.characters),
             environment=replace(
-                world_state.environment, enemies=deepcopy(world_state.environment.enemies)
+                world_state.environment,
+                enemies=deepcopy(world_state.environment.enemies),
             ),
         )
-        self.engine.world_state.environment.destructible_blocks = local_env.destructible_blocks
+        self.engine.world_state.environment.destructible_blocks = (
+            local_env.destructible_blocks
+        )
         self.engine.world_state.environment.power_ups = local_env.power_ups
-        self.engine.world_state.environment.cooperative_gates = local_env.cooperative_gates
+        self.engine.world_state.environment.cooperative_gates = (
+            local_env.cooperative_gates
+        )
         if pending_inputs:
             self._replay_pending(pending_inputs)
 

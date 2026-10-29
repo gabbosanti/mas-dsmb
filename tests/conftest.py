@@ -87,7 +87,9 @@ class _AckingLobbyWs:
 
     def send(self, message) -> None:
         if isinstance(message, SessionRecreate):
-            self._inbox.append(SessionCreated(session_id=message.session_id, join_index=0))
+            self._inbox.append(
+                SessionCreated(session_id=message.session_id, join_index=0)
+            )
 
     def poll(self):
         return self._inbox.pop(0) if self._inbox else None
@@ -100,8 +102,12 @@ class _AckingLobbyWs:
 def no_real_lobby_relaunch(monkeypatch):
     """Promotion re-registers with the lobby on localhost from a background
     thread: fake it, and join the thread before the fake goes away."""
-    monkeypatch.setattr("distributed_smb.application.election.mixin.time.sleep", lambda s: None)
-    monkeypatch.setattr("distributed_smb.application.election.mixin.WsHandler", _AckingLobbyWs)
+    monkeypatch.setattr(
+        "distributed_smb.application.election.mixin.time.sleep", lambda s: None
+    )
+    monkeypatch.setattr(
+        "distributed_smb.application.election.mixin.WsHandler", _AckingLobbyWs
+    )
     yield
     for t in threading.enumerate():
         if t.name == "lobby-relaunch":

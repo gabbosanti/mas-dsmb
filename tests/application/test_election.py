@@ -108,7 +108,9 @@ def test_a_claim_wins_only_if_it_comes_from_a_lower_join_index():
     claimer.state = ElectionState.CLAIMED
     claimer.current_host_join_index = 1
 
-    assert claimer.on_new_host_claim(claimer_join_index=2, claimer_ip="10.0.0.3") is None
+    assert (
+        claimer.on_new_host_claim(claimer_join_index=2, claimer_ip="10.0.0.3") is None
+    )
     assert claimer.state == ElectionState.CLAIMED
 
     event = claimer.on_new_host_claim(claimer_join_index=0, claimer_ip="10.0.0.1")

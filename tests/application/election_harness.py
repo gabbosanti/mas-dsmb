@@ -37,7 +37,9 @@ class FakeWsHandler:
     def send(self, message) -> None:
         self.sent.append(message)
         if isinstance(message, SessionRecreate):
-            self._queue.append(SessionCreated(session_id=message.session_id, join_index=0))
+            self._queue.append(
+                SessionCreated(session_id=message.session_id, join_index=0)
+            )
 
     def poll(self):
         return self._queue.pop(0) if self._queue else None
@@ -82,7 +84,10 @@ class SpyLobbyService:
 
 
 RECONNECTION_ACK = ReconnectionAck(
-    new_host_ip="10.0.0.2", udp_port=50010, game_events_port=50003, session_id="test-session"
+    new_host_ip="10.0.0.2",
+    udp_port=50010,
+    game_events_port=50003,
+    session_id="test-session",
 )
 
 
@@ -90,16 +95,24 @@ SESSION = "test-session"
 
 
 def claim(ip: str = "10.0.0.2", join_index: int = 1) -> NewHostClaim:
-    return NewHostClaim(claimer_ip=ip, claimer_join_index=join_index, session_id=SESSION)
+    return NewHostClaim(
+        claimer_ip=ip, claimer_join_index=join_index, session_id=SESSION
+    )
 
 
 def ack(ip: str) -> ElectionAck:
     return ElectionAck(from_ip=ip, session_id=SESSION)
 
 
-def peer(player_id: str, ip: str, udp_port: int, join_index: int, is_host: bool = False):
+def peer(
+    player_id: str, ip: str, udp_port: int, join_index: int, is_host: bool = False
+):
     return RosterEntry(
-        player_id=player_id, host=ip, udp_port=udp_port, join_index=join_index, is_host=is_host
+        player_id=player_id,
+        host=ip,
+        udp_port=udp_port,
+        join_index=join_index,
+        is_host=is_host,
     )
 
 
@@ -123,7 +136,9 @@ def make_controller(
     nc.session_id = SESSION
 
     if with_host_in_roster:
-        nc.roster.add_player(peer("player1", "10.0.0.1", HOST_UDP_PORT, 0, is_host=True))
+        nc.roster.add_player(
+            peer("player1", "10.0.0.1", HOST_UDP_PORT, 0, is_host=True)
+        )
     nc.roster.add_player(peer(local_player_id, local_ip, 50011, join_index))
     nc.election_coordinator = ElectionCoordinator(
         join_index=join_index,
@@ -135,7 +150,9 @@ def make_controller(
     # Patch out network-touching paths so unit tests never block on real I/O.
     fake_ws = FakeWsHandler()
     nc.ws_handler = fake_ws
-    nc._make_lobby_ws_client = lambda host, port: setattr(nc, "ws_handler", FakeWsHandler())
+    nc._make_lobby_ws_client = lambda host, port: setattr(
+        nc, "ws_handler", FakeWsHandler()
+    )
     nc._reconnect_game_event_handler = lambda *a, **kw: None
     return nc, broker
 
@@ -144,7 +161,9 @@ class SpyUdpHandler:
     def __init__(self) -> None:
         self.sent: list[tuple[bytes, str, int]] = []
 
-    def send_packet_nowait(self, payload: bytes, remote_host: str, remote_port: int) -> None:
+    def send_packet_nowait(
+        self, payload: bytes, remote_host: str, remote_port: int
+    ) -> None:
         self.sent.append((payload, remote_host, remote_port))
 
     def receive_packet_nowait(self):

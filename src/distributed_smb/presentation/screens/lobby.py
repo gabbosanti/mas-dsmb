@@ -70,7 +70,9 @@ class LobbyScreen:
                         pygame.key.stop_text_input()
                         return None
                     if event.key == pygame.K_TAB:
-                        active_field = "host_ip" if active_field == "session_id" else "session_id"
+                        active_field = (
+                            "host_ip" if active_field == "session_id" else "session_id"
+                        )
                     elif event.key == pygame.K_RETURN:
                         if host_ip.strip() and session_id.strip():
                             pygame.key.stop_text_input()
@@ -137,7 +139,9 @@ class LobbyScreen:
                     if len(session_id) < 96:
                         session_id += event.text
 
-            self._render_session_id_form(session_id=session_id, error_message=error_message)
+            self._render_session_id_form(
+                session_id=session_id, error_message=error_message
+            )
             clock.tick(30)
 
         pygame.key.stop_text_input()
@@ -186,7 +190,11 @@ class LobbyScreen:
                 if copy_btn.collidepoint(event.pos) and session_id:
                     self._copy_to_clipboard(session_id)
                     self._copy_flash_until = time.time() + 2.0
-                elif role is PlayerRole.HOST and start_btn.collidepoint(event.pos) and session_id:
+                elif (
+                    role is PlayerRole.HOST
+                    and start_btn.collidepoint(event.pos)
+                    and session_id
+                ):
                     self.start_requested = True
 
         try:
@@ -200,8 +208,12 @@ class LobbyScreen:
             pass
 
         self._screen.fill(self.background_color)
-        self._draw_text("Distributed SMB Lobby", self._title_font, self.text_color, 48, 44)
-        self._draw_text(f"Role: {role.value.upper()}", self._body_font, self.accent_color, 52, 104)
+        self._draw_text(
+            "Distributed SMB Lobby", self._title_font, self.text_color, 48, 44
+        )
+        self._draw_text(
+            f"Role: {role.value.upper()}", self._body_font, self.accent_color, 52, 104
+        )
         self._draw_text(status, self._body_font, self.text_color, 52, 144)
 
         session_label = session_id if session_id else "waiting for session id"
@@ -211,12 +223,16 @@ class LobbyScreen:
         if session_id:
             btn_color = (85, 175, 125) if hovered else (60, 140, 100)
             pygame.draw.rect(self._screen, btn_color, copy_btn, border_radius=6)
-            self._draw_text("Copy", self._small_font, self.text_color, btn_x + 24, btn_y + 10)
+            self._draw_text(
+                "Copy", self._small_font, self.text_color, btn_x + 24, btn_y + 10
+            )
         if time.time() < self._copy_flash_until:
             # Right-aligned: shares row 322 with "ENTER also starts" on the left.
             confirm = "Session ID copied!"
             confirm_x = self.width - 78 - self._small_font.size(confirm)[0]
-            self._draw_text(confirm, self._small_font, self.accent_color, confirm_x, 322)
+            self._draw_text(
+                confirm, self._small_font, self.accent_color, confirm_x, 322
+            )
 
         if role is PlayerRole.HOST and session_id:
             start_color = (108, 200, 150) if start_hovered else self.accent_color
@@ -435,7 +451,9 @@ class LobbyScreen:
         center_y = self.height // 2
 
         pulse = int(32 * min(progress, 1.0))
-        pygame.draw.circle(self._screen, (40, 82, 98), (center_x, center_y), 120 + pulse, width=3)
+        pygame.draw.circle(
+            self._screen, (40, 82, 98), (center_x, center_y), 120 + pulse, width=3
+        )
         pygame.draw.circle(
             self._screen,
             (82, 174, 132),
@@ -446,12 +464,16 @@ class LobbyScreen:
 
         title = "GET READY" if progress < 0.72 else "GO!"
         title_surface = self._title_font.render(title, True, self.text_color)
-        self._screen.blit(title_surface, title_surface.get_rect(center=(center_x, center_y - 68)))
+        self._screen.blit(
+            title_surface, title_surface.get_rect(center=(center_x, center_y - 68))
+        )
 
         plural = "s" if player_count != 1 else ""
         detail = f"{role.value.upper()} | {player_count} player{plural}"
         detail_surface = self._body_font.render(detail, True, self.accent_color)
-        self._screen.blit(detail_surface, detail_surface.get_rect(center=(center_x, center_y - 18)))
+        self._screen.blit(
+            detail_surface, detail_surface.get_rect(center=(center_x, center_y - 18))
+        )
 
         bar_width = min(420, self.width - 160)
         bar = pygame.Rect(center_x - bar_width // 2, center_y + 42, bar_width, 14)

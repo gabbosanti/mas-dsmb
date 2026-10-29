@@ -19,7 +19,9 @@ class NewHostClaim:
         if not self.claimer_ip or not isinstance(self.claimer_ip, str):
             raise MessageValidationError(f"Invalid claimer_ip: {self.claimer_ip}")
         if self.claimer_join_index < 0:
-            raise MessageValidationError(f"Invalid claimer_join_index: {self.claimer_join_index}")
+            raise MessageValidationError(
+                f"Invalid claimer_join_index: {self.claimer_join_index}"
+            )
         if not self.session_id or not isinstance(self.session_id, str):
             raise MessageValidationError(f"Invalid session_id: {self.session_id}")
 
@@ -55,6 +57,8 @@ class ReconnectionAck:
         if not (1024 <= self.udp_port <= 65535):
             raise MessageValidationError(f"udp_port out of range: {self.udp_port}")
         if not (1024 <= self.game_events_port <= 65535):
-            raise MessageValidationError(f"game_events_port out of range: {self.game_events_port}")
+            raise MessageValidationError(
+                f"game_events_port out of range: {self.game_events_port}"
+            )
         if not self.session_id or not isinstance(self.session_id, str):
             raise MessageValidationError(f"Invalid session_id: {self.session_id}")

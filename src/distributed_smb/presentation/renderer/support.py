@@ -45,7 +45,9 @@ class SpriteFactory(AssetSpriteFactory):
         self.world_renderer.render_environment(screen, frame, camera_offset)
 
     def _get_environment_sprite(self, sprite_kind, state, width, height):
-        return self.world_renderer._get_environment_sprite(sprite_kind, state, width, height)
+        return self.world_renderer._get_environment_sprite(
+            sprite_kind, state, width, height
+        )
 
     def _powerup_sprite_state(self, powerup_id: str) -> str:
         return self.world_renderer._powerup_sprite_state(powerup_id)
@@ -79,7 +81,9 @@ class EffectRenderer:
         now_ms: int,
         camera_offset: tuple[int, int],
     ) -> None:
-        for powerup_id, started_at in list(self.owner._powerup_collection_effects.items()):
+        for powerup_id, started_at in list(
+            self.owner._powerup_collection_effects.items()
+        ):
             power_up = frame.power_ups.get(powerup_id)
             if power_up is None:
                 del self.owner._powerup_collection_effects[powerup_id]
@@ -90,7 +94,9 @@ class EffectRenderer:
                 del self.owner._powerup_collection_effects[powerup_id]
                 continue
 
-            sprite_name = self.owner._sprite_system._powerup_sprite_state(power_up.powerup_id)
+            sprite_name = self.owner._sprite_system._powerup_sprite_state(
+                power_up.powerup_id
+            )
             scale = 1 + progress * 0.55
             alpha = max(0, min(255, round(255 * (1 - progress))))
             width = max(1, round(power_up.width * scale))
@@ -102,8 +108,12 @@ class EffectRenderer:
             ).copy()
             sprite.set_alpha(alpha)
 
-            ring_radius = round(max(power_up.width, power_up.height) * (0.55 + progress * 0.8))
-            ring = pygame.Surface((ring_radius * 2 + 4, ring_radius * 2 + 4), pygame.SRCALPHA)
+            ring_radius = round(
+                max(power_up.width, power_up.height) * (0.55 + progress * 0.8)
+            )
+            ring = pygame.Surface(
+                (ring_radius * 2 + 4, ring_radius * 2 + 4), pygame.SRCALPHA
+            )
             pygame.draw.circle(
                 ring,
                 (255, 246, 156, round(alpha * 0.65)),
@@ -113,7 +123,9 @@ class EffectRenderer:
             )
             ring_x = round(power_up.x + power_up.width / 2 - ring.get_width() / 2)
             ring_y = round(power_up.y + power_up.height / 2 - ring.get_height() / 2)
-            screen.blit(ring, self.owner._to_screen_position(ring_x, ring_y, camera_offset))
+            screen.blit(
+                ring, self.owner._to_screen_position(ring_x, ring_y, camera_offset)
+            )
             screen.blit(sprite, self.owner._to_screen_position(x, y, camera_offset))
 
     def render_player_death_effects(

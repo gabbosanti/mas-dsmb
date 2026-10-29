@@ -8,7 +8,10 @@ from copy import deepcopy
 from distributed_smb.shared.config import TICK_INTERVAL
 from distributed_smb.shared.input import InputState
 from distributed_smb.shared.messages.gameplay import PlayerInputPacket
-from distributed_smb.shared.messages.recovery import HostDiscoveryProbe, HostIdentityResponse
+from distributed_smb.shared.messages.recovery import (
+    HostDiscoveryProbe,
+    HostIdentityResponse,
+)
 from distributed_smb.shared.messages.session import RosterUpdate
 from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSnapshot
 
@@ -26,7 +29,9 @@ class HostGameplayMixin:
         """Apply an incoming snapshot as the authoritative starting state."""
         self.engine.world_state = snapshot.world_state
         self.last_snapshot_sequence = snapshot.sequence_number
-        LOGGER.info("bootstrapped world state from snapshot seq=%d", snapshot.sequence_number)
+        LOGGER.info(
+            "bootstrapped world state from snapshot seq=%d", snapshot.sequence_number
+        )
 
     def _drain_remote_input_packets(self) -> int:
         """Poll incoming client input packets and cache the latest valid ones."""
@@ -149,28 +154,6 @@ class HostGameplayMixin:
             sync = InitialStateSync(world_state=self.engine.world_state.to_dict())
             self.ws_handler.send(sync)
             LOGGER.info("rejoin: sent InitialStateSync to %d rejoining player(s)", len(new_entries))
-
-    def _process_host_frame(self, local_input: InputState) -> object:
-        """Run one authoritative host frame: drain inputs, tick, broadcast snapshot."""
-        self._record_host_frame_interval()
-        self._check_for_rejoining_players()
-        self._check_player_disconnections()
-        self.host_input_packets_window += self._drain_remote_input_packets()
-        authoritative_inputs = self._build_host_inputs(local_input)
-        # Fixed simulation step, not the real (variable) frame dt: apply_physics()
-        # integrates gravity/velocity as GRAVITY*dt and vy*dt, so a client
-        # replaying the same tick with a different dt than this host actually
-        # used for it would diverge — proportionally to the dt gap, compounding
-        # over a jump arc. Both sides must integrate every tick by the exact
-        # same fixed amount for prediction and authority to ever agree.
-        self.engine.tick(TICK_INTERVAL, authoritative_inputs)
-        for event in self.engine.events:
-            self._send_game_event(event)
-        self.engine.events.clear()
-        self.host_last_payload_bytes = self._send_world_state_snapshot()
-        self._maybe_broadcast_roster()
-        self._maybe_log_host_diagnostics()
-        return self.engine.world_state
 
     def _maybe_broadcast_roster(self) -> None:
         """Periodically publish the authoritative roster to every client."""

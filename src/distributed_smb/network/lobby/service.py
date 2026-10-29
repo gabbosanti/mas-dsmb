@@ -55,7 +55,9 @@ class LobbyManager:
     def reset(self) -> None:
         self._sessions.clear()
 
-    def create_session(self, player_id: str, host: str, udp_port: int) -> tuple[str, int]:
+    def create_session(
+        self, player_id: str, host: str, udp_port: int
+    ) -> tuple[str, int]:
         """Register the host as the first participant. Returns (session_id, join_index=0)."""
         session_id = uuid.uuid4().hex[:8]
         entry = {
@@ -139,7 +141,9 @@ class LobbyManager:
         record = self._sessions.get(session_id)
         if record is None:
             return False
-        leaving = next((e for e in record.entries if e["join_index"] == join_index), None)
+        leaving = next(
+            (e for e in record.entries if e["join_index"] == join_index), None
+        )
         if leaving is None:
             return False
         record.entries = [e for e in record.entries if e["join_index"] != join_index]
@@ -254,7 +258,8 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                 await ws.send_text(json.dumps(_serializer.encode_ws_message(created)))
                 roster = lobby_manager.get_roster(session_id)
                 await lobby_manager.broadcast(
-                    session_id, _serializer.encode_ws_message(RosterUpdate(roster=roster))
+                    session_id,
+                    _serializer.encode_ws_message(RosterUpdate(roster=roster)),
                 )
 
             elif message_type == MessageType.SESSION_JOIN:
@@ -266,7 +271,9 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                         session_id=session_id,
                         reason=f"The session already has {MAX_PLAYERS} players",
                     )
-                    await ws.send_text(json.dumps(_serializer.encode_ws_message(rejected)))
+                    await ws.send_text(
+                        json.dumps(_serializer.encode_ws_message(rejected))
+                    )
                     session_id = None
                     continue
                 join_index = lobby_manager.join_session(
@@ -289,13 +296,16 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                 await ws.send_text(json.dumps(_serializer.encode_ws_message(joined)))
                 roster = lobby_manager.get_roster(session_id)
                 await lobby_manager.broadcast(
-                    session_id, _serializer.encode_ws_message(RosterUpdate(roster=roster))
+                    session_id,
+                    _serializer.encode_ws_message(RosterUpdate(roster=roster)),
                 )
                 # Game already running (rejoin after host migration): send GameStart immediately
                 # so _client_lobby_phase() can proceed without waiting for a host trigger.
                 if lobby_manager.is_active(session_id):
                     game_start = GameStart(session_id=session_id)
-                    await ws.send_text(json.dumps(_serializer.encode_ws_message(game_start)))
+                    await ws.send_text(
+                        json.dumps(_serializer.encode_ws_message(game_start))
+                    )
 
             elif message_type == MessageType.SESSION_RECREATE:
                 # The promoted host re-registers an existing session after a migration.
@@ -325,7 +335,10 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                     set(msg.reserved_join_indices),
                 )
                 lobby_manager.add_connection(session_id, ws)
-                LOGGER.info("lobby: session %s registered, sending SessionCreated ack", session_id)
+                LOGGER.info(
+                    "lobby: session %s registered, sending SessionCreated ack",
+                    session_id,
+                )
                 ack = SessionCreated(session_id=session_id, join_index=0)
                 await ws.send_text(json.dumps(_serializer.encode_ws_message(ack)))
 
@@ -340,14 +353,18 @@ async def lobby_endpoint(ws: WebSocket) -> None:
             elif message_type == MessageType.GAME_START:
                 msg: GameStart = _serializer.decode_ws_message(data)
                 lobby_manager.mark_active(msg.session_id)
-                await lobby_manager.broadcast(msg.session_id, _serializer.encode_ws_message(msg))
+                await lobby_manager.broadcast(
+                    msg.session_id, _serializer.encode_ws_message(msg)
+                )
 
     except WebSocketDisconnect:
         if session_id:
             lobby_manager.remove_connection(session_id, ws)
     except Exception as exc:
         LOGGER.error(
-            "lobby: unhandled exception in WebSocket handler: %s: %s", type(exc).__name__, exc
+            "lobby: unhandled exception in WebSocket handler: %s: %s",
+            type(exc).__name__,
+            exc,
         )
         if session_id:
             lobby_manager.remove_connection(session_id, ws)
@@ -361,7 +378,8 @@ async def _handle_leave(session_id: str, join_index: int) -> None:
     if lobby_manager.leave_session(session_id, join_index):
         LOGGER.info("lobby: host left session %s — closing the room", session_id)
         await lobby_manager.broadcast(
-            session_id, _serializer.encode_ws_message(SessionClosed(session_id=session_id))
+            session_id,
+            _serializer.encode_ws_message(SessionClosed(session_id=session_id)),
         )
         lobby_manager.drop_session(session_id)
         return
@@ -380,7 +398,9 @@ class LobbyService:
         launch_lobby_server(host=host, port=port)
 
 
-def launch_lobby_server(host: str = "0.0.0.0", port: int = LOBBY_WS_PORT) -> threading.Thread:
+def launch_lobby_server(
+    host: str = "0.0.0.0", port: int = LOBBY_WS_PORT
+) -> threading.Thread:
     """Start uvicorn in a background daemon thread and return it."""
 
     def _run() -> None:

@@ -132,12 +132,20 @@ class NodeController(
     sent_snapshots: int = 0
     received_snapshots: int = 0
     last_input_time: dict[str, float] = field(default_factory=dict)
-    prediction_engine: PredictionEngineProtocol = field(default_factory=NoopPredictionEngine)
+    prediction_engine: PredictionEngineProtocol = field(
+        default_factory=NoopPredictionEngine
+    )
     shadow_copies: dict[str, ShadowCopyProtocol] = field(default_factory=dict)
-    shadow_copy_factory: Callable[[], ShadowCopyProtocol] = field(default=NoopShadowCopy)
-    game_event_broker: GameEventBrokerProtocol = field(default_factory=NoopGameEventBroker)
+    shadow_copy_factory: Callable[[], ShadowCopyProtocol] = field(
+        default=NoopShadowCopy
+    )
+    game_event_broker: GameEventBrokerProtocol = field(
+        default_factory=NoopGameEventBroker
+    )
     lobby_service: LobbyServiceProtocol = field(default_factory=NoopLobbyService)
-    discovery_service: DiscoveryServiceProtocol = field(default_factory=NoopDiscoveryService)
+    discovery_service: DiscoveryServiceProtocol = field(
+        default_factory=NoopDiscoveryService
+    )
     lobby_container_manager: LobbyContainerManagerProtocol = field(
         default_factory=NoopLobbyContainerManager
     )
@@ -279,7 +287,9 @@ class NodeController(
             self.udp_handler.close_socket()
         return outcome
 
-    def _configure_role(self, *, packet_drop_rate: float, artificial_latency_ms: int = 0) -> None:
+    def _configure_role(
+        self, *, packet_drop_rate: float, artificial_latency_ms: int = 0
+    ) -> None:
         """Configure ports and player identities for host or client mode."""
         if self.role is PlayerRole.HOST:
             self.local_player_id = HOST_PLAYER_ID
@@ -291,7 +301,9 @@ class NodeController(
                 artificial_latency_ms=artificial_latency_ms,
             )
         else:
-            self.local_player_id = player_id_for(1)  # placeholder, overwritten after lobby join
+            self.local_player_id = player_id_for(
+                1
+            )  # placeholder, overwritten after lobby join
             self.engine.is_authoritative = False
             self.udp_handler = UdpHandler(
                 host="0.0.0.0",
@@ -314,7 +326,9 @@ class NodeController(
     ) -> WorldState:
         """Build a render-only snapshot separated from the authoritative world state."""
         visual_characters: dict[str, Player] = {}
-        local_player_respawning = self.local_player_id in self.engine.world_state.respawn_timers
+        local_player_respawning = (
+            self.local_player_id in self.engine.world_state.respawn_timers
+        )
 
         for player_id, character in self.engine.world_state.characters.items():
             if (
@@ -399,7 +413,9 @@ class NodeController(
         try:
             module = importlib.import_module("distributed_smb.presentation.app")
         except ModuleNotFoundError:
-            LOGGER.info("Presentation runtime not available yet: expected presentation.app.GameApp")
+            LOGGER.info(
+                "Presentation runtime not available yet: expected presentation.app.GameApp"
+            )
             return None
 
         game_app_class = getattr(module, "GameApp", None)

@@ -19,7 +19,9 @@ def test_packets_wait_for_the_delay_and_then_arrive_in_send_order():
         for i in range(5):
             sender.send_packet_nowait(f"pkt-{i}".encode(), "127.0.0.1", RECEIVER_PORT)
 
-        assert receiver.receive_packet_nowait() is None, "delivered before the delay elapsed"
+        assert receiver.receive_packet_nowait() is None, (
+            "delivered before the delay elapsed"
+        )
 
         time.sleep((LATENCY_MS + TOLERANCE * 1000) / 1000.0)
         sender._flush_outgoing()

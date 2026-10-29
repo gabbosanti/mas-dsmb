@@ -24,7 +24,10 @@ def test_main_resolves_the_local_ip_and_points_the_client_at_the_host():
         assert _detect_local_ip() == DEFAULT_HOST
 
     client = main(role=PlayerRole.CLIENT, host_ip="192.168.1.10")
-    assert (client.ws_handler.host, client.ws_handler.port) == ("192.168.1.10", LOBBY_WS_PORT)
+    assert (client.ws_handler.host, client.ws_handler.port) == (
+        "192.168.1.10",
+        LOBBY_WS_PORT,
+    )
     assert client.remote_host == "192.168.1.10"
 
 
@@ -67,8 +70,12 @@ class _FakeController:
         self.roster = object()
         self.ws_handler = _FakeConnection(calls)
         self.udp_handler = _FakeConnection(calls)
-        self.lobby_container_manager = SimpleNamespace(stop=lambda: calls.append("containers_stop"))
-        self.game_event_handler = SimpleNamespace(connect=lambda: calls.append("ws_connect"))
+        self.lobby_container_manager = SimpleNamespace(
+            stop=lambda: calls.append("containers_stop")
+        )
+        self.game_event_handler = SimpleNamespace(
+            connect=lambda: calls.append("ws_connect")
+        )
         self.use_discovery = use_discovery
         self.lobby_session_ids: list[str] = []
         self.start_requested_seen = None

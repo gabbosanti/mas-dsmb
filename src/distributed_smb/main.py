@@ -11,7 +11,10 @@ from distributed_smb.application.lobby.coordinator import (
     SessionClosedError,
     SessionJoinRejectedError,
 )
-from distributed_smb.application.node_controller import LobbyCancelledError, NodeController
+from distributed_smb.application.node_controller import (
+    LobbyCancelledError,
+    NodeController,
+)
 from distributed_smb.application.recovery.prober import RecoveryProber
 from distributed_smb.network.discovery import DiscoveryService
 from distributed_smb.network.game_events.broker import HttpGameEventBroker
@@ -32,7 +35,10 @@ from distributed_smb.shared.config import (
 )
 from distributed_smb.shared.enums import PlayerRole
 from distributed_smb.shared.roster import GlobalRoster, RosterEntry
-from distributed_smb.shared.session_metadata import delete_session_metadata, read_session_metadata
+from distributed_smb.shared.session_metadata import (
+    delete_session_metadata,
+    read_session_metadata,
+)
 
 
 class ReturnToMenu(Exception):
@@ -87,8 +93,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command line options for the loopback host/client runtime."""
     parser = argparse.ArgumentParser(description="Distributed SMB node")
     role_group = parser.add_mutually_exclusive_group()
-    role_group.add_argument("--host", action="store_true", help="Run the authoritative host")
-    role_group.add_argument("--client", action="store_true", help="Run the remote client")
+    role_group.add_argument(
+        "--host", action="store_true", help="Run the authoritative host"
+    )
+    role_group.add_argument(
+        "--client", action="store_true", help="Run the remote client"
+    )
     parser.add_argument(
         "--drop-rate",
         type=_drop_rate,
@@ -286,11 +296,17 @@ def _point_client_at(controller: NodeController, host_ip: str | None) -> None:
 
 
 def _prompt_client_join(
-    lobby_screen: LobbyScreen, *, use_discovery: bool, host_ip: str | None, session_id: str
+    lobby_screen: LobbyScreen,
+    *,
+    use_discovery: bool,
+    host_ip: str | None,
+    session_id: str,
 ) -> tuple[str, str | None] | None:
     """Ask what to join: (session_id, host_ip), or None if the player cancelled."""
     if use_discovery:
-        joined_session_id = lobby_screen.prompt_session_id(initial_session_id=session_id)
+        joined_session_id = lobby_screen.prompt_session_id(
+            initial_session_id=session_id
+        )
         return None if joined_session_id is None else (joined_session_id, None)
 
     join_result = lobby_screen.prompt_join_details(
@@ -316,7 +332,9 @@ def main(
     """Bootstrap the local node and start the graphical application."""
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     use_discovery = host_ip is None
-    logging.info("Starting Distributed SMB in %s mode (discovery=%s)", role, use_discovery)
+    logging.info(
+        "Starting Distributed SMB in %s mode (discovery=%s)", role, use_discovery
+    )
     controller = build_controller(
         role=role,
         packet_drop_rate=packet_drop_rate,
@@ -339,7 +357,10 @@ def main(
         lobby_screen = LobbyScreen()
         if role is PlayerRole.CLIENT and not session_id:
             joined = _prompt_client_join(
-                lobby_screen, use_discovery=use_discovery, host_ip=host_ip, session_id=session_id
+                lobby_screen,
+                use_discovery=use_discovery,
+                host_ip=host_ip,
+                session_id=session_id,
             )
             if joined is None:
                 logging.info("Client join cancelled before connecting to lobby")

@@ -91,7 +91,9 @@ class WorldRenderer:
                 return None
             sprite = sprite.copy()
             if state == "closed":
-                door = pygame.Rect(width * 0.36, height * 0.58, width * 0.28, height * 0.36)
+                door = pygame.Rect(
+                    width * 0.36, height * 0.58, width * 0.28, height * 0.36
+                )
                 pygame.draw.rect(sprite, (91, 55, 30), door)
                 pygame.draw.rect(sprite, (36, 24, 18), door, width=max(1, width // 18))
             return sprite
@@ -101,11 +103,15 @@ class WorldRenderer:
             )
         return None
 
-    def _get_decoration_sprite(self, kind: str, width: int, height: int) -> pygame.Surface | None:
+    def _get_decoration_sprite(
+        self, kind: str, width: int, height: int
+    ) -> pygame.Surface | None:
         rect = DECORATION_SOURCE_RECTS.get(kind)
         if rect is None:
             return None
-        return self.sprite_factory._get_asset_sprite("OverWorld.png", rect, width, height)
+        return self.sprite_factory._get_asset_sprite(
+            "OverWorld.png", rect, width, height
+        )
 
     def render_platforms(
         self,
@@ -126,13 +132,17 @@ class WorldRenderer:
         # tile-by-tile (plus a per-partial-tile pygame.transform.scale() —
         # a fresh surface allocation, not a cheap blit) — without culling,
         # per-frame cost scales with total level width, not viewport size.
-        viewport = pygame.Rect(camera_x, camera_y, screen.get_width(), screen.get_height())
+        viewport = pygame.Rect(
+            camera_x, camera_y, screen.get_width(), screen.get_height()
+        )
         if tile is None:
             for platform in platforms:
                 if not viewport.colliderect(platform):
                     continue
                 pygame.draw.rect(
-                    screen, self.owner.platform_color, platform.move(-camera_x, -camera_y)
+                    screen,
+                    self.owner.platform_color,
+                    platform.move(-camera_x, -camera_y),
                 )
             return
 
@@ -147,7 +157,9 @@ class WorldRenderer:
                     if width == DISPLAY_TILE_SIZE and height == DISPLAY_TILE_SIZE:
                         screen.blit(tile, target)
                     else:
-                        screen.blit(pygame.transform.scale(tile, (width, height)), target)
+                        screen.blit(
+                            pygame.transform.scale(tile, (width, height)), target
+                        )
 
     def render_decoration_layer(
         self,
@@ -157,11 +169,15 @@ class WorldRenderer:
         kinds: set[str],
     ) -> None:
         camera_x, camera_y = camera_offset
-        viewport = pygame.Rect(camera_x, camera_y, screen.get_width(), screen.get_height())
+        viewport = pygame.Rect(
+            camera_x, camera_y, screen.get_width(), screen.get_height()
+        )
         for decoration in frame.decorations:
             if decoration.kind not in kinds:
                 continue
-            deco_rect = pygame.Rect(decoration.x, decoration.y, decoration.width, decoration.height)
+            deco_rect = pygame.Rect(
+                decoration.x, decoration.y, decoration.width, decoration.height
+            )
             if not viewport.colliderect(deco_rect):
                 continue
             sprite = self._get_decoration_sprite(
@@ -170,7 +186,10 @@ class WorldRenderer:
             if sprite is None:
                 continue
             screen.blit(
-                sprite, self.owner._to_screen_position(decoration.x, decoration.y, camera_offset)
+                sprite,
+                self.owner._to_screen_position(
+                    decoration.x, decoration.y, camera_offset
+                ),
             )
 
     def render_environment(
@@ -182,7 +201,9 @@ class WorldRenderer:
         for block in frame.blocks:
             if not block.destroyed:
                 screen.blit(
-                    self._get_environment_sprite("block", "intact", block.width, block.height),
+                    self._get_environment_sprite(
+                        "block", "intact", block.width, block.height
+                    ),
                     self.owner._to_screen_position(block.x, block.y, camera_offset),
                 )
 
@@ -195,7 +216,9 @@ class WorldRenderer:
             )
             if power_up.collected and not previous:
                 self.owner._powerup_collection_effects[power_up.powerup_id] = now_ms
-            self.owner._powerup_collected_state[power_up.powerup_id] = power_up.collected
+            self.owner._powerup_collected_state[power_up.powerup_id] = (
+                power_up.collected
+            )
             if power_up.collected:
                 continue
             screen.blit(
@@ -214,12 +237,16 @@ class WorldRenderer:
 
         for gate in frame.gates.values():
             screen.blit(
-                self._get_environment_sprite("gate", gate.state, gate.width, gate.height),
+                self._get_environment_sprite(
+                    "gate", gate.state, gate.width, gate.height
+                ),
                 self.owner._to_screen_position(gate.x, gate.y, camera_offset),
             )
 
         for enemy in frame.enemies.values():
             screen.blit(
-                self._get_environment_sprite("enemy", "default", enemy.width, enemy.height),
+                self._get_environment_sprite(
+                    "enemy", "default", enemy.width, enemy.height
+                ),
                 self.owner._to_screen_position(enemy.x, enemy.y, camera_offset),
             )

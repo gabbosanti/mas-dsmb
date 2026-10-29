@@ -26,7 +26,9 @@ class UdpHandler:
     max_packet_size: int = UDP_MAX_PACKET_SIZE
     artificial_latency_ms: int = ARTIFICIAL_LATENCY_MS
     _socket: socket.socket | None = field(init=False, default=None, repr=False)
-    _outgoing_queue: list[_QueueEntry] = field(init=False, default_factory=list, repr=False)
+    _outgoing_queue: list[_QueueEntry] = field(
+        init=False, default_factory=list, repr=False
+    )
     _send_counter: int = field(init=False, default=0, repr=False)
 
     def open_socket(self) -> None:
@@ -53,11 +55,15 @@ class UdpHandler:
         """Send all queued packets whose scheduled time has elapsed."""
         now = time.monotonic()
         while self._outgoing_queue and self._outgoing_queue[0][0] <= now:
-            _, _, payload, remote_host, remote_port = heapq.heappop(self._outgoing_queue)
+            _, _, payload, remote_host, remote_port = heapq.heappop(
+                self._outgoing_queue
+            )
             assert self._socket is not None
             self._socket.sendto(payload, (remote_host, remote_port))
 
-    def send_packet_nowait(self, payload: bytes, remote_host: str, remote_port: int) -> None:
+    def send_packet_nowait(
+        self, payload: bytes, remote_host: str, remote_port: int
+    ) -> None:
         """Send one UDP packet from the game loop thread."""
         self.open_socket()
         if self._should_drop_packet():

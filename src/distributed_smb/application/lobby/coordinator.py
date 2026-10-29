@@ -105,7 +105,11 @@ class LobbyMixin:
             if isinstance(msg, RosterUpdate):
                 self.roster = msg.roster
             self._notify_lobby_update("Waiting for players", on_update)
-            if start_requested is not None and start_requested() and self.roster.players:
+            if (
+                start_requested is not None
+                and start_requested()
+                and self.roster.players
+            ):
                 break
             time.sleep(0.05)
 
@@ -162,7 +166,9 @@ class LobbyMixin:
                 raise LobbyCancelledError("Lobby was closed before game start")
 
     def _discovery_allowed_ips(self) -> set[str]:
-        allowed_ips = {entry.host for entry in self.roster.get_all_players() if entry.host}
+        allowed_ips = {
+            entry.host for entry in self.roster.get_all_players() if entry.host
+        }
         if self.local_ip:
             allowed_ips.add(self.local_ip)
         return allowed_ips
@@ -203,7 +209,11 @@ class LobbyMixin:
             if isinstance(msg, RosterUpdate):
                 self.roster = msg.roster
             self._notify_lobby_update("Waiting for players", on_update)
-            if start_requested is not None and start_requested() and self.roster.players:
+            if (
+                start_requested is not None
+                and start_requested()
+                and self.roster.players
+            ):
                 LOGGER.info("Host manually requested game start")
                 break
             time.sleep(0.05)
@@ -260,7 +270,9 @@ class LobbyMixin:
             self.prediction_engine.local_player_id = self.local_player_id
         self._notify_lobby_update("Joined session", on_update)
 
-        self._wait_for_game_start("Waiting for game start", on_update, adopt_session_id=True)
+        self._wait_for_game_start(
+            "Waiting for game start", on_update, adopt_session_id=True
+        )
 
         LOGGER.info("Lobby phase complete: session=%s", self.session_id)
 
@@ -290,14 +302,20 @@ class LobbyMixin:
             self.shadow_copies.clear()
         for entry in self.roster.get_all_players():
             x, y = self._spawn_position_for(entry.join_index)
-            self.engine.spawn_player(entry.player_id, x=x, y=y, join_index=entry.join_index)
+            self.engine.spawn_player(
+                entry.player_id, x=x, y=y, join_index=entry.join_index
+            )
         now = time.time()
         self.last_input_time = {
             entry.player_id: now
             for entry in self.roster.get_all_players()
             if entry.player_id != self.local_player_id
         }
-        others = [e for e in self.roster.get_all_players() if e.player_id != self.local_player_id]
+        others = [
+            e
+            for e in self.roster.get_all_players()
+            if e.player_id != self.local_player_id
+        ]
         if others:
             self.remote_player_id = others[0].player_id
         host_entry = next((e for e in self.roster.get_all_players() if e.is_host), None)

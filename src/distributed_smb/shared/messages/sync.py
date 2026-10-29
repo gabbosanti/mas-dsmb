@@ -15,4 +15,6 @@ class WorldStateSnapshot:
 @dataclass(slots=True)
 class InitialStateSync:
     world_state: dict
-    message_type: MessageType = field(init=False, default=MessageType.INITIAL_STATE_SYNC)
+    message_type: MessageType = field(
+        init=False, default=MessageType.INITIAL_STATE_SYNC
+    )

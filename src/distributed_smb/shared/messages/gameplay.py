@@ -2,7 +2,10 @@ from dataclasses import dataclass, field
 
 from distributed_smb.shared.enums import MessageType
 from distributed_smb.shared.input import InputState
-from distributed_smb.shared.messages.common import MessageValidationError, validate_player_id
+from distributed_smb.shared.messages.common import (
+    MessageValidationError,
+    validate_player_id,
+)
 
 
 @dataclass(slots=True)
@@ -21,7 +24,9 @@ class PlayerInputPacket:
 @dataclass(slots=True)
 class BlockDestroyedMessage:
     position: tuple[int, int]
-    message_type: MessageType = field(init=False, default=MessageType.BLOCK_DESTROYED_MESSAGE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.BLOCK_DESTROYED_MESSAGE
+    )
 
     def __post_init__(self):
         if (
@@ -36,7 +41,9 @@ class BlockDestroyedMessage:
 class PowerUpCollectedMessage:
     powerup_id: str
     player_id: str
-    message_type: MessageType = field(init=False, default=MessageType.POWERUP_COLLECTED_MESSAGE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.POWERUP_COLLECTED_MESSAGE
+    )
 
     def __post_init__(self):
         if not self.powerup_id or not isinstance(self.powerup_id, str):
@@ -48,7 +55,9 @@ class PowerUpCollectedMessage:
 class GateStateChangedMessage:
     gate_id: str
     new_state: str
-    message_type: MessageType = field(init=False, default=MessageType.GATE_STATE_CHANGED_MESSAGE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.GATE_STATE_CHANGED_MESSAGE
+    )
 
     def __post_init__(self):
         if not self.gate_id or not isinstance(self.gate_id, str):
@@ -69,7 +78,9 @@ class PlayerLeft:
 @dataclass(slots=True)
 class PlayerDisconnected:
     player_id: str
-    message_type: MessageType = field(init=False, default=MessageType.PLAYER_DISCONNECTED)
+    message_type: MessageType = field(
+        init=False, default=MessageType.PLAYER_DISCONNECTED
+    )
 
     def __post_init__(self):
         validate_player_id(self.player_id)
@@ -79,7 +90,9 @@ class PlayerDisconnected:
 class PlayerDeathMessage:
     player_id: str
     enemy_id: str
-    message_type: MessageType = field(init=False, default=MessageType.PLAYER_DEATH_MESSAGE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.PLAYER_DEATH_MESSAGE
+    )
 
     def __post_init__(self):
         validate_player_id(self.player_id)
@@ -91,4 +104,6 @@ class PlayerDeathMessage:
 class LevelResetMessage:
     """Broadcast by the host when it restarts the current run after a victory."""
 
-    message_type: MessageType = field(init=False, default=MessageType.LEVEL_RESET_MESSAGE)
+    message_type: MessageType = field(
+        init=False, default=MessageType.LEVEL_RESET_MESSAGE
+    )

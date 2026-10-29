@@ -116,7 +116,9 @@ class GameEngine:
                         self.events.append(event)
                     resolve_collision(player, block)
 
-    def _clamp_character_to_world(self, character: Player, *, clamp_bottom: bool = True) -> None:
+    def _clamp_character_to_world(
+        self, character: Player, *, clamp_bottom: bool = True
+    ) -> None:
         max_x = max(0, self.world_width - character.width)
         character.x = max(0, min(character.x, max_x))
         if clamp_bottom:
@@ -136,11 +138,14 @@ class GameEngine:
             if power_up.collected and power_up.powerup_id.startswith("coin-")
         )
         self.world_state.blocks_destroyed = sum(
-            1 for block in self.world_state.environment.destructible_blocks if block.destroyed
+            1
+            for block in self.world_state.environment.destructible_blocks
+            if block.destroyed
         )
         self.world_state.enemies_defeated = max(
             0,
-            self.world_state.initial_enemy_count - len(self.world_state.environment.enemies),
+            self.world_state.initial_enemy_count
+            - len(self.world_state.environment.enemies),
         )
 
     @staticmethod
@@ -157,7 +162,9 @@ class GameEngine:
             ):
                 player.powerup_effect_expires_at = None
 
-    def _has_active_powerup_effect(self, player: Player, now: float | None = None) -> bool:
+    def _has_active_powerup_effect(
+        self, player: Player, now: float | None = None
+    ) -> bool:
         if now is None:
             now = time.time()
         if player.powerup_effect_expires_at is None:
@@ -270,13 +277,19 @@ class GameEngine:
         horizontally_overlapping = (
             player.x < enemy.x + enemy.width and player.x + player.width > enemy.x
         )
-        return horizontally_overlapping and player.vy > 0 and previous_bottom <= enemy.y + 4
+        return (
+            horizontally_overlapping
+            and player.vy > 0
+            and previous_bottom <= enemy.y + 4
+        )
 
     def _queue_player_death(self, player: Player, cause: str) -> None:
         self.events.append(PlayerDeathEvent(player_id=player.player_id, enemy_id=cause))
         self._respawn_join_index[player.player_id] = player.join_index
         self.world_state.remove_player(player.player_id)
-        self.world_state.respawn_timers[player.player_id] = time.time() + RESPAWN_DELAY_S
+        self.world_state.respawn_timers[player.player_id] = (
+            time.time() + RESPAWN_DELAY_S
+        )
 
     def _handle_enemy_collisions(self) -> None:
         if not self.is_authoritative:

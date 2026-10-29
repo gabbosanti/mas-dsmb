@@ -48,7 +48,9 @@ def test_a_snapshot_gap_probes_first_and_elects_only_if_nobody_answers(monkeypat
     assert probes == [(answered.remote_host, answered.remote_port)]
 
     answered._on_host_identity_response(
-        HostIdentityResponse(session_id=answered.session_id, host_ip=answered.remote_host)
+        HostIdentityResponse(
+            session_id=answered.session_id, host_ip=answered.remote_host
+        )
     )
     answered._tick_election_state()
 

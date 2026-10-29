@@ -45,8 +45,12 @@ class WorldState:
         self.environment.power_ups = {
             powerup.powerup_id: powerup for powerup in deepcopy(level.powerups)
         }
-        self.environment.enemies = {enemy.enemy_id: enemy for enemy in deepcopy(level.enemies)}
-        self.environment.cooperative_gates = {gate.gate_id: gate for gate in deepcopy(level.gates)}
+        self.environment.enemies = {
+            enemy.enemy_id: enemy for enemy in deepcopy(level.enemies)
+        }
+        self.environment.cooperative_gates = {
+            gate.gate_id: gate for gate in deepcopy(level.gates)
+        }
         self.coins_collected = 0
         self.coins_to_win = level.coins_to_win
         self.blocks_destroyed = 0
@@ -105,12 +109,17 @@ class WorldState:
         destructible_blocks = [
             DestructibleBlock(**b) for b in data["environment"]["destructible_blocks"]
         ]
-        power_ups = {k: ExclusivePowerUp(**v) for k, v in data["environment"]["power_ups"].items()}
+        power_ups = {
+            k: ExclusivePowerUp(**v)
+            for k, v in data["environment"]["power_ups"].items()
+        }
         cooperative_gates = {
             k: CooperativeGate(**{**v, "contributions": set(v["contributions"])})
             for k, v in data["environment"]["cooperative_gates"].items()
         }
-        enemies = {k: Enemy(**v) for k, v in data["environment"].get("enemies", {}).items()}
+        enemies = {
+            k: Enemy(**v) for k, v in data["environment"].get("enemies", {}).items()
+        }
         environment = EnvironmentalState(
             destructible_blocks=destructible_blocks,
             power_ups=power_ups,

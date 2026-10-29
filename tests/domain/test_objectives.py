@@ -11,7 +11,9 @@ def test_only_the_authoritative_engine_moves_the_shared_coin_counter():
     def collect_a_coin(engine: GameEngine) -> ExclusivePowerUp:
         engine.spawn_player("player1")
         player = engine.world_state.get_player("player1")
-        coin = ExclusivePowerUp(powerup_id="coin-custom", x=player.x + 10, y=player.y - 10)
+        coin = ExclusivePowerUp(
+            powerup_id="coin-custom", x=player.x + 10, y=player.y - 10
+        )
         engine.world_state.add_power_up(coin)
         player.x, player.y = coin.x, coin.y
         player.prev_x, player.prev_y = player.x, player.y
@@ -93,7 +95,9 @@ def test_only_the_final_gate_triggers_victory_and_then_the_world_stops():
 
     def touch(gate_id: str, is_final: bool) -> GameEngine:
         engine = GameEngine()
-        gate = CooperativeGate(x=100, y=100, gate_id=gate_id, state="open", is_final=is_final)
+        gate = CooperativeGate(
+            x=100, y=100, gate_id=gate_id, state="open", is_final=is_final
+        )
         engine.world_state.environment.cooperative_gates = {gate_id: gate}
         engine.spawn_player("player1", x=100, y=100)
         engine.handle_victory_condition()

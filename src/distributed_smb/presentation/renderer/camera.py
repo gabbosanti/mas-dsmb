@@ -11,7 +11,9 @@ class CameraController:
     def __init__(self, owner: object) -> None:
         self.owner = owner
 
-    def world_bounds(self, frame: RenderFrame, platforms: list[pygame.Rect]) -> tuple[int, int]:
+    def world_bounds(
+        self, frame: RenderFrame, platforms: list[pygame.Rect]
+    ) -> tuple[int, int]:
         if frame.world_width and frame.world_height:
             return max(self.owner.width, frame.world_width), max(
                 self.owner.height, frame.world_height
@@ -46,7 +48,9 @@ class CameraController:
 
         return max_right, max_bottom
 
-    def camera_offset(self, frame: RenderFrame, platforms: list[pygame.Rect]) -> tuple[int, int]:
+    def camera_offset(
+        self, frame: RenderFrame, platforms: list[pygame.Rect]
+    ) -> tuple[int, int]:
         if frame.focus_player_id is None:
             return 0, 0
 

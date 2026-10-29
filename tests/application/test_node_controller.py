@@ -24,7 +24,9 @@ def test_bootstrap_initializes_state_and_spawns_the_local_player():
     assert controller.role is PlayerRole.HOST
     assert controller.lifecycle.state is NodeState.IDLE
     assert controller.tick_interval == TICK_INTERVAL
-    assert controller.engine.world_state.get_player(controller.local_player_id) is not None
+    assert (
+        controller.engine.world_state.get_player(controller.local_player_id) is not None
+    )
 
     spawn_points = controller.engine.spawn_points
     for join_index in range(4):
@@ -89,7 +91,10 @@ def test_client_snapshot_updates_characters_preserves_environment():
 
     assert controller.engine.world_state.sequence_number == 12
     assert controller.engine.world_state.characters["player1"].x == 180.0
-    assert controller.engine.world_state.environment.destructible_blocks[0].destroyed is False
+    assert (
+        controller.engine.world_state.environment.destructible_blocks[0].destroyed
+        is False
+    )
     assert "pu-a" not in controller.engine.world_state.environment.power_ups
     assert "gate-a" not in controller.engine.world_state.environment.cooperative_gates
 
@@ -102,7 +107,9 @@ def test_the_view_shows_the_prediction_and_never_mutates_the_authoritative_state
     # Pinned, so the expected direction of the correction survives spawn changes.
     controller.engine.world_state.characters[local_pid].x = 100.0
     controller.engine.world_state.characters[local_pid].y = 100.0
-    controller.engine.world_state.add_block(DestructibleBlock(x=12, y=20, destroyed=False))
+    controller.engine.world_state.add_block(
+        DestructibleBlock(x=12, y=20, destroyed=False)
+    )
     authoritative_world = WorldState(
         sequence_number=20,
         characters={
@@ -118,7 +125,10 @@ def test_the_view_shows_the_prediction_and_never_mutates_the_authoritative_state
 
     visual_world = controller.process_frame(InputState(right=True))
 
-    assert visual_world.characters[local_pid].x > authoritative_world.characters[local_pid].x
+    assert (
+        visual_world.characters[local_pid].x
+        > authoritative_world.characters[local_pid].x
+    )
     assert (
         controller.engine.world_state.characters[local_pid].x
         == authoritative_world.characters[local_pid].x
@@ -127,7 +137,10 @@ def test_the_view_shows_the_prediction_and_never_mutates_the_authoritative_state
     visual_state = controller._build_visual_world_state()
     assert visual_state.environment is not controller.engine.world_state.environment
     visual_state.environment.destructible_blocks[0].destroyed = True
-    assert controller.engine.world_state.environment.destructible_blocks[0].destroyed is False
+    assert (
+        controller.engine.world_state.environment.destructible_blocks[0].destroyed
+        is False
+    )
 
 
 class _FakePredictionEngine:

@@ -62,7 +62,9 @@ class SpyWsHandler:
 
     def send(self, message) -> None:
         if isinstance(message, SessionRecreate):
-            self._queue.append(SessionCreated(session_id=message.session_id, join_index=0))
+            self._queue.append(
+                SessionCreated(session_id=message.session_id, join_index=0)
+            )
 
     def poll(self):
         return self._queue.pop(0) if self._queue else None
@@ -71,9 +73,13 @@ class SpyWsHandler:
         pass
 
 
-def _client(local_ip: str, player_id: str, join_index: int, peers: list[tuple]) -> NodeController:
+def _client(
+    local_ip: str, player_id: str, join_index: int, peers: list[tuple]
+) -> NodeController:
     """A client mid-session: crashed host plus `peers` in its roster."""
-    node = NodeController(game_event_broker=SpyBroker()).bootstrap(role=PlayerRole.CLIENT)
+    node = NodeController(game_event_broker=SpyBroker()).bootstrap(
+        role=PlayerRole.CLIENT
+    )
     node.local_ip = local_ip
     node.local_player_id = player_id
     node.join_index = join_index
@@ -81,7 +87,11 @@ def _client(local_ip: str, player_id: str, join_index: int, peers: list[tuple]) 
     node.roster = GlobalRoster()
     node.roster.add_player(
         RosterEntry(
-            player_id="player1", host="10.0.0.1", udp_port=50010, join_index=0, is_host=True
+            player_id="player1",
+            host="10.0.0.1",
+            udp_port=50010,
+            join_index=0,
+            is_host=True,
         )
     )
     for peer_id, peer_ip, peer_port, peer_index in [
@@ -89,7 +99,12 @@ def _client(local_ip: str, player_id: str, join_index: int, peers: list[tuple]) 
         (player_id, local_ip, 50011, join_index),
     ]:
         node.roster.add_player(
-            RosterEntry(player_id=peer_id, host=peer_ip, udp_port=peer_port, join_index=peer_index)
+            RosterEntry(
+                player_id=peer_id,
+                host=peer_ip,
+                udp_port=peer_port,
+                join_index=peer_index,
+            )
         )
     node.election_coordinator = ElectionCoordinator(
         join_index=join_index,
@@ -100,18 +115,26 @@ def _client(local_ip: str, player_id: str, join_index: int, peers: list[tuple]) 
     node.timeout_watcher = HostTimeoutWatcher(timeout_s=HOST_TIMEOUT_S)
     node.env_state_buffer = EnvironmentalStateBuffer()
     node.ws_handler = SpyWsHandler()
-    node._make_lobby_ws_client = lambda host, port: setattr(node, "ws_handler", SpyWsHandler())
+    node._make_lobby_ws_client = lambda host, port: setattr(
+        node, "ws_handler", SpyWsHandler()
+    )
     node._reconnect_game_event_handler = lambda *a, **kw: None
     node._reconnect_lobby_ws_handler = lambda *a, **kw: None
     return node
 
 
 def test_a_crashed_host_is_verified_then_replaced_and_its_world_survives():
-    candidate = _client("10.0.0.2", "player2", 1, peers=[("player3", "10.0.0.3", 50012, 2)])
+    candidate = _client(
+        "10.0.0.2", "player2", 1, peers=[("player3", "10.0.0.3", 50012, 2)]
+    )
     # The last snapshot seen before the crash, with a block already destroyed.
     world = WorldState()
-    world.environment.destructible_blocks.append(DestructibleBlock(x=100, y=200, destroyed=True))
-    candidate.env_state_buffer.update(WorldStateSnapshot(sequence_number=7, world_state=world))
+    world.environment.destructible_blocks.append(
+        DestructibleBlock(x=100, y=200, destroyed=True)
+    )
+    candidate.env_state_buffer.update(
+        WorldStateSnapshot(sequence_number=7, world_state=world)
+    )
 
     candidate.timeout_watcher.reset(time.time() - HOST_TIMEOUT_S - 0.1)
     candidate._tick_election_state()
@@ -161,7 +184,10 @@ def test_every_survivor_follows_the_ack_the_new_host_broadcast():
     finally:
         promoted.udp_handler.close_socket()
 
-    for peer_ip, peer_id, peer_index in (("10.0.0.3", "player3", 2), ("10.0.0.4", "player4", 3)):
+    for peer_ip, peer_id, peer_index in (
+        ("10.0.0.3", "player3", 2),
+        ("10.0.0.4", "player4", 3),
+    ):
         survivor = _client(peer_ip, peer_id, peer_index, peers=[])
         survivor._on_reconnection_ack(ack)
 

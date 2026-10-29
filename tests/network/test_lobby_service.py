@@ -67,7 +67,9 @@ def _active_session(session_id: str = "active-1") -> None:
 def test_the_handshake_creates_the_session_and_numbers_the_joiners():
     """join_index is the total order the election later relies on."""
     with client.websocket_connect("/lobby") as host_ws:
-        _send(host_ws, "session_create", player_id="host1", ip="127.0.0.1", udp_port=50010)
+        _send(
+            host_ws, "session_create", player_id="host1", ip="127.0.0.1", udp_port=50010
+        )
 
         created = _next(host_ws)
         assert created["message_type"] == MessageType.SESSION_CREATED
@@ -83,7 +85,12 @@ def test_the_handshake_creates_the_session_and_numbers_the_joiners():
             assert len(_next(host_ws)["roster"]["players"]) == 2
 
             with client.websocket_connect("/lobby") as second:
-                assert _join_session(second, created["session_id"], player_id="c2", port=50012) == 2
+                assert (
+                    _join_session(
+                        second, created["session_id"], player_id="c2", port=50012
+                    )
+                    == 2
+                )
 
 
 def test_a_session_refuses_the_fifth_player():
@@ -92,10 +99,15 @@ def test_a_session_refuses_the_fifth_player():
     with client.websocket_connect("/lobby") as host_ws:
         session_id = _create_session(host_ws)
 
-        with client.websocket_connect("/lobby") as c1, client.websocket_connect("/lobby") as c2:
+        with (
+            client.websocket_connect("/lobby") as c1,
+            client.websocket_connect("/lobby") as c2,
+        ):
             with client.websocket_connect("/lobby") as c3:
                 for index, ws in enumerate((c1, c2, c3), start=1):
-                    assert _join_session(ws, session_id, player_id=f"c{index}", port=50010 + index)
+                    assert _join_session(
+                        ws, session_id, player_id=f"c{index}", port=50010 + index
+                    )
 
                 with client.websocket_connect("/lobby") as too_many:
                     _send(
@@ -251,7 +263,9 @@ def test_a_client_that_leaves_disappears_from_everyone_else_roster():
             join_index = _join_session(client_ws, session_id)
             assert len(_next(host_ws)["roster"]["players"]) == 2
 
-            _send(client_ws, "session_leave", session_id=session_id, join_index=join_index)
+            _send(
+                client_ws, "session_leave", session_id=session_id, join_index=join_index
+            )
             roster = _next(host_ws)
             _next(client_ws)  # the leaver gets the broadcast too
 
@@ -298,5 +312,7 @@ def test_a_dropped_connection_does_not_evict_anyone():
             _join_session(client_ws, session_id)
             _next(host_ws)  # roster_update caused by the join
 
-    players = {e.player_id for e in lobby_manager.get_roster(session_id).get_all_players()}
+    players = {
+        e.player_id for e in lobby_manager.get_roster(session_id).get_all_players()
+    }
     assert players == {"player1", "player2"}
