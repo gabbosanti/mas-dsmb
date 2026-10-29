@@ -13,6 +13,7 @@ import pytest
 
 from distributed_smb.domain.game_engine import GameEngine
 
+
 @pytest.fixture
 def bdi():
     try:
@@ -32,6 +33,7 @@ def bdi():
             f"running these behavioral tests: {exc}",
             pytrace=False,
         )
+
 
 @pytest.fixture
 def objectives(bdi):
