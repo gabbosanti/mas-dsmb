@@ -93,6 +93,23 @@ class HostGameplayMixin:
         self.sent_snapshots += 1
         return len(payload)
 
+    def _process_host_frame(self, local_input: InputState) -> object:
+        """Run one authoritative host frame: drain inputs, tick, broadcast snapshot."""
+        self._record_host_frame_interval()
+        self._check_for_rejoining_players()
+        self._check_player_disconnections()
+        self.host_input_packets_window += self._drain_remote_input_packets()
+        authoritative_inputs = self._build_host_inputs(local_input)
+        # Host and client replay must integrate each tick with the same fixed step.
+        self.engine.tick(TICK_INTERVAL, authoritative_inputs)
+        for event in self.engine.events:
+            self._send_game_event(event)
+        self.engine.events.clear()
+        self.host_last_payload_bytes = self._send_world_state_snapshot()
+        self._maybe_broadcast_roster()
+        self._maybe_log_host_diagnostics()
+        return self.engine.world_state
+
     def _check_for_rejoining_players(self) -> None:
         """Detect players that rejoined through the lobby and add them to the running game."""
         msg = self.ws_handler.poll()
