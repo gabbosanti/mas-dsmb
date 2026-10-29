@@ -192,7 +192,9 @@ class HostGameplayMixin:
                 self.engine.world_state.add_player(deepcopy(restored))
             elif existing is None:
                 x, y = self._spawn_position_for(entry.join_index)
-                self.engine.spawn_player(entry.player_id, x=x, y=y, join_index=entry.join_index)
+                self.engine.spawn_player(
+                    entry.player_id, x=x, y=y, join_index=entry.join_index
+                )
 
             self.last_input_time[entry.player_id] = time.time()
             LOGGER.info(
@@ -204,7 +206,10 @@ class HostGameplayMixin:
         if new_entries:
             sync = InitialStateSync(world_state=self.engine.world_state.to_dict())
             self.ws_handler.send(sync)
-            LOGGER.info("rejoin: sent InitialStateSync to %d rejoining player(s)", len(new_entries))
+            LOGGER.info(
+                "rejoin: sent InitialStateSync to %d rejoining player(s)",
+                len(new_entries),
+            )
 
     def _maybe_broadcast_roster(self) -> None:
         """Periodically publish the authoritative roster to every client."""

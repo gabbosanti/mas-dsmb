@@ -349,7 +349,9 @@ def main(
                 controller.join_index = metadata.join_index
                 controller.local_player_id = metadata.local_player_id
                 if hasattr(controller.prediction_engine, "local_player_id"):
-                    controller.prediction_engine.local_player_id = metadata.local_player_id
+                    controller.prediction_engine.local_player_id = (
+                        metadata.local_player_id
+                    )
     controller.local_ip = local_ip or _detect_local_ip()
     logging.info("Advertising local IP %s to peers", controller.local_ip)
 

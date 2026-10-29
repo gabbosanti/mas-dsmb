@@ -245,7 +245,9 @@ def test_rejoins_reclaim_reserved_player_slots_without_exceeding_the_player_limi
 
     assert refusal["message_type"] == MessageType.SESSION_JOIN_REJECTED
     roster = lobby_manager.get_roster("migrated-session")
-    assert [(entry.player_id, entry.join_index) for entry in roster.get_all_players()] == [
+    assert [
+        (entry.player_id, entry.join_index) for entry in roster.get_all_players()
+    ] == [
         ("player1", 0),
         ("player2", 1),
         ("player3", 2),

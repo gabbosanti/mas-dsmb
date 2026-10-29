@@ -46,6 +46,9 @@ node.agent_integration.control_enemy("enemy-1", PursuitController())
 node.agent_integration.enabled = True
 ```
 
+For a fixed action instead of a decision-making controller, pass an
+`EnemyAction` directly to `control_enemy`.
+
 An agent receives an immutable `EnemyObservation`, including the nearest active
 player (the game has multiplayer `Player` entities rather than a unique Mario),
 and platforms or non-destroyed blocks within 200 world pixels. The enemy model

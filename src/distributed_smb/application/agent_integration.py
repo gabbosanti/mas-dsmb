@@ -119,14 +119,17 @@ class AgentGameIntegration:
 
     engine: GameEngine
     enabled: bool = False
-    controllers: dict[str, EnemyController] = field(default_factory=dict)
+    controllers: dict[str, EnemyController | EnemyAction] = field(default_factory=dict)
     last_results: dict[str, ActionResult] = field(default_factory=dict, init=False)
     perceptor: EnemyPerceptor = field(init=False)
 
     def __post_init__(self) -> None:
         self.perceptor = EnemyPerceptor(self.engine)
 
-    def control_enemy(self, enemy_id: str, controller: EnemyController) -> None:
+    def control_enemy(
+        self, enemy_id: str, controller: EnemyController | EnemyAction
+    ) -> None:
+        """Assign a controller or a fixed action to one enemy."""
         if enemy_id not in self.engine.world_state.environment.enemies:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
         self.controllers[enemy_id] = controller
@@ -178,7 +181,12 @@ class AgentGameIntegration:
 
             positions_before[enemy_id] = Position(enemy.x, enemy.y)
             if request is None:
-                request = self.controllers[enemy_id].decide(self.observe(enemy_id))
+                controller = self.controllers[enemy_id]
+                request = (
+                    ActionRequest(enemy_id, controller)
+                    if isinstance(controller, EnemyAction)
+                    else controller.decide(self.observe(enemy_id))
+                )
             if not isinstance(request, ActionRequest):
                 raise TypeError("Enemy controllers must return an ActionRequest")
             if request.enemy_id != enemy_id:

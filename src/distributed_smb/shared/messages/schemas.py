@@ -48,7 +48,9 @@ class SessionRecreateSchema(BaseModel):
     host_ip: str = Field(..., min_length=1)
     host_udp_port: int = Field(..., ge=1024, le=65535)
     host_join_index: int = Field(..., ge=0, lt=MAX_PLAYERS)
-    reserved_join_indices: list[int] = Field(default_factory=list, max_length=MAX_PLAYERS)
+    reserved_join_indices: list[int] = Field(
+        default_factory=list, max_length=MAX_PLAYERS
+    )
     message_type: str = Field(default="session_recreate")
 
 

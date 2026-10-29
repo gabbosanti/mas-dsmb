@@ -43,8 +43,13 @@ class SessionJoin:
             raise MessageValidationError(f"Invalid session_id: {self.session_id}")
         if not self.ip or not isinstance(self.ip, str):
             raise MessageValidationError(f"Invalid ip: {self.ip}")
-        if self.rejoin_join_index is not None and not 0 <= self.rejoin_join_index < MAX_PLAYERS:
-            raise MessageValidationError(f"Invalid rejoin_join_index: {self.rejoin_join_index}")
+        if (
+            self.rejoin_join_index is not None
+            and not 0 <= self.rejoin_join_index < MAX_PLAYERS
+        ):
+            raise MessageValidationError(
+                f"Invalid rejoin_join_index: {self.rejoin_join_index}"
+            )
         if self.rejoin_join_index is not None and self.player_id != player_id_for(
             self.rejoin_join_index
         ):
@@ -141,13 +146,17 @@ class SessionRecreate:
             raise MessageValidationError(f"Invalid host_ip: {self.host_ip}")
         validate_port(self.host_udp_port)
         if not 0 <= self.host_join_index < MAX_PLAYERS:
-            raise MessageValidationError(f"Invalid host_join_index: {self.host_join_index}")
+            raise MessageValidationError(
+                f"Invalid host_join_index: {self.host_join_index}"
+            )
         if len(self.reserved_join_indices) != len(set(self.reserved_join_indices)):
             raise MessageValidationError("reserved_join_indices must be unique")
         for join_index in self.reserved_join_indices:
             validate_join_index(join_index)
             if join_index >= MAX_PLAYERS:
-                raise MessageValidationError(f"Invalid reserved join_index: {join_index}")
+                raise MessageValidationError(
+                    f"Invalid reserved join_index: {join_index}"
+                )
         if self.host_join_index in self.reserved_join_indices:
             raise MessageValidationError("host_join_index cannot be reserved")
 

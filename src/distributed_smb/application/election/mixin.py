@@ -207,7 +207,9 @@ class ElectionMixin:
             all_players = self.roster.get_all_players()
             next_ji = (max(e.join_index for e in all_players) + 1) if all_players else 0
             reserved_join_indices = {
-                entry.join_index for entry in all_players if entry.player_id != self.local_player_id
+                entry.join_index
+                for entry in all_players
+                if entry.player_id != self.local_player_id
             } | set(self.rejoin_states)
             lobby_ws.send(
                 SessionRecreate(

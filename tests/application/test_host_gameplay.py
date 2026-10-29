@@ -1,8 +1,6 @@
 from distributed_smb.agents.models import (
-    ActionRequest,
     ActionStatus,
     EnemyAction,
-    EnemyObservation,
 )
 from distributed_smb.application.node_controller import NodeController
 from distributed_smb.domain.entity import Player

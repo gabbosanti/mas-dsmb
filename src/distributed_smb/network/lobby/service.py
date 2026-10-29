@@ -91,7 +91,11 @@ class LobbyManager:
 
         if rejoin_join_index is not None:
             existing = next(
-                (entry for entry in record.entries if entry["join_index"] == rejoin_join_index),
+                (
+                    entry
+                    for entry in record.entries
+                    if entry["join_index"] == rejoin_join_index
+                ),
                 None,
             )
             if existing is not None:
@@ -110,7 +114,11 @@ class LobbyManager:
             if len(occupied_indices) >= MAX_PLAYERS:
                 return None
             join_index = next(
-                (index for index in range(MAX_PLAYERS) if index not in occupied_indices),
+                (
+                    index
+                    for index in range(MAX_PLAYERS)
+                    if index not in occupied_indices
+                ),
                 None,
             )
             if join_index is None:
@@ -161,7 +169,10 @@ class LobbyManager:
                 for entry in record.entries
             )
         return (
-            len({entry["join_index"] for entry in record.entries} | record.reserved_join_indices)
+            len(
+                {entry["join_index"] for entry in record.entries}
+                | record.reserved_join_indices
+            )
             >= MAX_PLAYERS
         )
 
@@ -266,7 +277,9 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                 msg: SessionJoin = _serializer.decode_ws_message(data)
                 session_id = msg.session_id
                 if lobby_manager.is_full(session_id, msg.rejoin_join_index):
-                    LOGGER.info("lobby: session %s is full, refusing a join", session_id)
+                    LOGGER.info(
+                        "lobby: session %s is full, refusing a join", session_id
+                    )
                     rejected = SessionJoinRejected(
                         session_id=session_id,
                         reason=f"The session already has {MAX_PLAYERS} players",
@@ -288,7 +301,9 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                         session_id=session_id,
                         reason="The requested player slot is unavailable",
                     )
-                    await ws.send_text(json.dumps(_serializer.encode_ws_message(rejected)))
+                    await ws.send_text(
+                        json.dumps(_serializer.encode_ws_message(rejected))
+                    )
                     session_id = None
                     continue
                 lobby_manager.add_connection(session_id, ws)

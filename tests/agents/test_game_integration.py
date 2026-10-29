@@ -85,6 +85,20 @@ def test_agent_control_is_selective_and_other_enemies_keep_patrolling():
     assert results["enemy-1"].position_after.x == pytest.approx(controlled.x)
 
 
+def test_fixed_action_controls_selected_enemy_without_a_controller():
+    engine = GameEngine()
+    enemy = engine.world_state.environment.enemies["enemy-1"]
+    enemy.x = 520
+    integration = AgentGameIntegration(engine, enabled=True)
+    integration.control_enemy("enemy-1", EnemyAction.MOVE_LEFT)
+
+    results = integration.tick(0.1, {})
+
+    assert enemy.x == pytest.approx(515)
+    assert results["enemy-1"].status is ActionStatus.APPLIED
+    assert results["enemy-1"].requested_action is EnemyAction.MOVE_LEFT
+
+
 def test_unsupported_jump_stops_only_the_selected_enemy_for_one_tick():
     engine = GameEngine()
     controlled = engine.world_state.environment.enemies["enemy-1"]

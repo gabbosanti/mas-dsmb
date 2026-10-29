@@ -181,7 +181,9 @@ def test_the_promoted_host_re_registers_the_session_for_rejoining_nodes(monkeypa
     """Runs on a background thread, so join it before asserting."""
     nc, _ = make_controller()
     nc.roster.add_player(peer("player3", "10.0.0.3", 50012, 2))
-    nc.engine.world_state.add_player(Player(player_id="player1", x=250, y=100, join_index=0))
+    nc.engine.world_state.add_player(
+        Player(player_id="player1", x=250, y=100, join_index=0)
+    )
     nc.lobby_service = SpyLobbyService()
     fake_ws = FakeWsHandler()
     monkeypatch.setattr(

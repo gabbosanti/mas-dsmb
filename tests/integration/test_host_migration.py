@@ -176,7 +176,10 @@ def test_a_crashed_host_is_verified_then_replaced_and_its_world_survives(
         assert candidate.role is PlayerRole.HOST
         assert candidate.engine.is_authoritative is True
         assert candidate.engine.world_state is world
-        assert candidate.engine.world_state.environment.destructible_blocks[0].destroyed is True
+        assert (
+            candidate.engine.world_state.environment.destructible_blocks[0].destroyed
+            is True
+        )
         assert candidate.last_snapshot_sequence == 7
     finally:
         candidate.udp_handler.close_socket()
