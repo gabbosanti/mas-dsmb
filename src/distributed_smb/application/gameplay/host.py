@@ -93,6 +93,35 @@ class HostGameplayMixin:
         self.sent_snapshots += 1
         return len(payload)
 
+    def _check_for_rejoining_players(self) -> None:
+        """Detect players that rejoined through the lobby and add them to the running game."""
+        msg = self.ws_handler.poll()
+        if not isinstance(msg, RosterUpdate):
+            return
+        known = {e.join_index for e in self.roster.get_all_players()}
+        new_entries = []
+        for entry in msg.roster.get_all_players():
+            if entry.join_index not in known:
+                x, y = self._spawn_position_for(entry.join_index)
+                self.roster.add_player(entry)
+                self.engine.spawn_player(
+                    entry.player_id, x=x, y=y, join_index=entry.join_index
+                )
+                self.last_input_time[entry.player_id] = time.time()
+                LOGGER.info(
+                    "rejoin: %s (join_index=%d) re-entered the game",
+                    entry.player_id,
+                    entry.join_index,
+                )
+                new_entries.append(entry)
+        if new_entries:
+            sync = InitialStateSync(world_state=self.engine.world_state.to_dict())
+            self.ws_handler.send(sync)
+            LOGGER.info(
+                "rejoin: sent InitialStateSync to %d rejoining player(s)",
+                len(new_entries),
+            )
+
     def _process_host_frame(self, local_input: InputState) -> object:
         """Run one authoritative host frame: drain inputs, tick, broadcast snapshot."""
         self._record_host_frame_interval()

@@ -34,11 +34,15 @@ def _create_session(ws, player_id: str = "host1") -> str:
 
 
 def _join_session(
+<<<<<<< HEAD
     ws,
     session_id: str,
     player_id: str = "client1",
     port: int = 50011,
     rejoin_join_index: int | None = None,
+=======
+    ws, session_id: str, player_id: str = "client1", port: int = 50011
+>>>>>>> a7fb74bc4823c26a1b4b277e4c85fa8ec48ffd8d
 ) -> int:
     """Client side of the handshake: returns the assigned join_index."""
     _send(
@@ -48,7 +52,10 @@ def _join_session(
         player_id=player_id,
         ip="127.0.0.1",
         port=port,
+<<<<<<< HEAD
         rejoin_join_index=rejoin_join_index,
+=======
+>>>>>>> a7fb74bc4823c26a1b4b277e4c85fa8ec48ffd8d
     )
     join_index = _next(ws)["join_index"]
     _next(ws)  # roster_update
