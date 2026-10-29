@@ -10,6 +10,7 @@ from typing import Any
 
 from distributed_smb.application.agent_integration import AgentGameIntegration
 from distributed_smb.application.dto import RenderFrame, build_render_frame
+from distributed_smb.agents.spade_runtime import SpadeRuntime
 from distributed_smb.application.election import (
     ElectionCoordinator,
     EnvironmentalStateBuffer,
@@ -98,6 +99,7 @@ class NodeController(
     roster: GlobalRoster = field(default_factory=GlobalRoster)
     engine: GameEngine = field(default_factory=GameEngine)
     agent_integration: AgentGameIntegration = field(init=False)
+    spade_runtime: SpadeRuntime = field(default_factory=SpadeRuntime)
     # Presentation objects: application never calls methods on these, it only
     # holds them to hand off to GameApp in run() — keeping the type unknown
     # here avoids an application -> presentation import. main.py (composition
@@ -285,10 +287,20 @@ class NodeController(
             renderer=self.renderer,
             local_player_id=self.local_player_id,
         )
-        outcome = app.run()
+        try:
+            if self.role is PlayerRole.HOST:
+                self._start_spade_runtime()
+            outcome = app.run()
+        finally:
+            self.spade_runtime.stop()
         if outcome != "victory":
             self.udp_handler.close_socket()
         return outcome
+
+    def _start_spade_runtime(self) -> None:
+        """Start the BDI runtime only on the authoritative host."""
+        if self.role is PlayerRole.HOST:
+            self.spade_runtime.start()
 
     def _configure_role(
         self, *, packet_drop_rate: float, artificial_latency_ms: int = 0
