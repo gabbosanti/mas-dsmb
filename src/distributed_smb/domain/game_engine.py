@@ -2,6 +2,7 @@
 
 import time
 from dataclasses import dataclass, field
+from enum import IntEnum
 
 from distributed_smb.domain.collisions import check_collision, resolve_collision
 from distributed_smb.domain.entity import DestructibleBlock, Enemy, Player
@@ -18,6 +19,14 @@ COIN_SIZE = 26
 GATE_WIDTH = 54
 GATE_HEIGHT = 96
 VOID_DEATH_CAUSE = "void"
+
+
+class EnemyMovementCommand(IntEnum):
+    """Horizontal intent consumed by the next enemy update."""
+
+    MOVE_LEFT = -1
+    STOP = 0
+    MOVE_RIGHT = 1
 
 
 @dataclass(slots=True)
@@ -64,7 +73,13 @@ class GameEngine:
 
             player.is_crouching = bool(input_state.down and player.on_ground)
 
-    def tick(self, dt, inputs: dict[str, InputState]):
+    def tick(
+        self,
+        dt,
+        inputs: dict[str, InputState],
+        *,
+        enemy_commands: dict[str, EnemyMovementCommand] | None = None,
+    ):
         if self.world_state.victory:
             self.world_state.sequence_number += 1
             return
@@ -80,7 +95,7 @@ class GameEngine:
 
         self.handle_collisions()
         self.handle_environment_collisions()
-        self._update_enemies(dt)
+        self._update_enemies(dt, enemy_commands)
         self._handle_enemy_collisions()
         self._handle_void_deaths()
         self._sync_objective_progress_from_environment()
@@ -261,8 +276,24 @@ class GameEngine:
             and player.y + player.height > block.y
         )
 
-    def _update_enemies(self, dt: float) -> None:
-        for enemy in self.world_state.environment.enemies.values():
+    def _update_enemies(
+        self,
+        dt: float,
+        enemy_commands: dict[str, EnemyMovementCommand] | None = None,
+    ) -> None:
+        for enemy_id, enemy in self.world_state.environment.enemies.items():
+            if enemy_commands is not None and enemy_id in enemy_commands:
+                command = enemy_commands[enemy_id]
+                if not isinstance(command, EnemyMovementCommand):
+                    raise ValueError(f"Invalid enemy movement command: {command!r}")
+                if command is EnemyMovementCommand.STOP:
+                    continue
+                speed = (
+                    enemy.movement_speed
+                    if enemy.movement_speed is not None
+                    else abs(enemy.vx)
+                )
+                enemy.vx = command.value * speed
             enemy.x += enemy.vx * dt
             if enemy.x < enemy.left_bound:
                 enemy.x = enemy.left_bound

@@ -100,8 +100,13 @@ class HostGameplayMixin:
         self._check_player_disconnections()
         self.host_input_packets_window += self._drain_remote_input_packets()
         authoritative_inputs = self._build_host_inputs(local_input)
-        # Host and client replay must integrate each tick with the same fixed step.
-        self.engine.tick(TICK_INTERVAL, authoritative_inputs)
+        # Fixed simulation step, not the real (variable) frame dt: apply_physics()
+        # integrates gravity/velocity as GRAVITY*dt and vy*dt, so a client
+        # replaying the same tick with a different dt than this host actually
+        # used for it would diverge — proportionally to the dt gap, compounding
+        # over a jump arc. Both sides must integrate every tick by the exact
+        # same fixed amount for prediction and authority to ever agree.
+        self.agent_integration.tick(TICK_INTERVAL, authoritative_inputs)
         for event in self.engine.events:
             self._send_game_event(event)
         self.engine.events.clear()

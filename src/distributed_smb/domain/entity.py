@@ -94,6 +94,11 @@ class Enemy:
     vx: float = 50.0
     left_bound: float = 0.0
     right_bound: float = 0.0
+    movement_speed: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.movement_speed is None:
+            self.movement_speed = abs(self.vx)
 
 
 @dataclass(slots=True)
