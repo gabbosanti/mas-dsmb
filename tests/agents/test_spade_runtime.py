@@ -25,7 +25,7 @@ def test_runtime_starts_one_async_runner_and_stops_it_cleanly():
     runtime.start()
     try:
         assert runner_started.wait(timeout=2.0)
-        runtime.submit_perception({"enemy": "goomba-1"})
+        runtime.send_perception({"enemy": "goomba-1"})
         assert runtime.get_action(timeout=2.0) == (
             "handled",
             {"enemy": "goomba-1"},

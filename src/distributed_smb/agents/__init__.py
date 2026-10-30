@@ -1,7 +1,7 @@
 """Agent-facing observation and action contracts."""
 
 from distributed_smb.agents.controller import EnemyController, PursuitController
-from distributed_smb.agents.spade_runtime import SpadeRuntime
+from distributed_smb.agents.spade_runtime import AgentType, SpadeRuntime
 from distributed_smb.agents.models import (
     ActionRequest,
     ActionResult,
@@ -18,6 +18,7 @@ __all__ = [
     "ActionRequest",
     "ActionResult",
     "ActionStatus",
+    "AgentType",
     "EnemyAction",
     "EnemyController",
     "EnemyObservation",
