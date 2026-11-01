@@ -10,6 +10,7 @@ from enum import Enum
 from queue import Queue
 from typing import TypeAlias
 from distributed_smb.agents.bdi.goomba import GoombaAgent
+from distributed_smb.agents.dto.goombaAction import GoombaActionDTO
 from distributed_smb.agents.dto.goombaPerception import GoombaPerceptionDTO
 import spade
 
@@ -94,13 +95,29 @@ class SpadeRuntime:
         if self._error is not None:
             raise RuntimeError("The SPADE runtime failed") from self._error
         
-    def get_perception(self, agent_type: AgentType, timeout: float | None = 0) -> GoombaPerceptionDTO :
+    def get_perception(self, agent_type: AgentType, timeout: float | None = 0) -> object :
         # Read a perception from the queue for an agent type
         self.perception_queue[AgentType(agent_type)].get(timeout=timeout)
 
-    def put_action(self, agent_type: AgentType, action: GoombaActionDTO) -> None :
+    def put_action(self, agent_type: AgentType, action: object) -> None :
         # Send an action to the queue for his agent type
         return self.action_queue[AgentType(agent_type)].put(action)
+    
+    async def setup(self) -> None:
+        asl_path = Path(__file__).with_name("goomba.asl")
+
+        goombaAgent = GoombaAgent(
+            "goomba@localhost",
+            "goomba_password",
+            str(asl_path)
+        )
+        
+        print("[SPADE] Starting agent...")
+        await goombaAgent.start()
+        
+        print("Wait until user interrupts with ctrl+C")
+        await spade.wait_until_finished(goombaAgent)
+        
 
     async def _main(self) -> None:
         self._eventReady.set()
@@ -109,35 +126,9 @@ class SpadeRuntime:
                 await asyncio.sleep(0.1)
             return
         
-        asl_path = Path(__file__).with_name("goomba.asl")
-
-        goombaAgent = GoombaAgent(
-            "goomba@localhost",
-            "goomba_password",
-            str(asl_path)
-        )
-
-        print("[SPADE] Starting agent...")
-
-        await goombaAgent.start()
+        print("[SPADE] Setting up agent")
+        await self.setup()
         
-        print("Wait until user interrupts with ctrl+C")
-        await spade.wait_until_finished(goombaAgent)
-        
-        #ricevo la percezione in formato json string
-        goombaPerception = self.get_perception(AgentType.GOOMBA)
-        print(f"[Agent] Perception received: {goombaPerception}")
-        
-        if (goombaPerception.obstacle_ahead == True) : #Se c'è un ostacolo davanti
-            goombaAgent.bdi.set_belief("obstacle_ahead")  #aggiorno la belief
-
-        #asl ragiona ed elabora un piano....
-                
-        self.put_action(AgentType.GOOMBA, action)
-        print("[Agent] Action sent")
-
-        print("[SPADE] Agent started")
-
         '''        
         await self._runner(
             self.perception_queues,
