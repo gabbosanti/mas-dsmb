@@ -6,11 +6,17 @@ import time
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
+from queue import Queue
 from typing import Any
 
 from distributed_smb.application.agent_integration import AgentGameIntegration
 from distributed_smb.application.dto import RenderFrame, build_render_frame
-from distributed_smb.agents.spade_runtime import SpadeRuntime
+from distributed_smb.agents.spade_runtime import (
+    ActionQueue,
+    AgentType,
+    PerceptionQueue,
+    SpadeRuntime,
+)
 from distributed_smb.application.election import (
     ElectionCoordinator,
     EnvironmentalStateBuffer,
@@ -99,7 +105,9 @@ class NodeController(
     roster: GlobalRoster = field(default_factory=GlobalRoster)
     engine: GameEngine = field(default_factory=GameEngine)
     agent_integration: AgentGameIntegration = field(init=False)
-    spade_runtime: SpadeRuntime = field(default_factory=SpadeRuntime)
+    perception_queue: PerceptionQueue = field(init=False, repr=False)
+    action_queue: ActionQueue = field(init=False, repr=False)
+    spade_runtime: SpadeRuntime = field(init=False)
     # Presentation objects: application never calls methods on these, it only
     # holds them to hand off to GameApp in run() — keeping the type unknown
     # here avoids an application -> presentation import. main.py (composition
@@ -189,6 +197,16 @@ class NodeController(
     _relaunch_thread: Any | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        self.perception_queue = {
+            agent_type: Queue() for agent_type in AgentType
+        }
+        self.action_queue = {
+            agent_type: Queue() for agent_type in AgentType
+        }
+        self.spade_runtime = SpadeRuntime(
+            perception_queue=self.perception_queue,
+            action_queue=self.action_queue,
+        )
         self.agent_integration = AgentGameIntegration(self.engine)
         if isinstance(self.prediction_engine, NoopPredictionEngine):
             self.prediction_engine._engine = self.engine

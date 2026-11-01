@@ -36,11 +36,20 @@ class SpadeRuntime:
     The runner is expected to stop its SPADE agents when stop_event is set.
     """
 
-    def __init__(self, runner: SpadeRunner | None = None) -> None:
-        self.perception_queue: PerceptionQueue = {
+    def __init__(
+        self,
+        runner: SpadeRunner | None = None,
+        *,
+        perception_queue: PerceptionQueue | None = None,
+        action_queue: ActionQueue | None = None,
+    ) -> None:
+        # NodeController creates and injects these on the game thread. The
+        # fallback keeps standalone runtime use convenient; it also runs on
+        # the constructing thread, never on the SPADE worker.
+        self.perception_queue = perception_queue or {
             agent_type: Queue() for agent_type in AgentType
         }
-        self.action_queue: ActionQueue = {
+        self.action_queue = action_queue or {
             agent_type: Queue() for agent_type in AgentType
         }
         self.stop_event = threading.Event()
@@ -129,13 +138,11 @@ class SpadeRuntime:
         print("[SPADE] Setting up agent")
         await self.setup()
         
-        '''        
         await self._runner(
-            self.perception_queues,
-            self.action_queues,
+            self.perception_queue,
+            self.action_queue,
             self.stop_event,
         )
-        '''       
 
     def _thread_main(self) -> None:
         try:
