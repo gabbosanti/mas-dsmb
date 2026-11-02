@@ -7,6 +7,8 @@ from pathlib import Path
 from queue import Queue
 from typing import TypeAlias
 
+import spade
+
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.bdi.goomba import GoombaAgent
 from distributed_smb.agents.dto.goombaAction import GoombaActionDTO
@@ -29,22 +31,32 @@ class SpadeRuntime:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
         self.stop_event = stop_event or threading.Event()
-        self._agent = None
 
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
         self.stop_event.set()
-
+    
     async def run(self) -> None:
         """Start configured agents, run until requested to stop, then stop them."""
         asl_path = Path(__file__).with_name("goomba.asl")
-        agent = GoombaAgent("goomba@localhost", "goomba_password", str(asl_path))
-        self._agent = agent
+        
+        goombaAgent = GoombaAgent(
+                    "goomba@localhost",
+                    "goomba_password",
+                    str(asl_path)
+        )
+                        
         try:
-            await agent.start()
+            print("[SPADE] Starting agent...")
+            await goombaAgent.start()
+            
+            print("Wait until user interrupts with ctrl+C")
+            await spade.wait_until_finished(goombaAgent)
+            
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
+                
         finally:
-            if agent.is_alive():
-                await agent.stop()
-            self._agent = None
+            if goombaAgent.is_alive():
+                await goombaAgent.stop()
+

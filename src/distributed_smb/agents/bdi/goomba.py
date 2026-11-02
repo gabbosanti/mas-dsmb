@@ -59,3 +59,11 @@ class GoombaAgent(BDIAgent):
                 self.bdi.set_belief("direction", "right")
 
             yield
+            
+    def get_perception(self, agent_type: AgentType, timeout: float | None = 0) -> object :
+        # Read a perception from the queue for an agent type
+        self.perception_queue[AgentType(agent_type)].get(timeout=timeout)
+
+    def put_action(self, agent_type: AgentType, action: object) -> None :
+        # Send an action to the queue for his agent type
+        return self.action_queue[AgentType(agent_type)].put(action)
