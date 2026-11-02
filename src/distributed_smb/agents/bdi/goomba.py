@@ -2,7 +2,7 @@ import asyncio
 from spade_bdi.bdi import BDIAgent
 from spade.behaviour import CyclicBehaviour
 
-from distributed_smb.agents.spade_runtime import AgentType
+from distributed_smb.agents.agent_type import AgentType
 
 class GoombaAgent(BDIAgent):
     class PatrolBehaviour(CyclicBehaviour):

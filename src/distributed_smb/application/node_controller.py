@@ -11,12 +11,13 @@ from typing import Any
 
 from distributed_smb.application.agent_integration import AgentGameIntegration
 from distributed_smb.application.dto import RenderFrame, build_render_frame
+from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.spade_runtime import (
     ActionQueue,
-    AgentType,
     PerceptionQueue,
     SpadeRuntime,
 )
+from distributed_smb.agents.spade_thread import SpadeThread
 from distributed_smb.application.election import (
     ElectionCoordinator,
     EnvironmentalStateBuffer,
@@ -108,6 +109,7 @@ class NodeController(
     perception_queue: PerceptionQueue = field(init=False, repr=False)
     action_queue: ActionQueue = field(init=False, repr=False)
     spade_runtime: SpadeRuntime = field(init=False)
+    spade_thread: SpadeThread = field(init=False, repr=False)
     # Presentation objects: application never calls methods on these, it only
     # holds them to hand off to GameApp in run() — keeping the type unknown
     # here avoids an application -> presentation import. main.py (composition
@@ -207,6 +209,7 @@ class NodeController(
             perception_queue=self.perception_queue,
             action_queue=self.action_queue,
         )
+        self.spade_thread = SpadeThread(self.spade_runtime.run)
         self.agent_integration = AgentGameIntegration(self.engine)
         if isinstance(self.prediction_engine, NoopPredictionEngine):
             self.prediction_engine._engine = self.engine
@@ -310,7 +313,8 @@ class NodeController(
                 self._start_spade_runtime()
             outcome = app.run()
         finally:
-            self.spade_runtime.stop()
+            self.spade_runtime.request_stop()
+            self.spade_thread.stop()
         if outcome != "victory":
             self.udp_handler.close_socket()
         return outcome
@@ -318,7 +322,7 @@ class NodeController(
     def _start_spade_runtime(self) -> None:
         """Start the BDI runtime only on the authoritative host."""
         if self.role is PlayerRole.HOST:
-            self.spade_runtime.start()
+            self.spade_thread.start()
 
     def _configure_role(
         self, *, packet_drop_rate: float, artificial_latency_ms: int = 0

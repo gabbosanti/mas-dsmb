@@ -1,7 +1,7 @@
 import asyncio
 import threading
 
-from distributed_smb.agents.spade_runtime import SpadeRuntime
+from distributed_smb.agents.spade_thread import SpadeThread
 
 
 def test_runtime_starts_one_async_runner_and_stops_it_cleanly():
@@ -19,7 +19,7 @@ def test_runtime_starts_one_async_runner_and_stops_it_cleanly():
             await asyncio.sleep(0.01)
         runner_stopped.set()
 
-    runtime = SpadeRuntime(runner)
+    runtime = SpadeThread(runner)
 
     runtime.start()
     runtime.start()
@@ -39,7 +39,7 @@ def test_runtime_starts_one_async_runner_and_stops_it_cleanly():
 
 
 def test_runtime_can_be_started_again_after_shutdown():
-    runtime = SpadeRuntime()
+    runtime = SpadeThread()
 
     runtime.start()
     runtime.stop()
