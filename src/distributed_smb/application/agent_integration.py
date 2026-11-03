@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 from math import hypot
+from queue import Empty, Full, Queue
+from typing import TypeVar
 
 from distributed_smb.agents.controller import EnemyController
 from distributed_smb.agents.models import (
@@ -10,6 +12,7 @@ from distributed_smb.agents.models import (
     ActionStatus,
     EnemyAction,
     GoombaPerception,
+    GoombaPerceptionMessage,
     MovementCommand,
     ObstacleKind,
     ObstacleObservation,
@@ -23,6 +26,62 @@ from distributed_smb.shared.input import InputState
 
 GOOMBA_SIGHT_DISTANCE = 200.0
 OBSTACLE_SIGHT_DISTANCE = GOOMBA_SIGHT_DISTANCE
+AGENT_QUEUE_CAPACITY = 64
+QueueItem = TypeVar("QueueItem")
+
+
+@dataclass(slots=True)
+class SpadeAgentBridge:
+    """Thread-safe, non-blocking queues at the SPADE/application boundary.
+
+    SPADE may poll ``perceptions`` and submit ``ActionRequest`` instances via
+    ``submit_action``. When a queue fills, its oldest item is discarded so
+    consumers always work with recent game state.
+    """
+
+    perceptions: Queue[GoombaPerceptionMessage] = field(
+        default_factory=lambda: Queue(maxsize=AGENT_QUEUE_CAPACITY)
+    )
+    action_requests: Queue[ActionRequest] = field(
+        default_factory=lambda: Queue(maxsize=AGENT_QUEUE_CAPACITY)
+    )
+    dropped_perceptions: int = field(default=0, init=False)
+    dropped_actions: int = field(default=0, init=False)
+
+    def publish(self, message: GoombaPerceptionMessage) -> None:
+        self.dropped_perceptions += self._put_latest(self.perceptions, message)
+
+    def submit_action(self, request: ActionRequest) -> None:
+        if not isinstance(request, ActionRequest):
+            raise TypeError("SPADE must submit ActionRequest instances")
+        self.dropped_actions += self._put_latest(self.action_requests, request)
+
+    @staticmethod
+    def _put_latest(target: Queue[QueueItem], value: QueueItem) -> int:
+        dropped = 0
+        while True:
+            try:
+                target.put_nowait(value)
+                return dropped
+            except Full:
+                try:
+                    target.get_nowait()
+                except Empty:
+                    continue
+                dropped += 1
+
+    def discard_perceptions(self) -> None:
+        while True:
+            try:
+                self.perceptions.get_nowait()
+            except Empty:
+                return
+
+    def poll_perception(self) -> GoombaPerceptionMessage | None:
+        try:
+            return self.perceptions.get_nowait()
+        except Empty:
+            return None
 
 
 class EnemyNotFoundError(LookupError):
@@ -201,20 +260,49 @@ class AgentGameIntegration:
 
     engine: GameEngine
     enabled: bool = False
+    perception_interval_ticks: int = 5
+    action_max_age_ticks: int | None = None
     controllers: dict[str, EnemyController] = field(default_factory=dict)
+    spade_controlled_enemy_ids: set[str] = field(default_factory=set)
+    bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
     last_results: dict[str, ActionResult] = field(default_factory=dict, init=False)
     perceptor: EnemyPerceptor = field(init=False)
+    _latest_spade_actions: dict[str, ActionRequest] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
+        if self.perception_interval_ticks < 1:
+            raise ValueError("perception_interval_ticks must be at least one")
+        if self.action_max_age_ticks is None:
+            self.action_max_age_ticks = 2 * self.perception_interval_ticks
+        elif self.action_max_age_ticks < 0:
+            raise ValueError("action_max_age_ticks must be non-negative")
         self.perceptor = EnemyPerceptor(self.engine)
+
+    @property
+    def _max_action_age_ticks(self) -> int:
+        if self.action_max_age_ticks is not None:
+            return self.action_max_age_ticks
+        return 2 * self.perception_interval_ticks
 
     def control_enemy(self, enemy_id: str, controller: EnemyController) -> None:
         if enemy_id not in self.engine.world_state.environment.enemies:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
+        self.spade_controlled_enemy_ids.discard(enemy_id)
         self.controllers[enemy_id] = controller
+
+    def control_enemy_with_spade(self, enemy_id: str) -> None:
+        if enemy_id not in self.engine.world_state.environment.enemies:
+            raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
+        if enemy_id in self.controllers:
+            raise ValueError(f"Enemy {enemy_id!r} already has a synchronous controller")
+        self.spade_controlled_enemy_ids.add(enemy_id)
 
     def release_enemy(self, enemy_id: str) -> None:
         self.controllers.pop(enemy_id, None)
+        self.spade_controlled_enemy_ids.discard(enemy_id)
+        self._latest_spade_actions.pop(enemy_id, None)
 
     def observe(self, enemy_id: str) -> GoombaPerception:
         return self.perceptor.observe(enemy_id)
@@ -225,11 +313,14 @@ class AgentGameIntegration:
         player_inputs: dict[str, InputState],
         action_requests: dict[str, ActionRequest] | None = None,
     ) -> dict[str, ActionResult]:
-        """Run one game tick, consuming one synchronous decision per controlled enemy."""
+        """Run one simulation tick without waiting for SPADE."""
         requests = action_requests or {}
         if any(not isinstance(request, ActionRequest) for request in requests.values()):
             raise TypeError("action_requests values must be ActionRequest instances")
         if not self.enabled:
+            self._latest_spade_actions.clear()
+            self._discard_queued_actions()
+            self.bridge.discard_perceptions()
             self.engine.tick(dt, player_inputs)
             self.last_results = {
                 enemy_id: ActionResult(
@@ -242,11 +333,14 @@ class AgentGameIntegration:
             }
             return self.last_results
 
+        current_sequence = self.engine.world_state.sequence_number
+        self._drain_spade_actions(current_sequence)
         directions: dict[str, EnemyMovementCommand] = {}
         pending_results: dict[str, ActionResult] = {}
         positions_before: dict[str, Position] = {}
 
-        for enemy_id in self.controllers:
+        controlled_ids = self.controllers.keys() | self.spade_controlled_enemy_ids
+        for enemy_id in controlled_ids:
             enemy = self.engine.world_state.environment.enemies.get(enemy_id)
             request = requests.get(enemy_id)
             if enemy is None:
@@ -260,7 +354,10 @@ class AgentGameIntegration:
 
             positions_before[enemy_id] = Position(enemy.x, enemy.y)
             if request is None:
-                request = self.controllers[enemy_id].decide(self.observe(enemy_id))
+                if enemy_id in self.controllers:
+                    request = self.controllers[enemy_id].decide(self.observe(enemy_id))
+                else:
+                    request = self._spade_action_for(enemy_id, current_sequence)
             if not isinstance(request, ActionRequest):
                 raise TypeError("Enemy controllers must return an ActionRequest")
             if request.enemy_id != enemy_id:
@@ -289,7 +386,7 @@ class AgentGameIntegration:
             )
 
         for enemy_id, request in requests.items():
-            if enemy_id in self.controllers:
+            if enemy_id in controlled_ids:
                 continue
             pending_results[enemy_id] = ActionResult(
                 enemy_id=enemy_id,
@@ -302,6 +399,10 @@ class AgentGameIntegration:
             self.engine.tick(dt, player_inputs, enemy_commands=directions)
         else:
             self.engine.tick(dt, player_inputs)
+
+        sequence = self.engine.world_state.sequence_number
+        if sequence % self.perception_interval_ticks == 0:
+            self._publish_perceptions(sequence)
 
         self.last_results = {
             enemy_id: ActionResult(
@@ -316,6 +417,61 @@ class AgentGameIntegration:
             for enemy_id, result in pending_results.items()
         }
         return self.last_results
+
+    def _publish_perceptions(self, sequence: int) -> None:
+        for enemy_id in sorted(self.spade_controlled_enemy_ids):
+            if enemy_id not in self.engine.world_state.environment.enemies:
+                continue
+            self.bridge.publish(
+                GoombaPerceptionMessage(
+                    simulation_sequence=sequence,
+                    perception=self.observe(enemy_id),
+                )
+            )
+
+    def _drain_spade_actions(self, current_sequence: int) -> None:
+        while True:
+            try:
+                request = self.bridge.action_requests.get_nowait()
+            except Empty:
+                return
+
+            observation_sequence = request.observation_sequence
+            if (
+                request.enemy_id not in self.spade_controlled_enemy_ids
+                or not isinstance(observation_sequence, int)
+                or isinstance(observation_sequence, bool)
+                or observation_sequence > current_sequence
+                or current_sequence - observation_sequence > self._max_action_age_ticks
+            ):
+                continue
+
+            previous = self._latest_spade_actions.get(request.enemy_id)
+            if (
+                previous is None
+                or previous.observation_sequence is None
+                or observation_sequence >= previous.observation_sequence
+            ):
+                self._latest_spade_actions[request.enemy_id] = request
+
+    def _spade_action_for(self, enemy_id: str, current_sequence: int) -> ActionRequest:
+        request = self._latest_spade_actions.get(enemy_id)
+        if (
+            request is None
+            or request.observation_sequence is None
+            or current_sequence - request.observation_sequence
+            > self._max_action_age_ticks
+        ):
+            self._latest_spade_actions.pop(enemy_id, None)
+            return ActionRequest(enemy_id=enemy_id, action=EnemyAction.STOP)
+        return request
+
+    def _discard_queued_actions(self) -> None:
+        while True:
+            try:
+                self.bridge.action_requests.get_nowait()
+            except Empty:
+                return
 
     @staticmethod
     def _translate_action(

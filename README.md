@@ -58,3 +58,20 @@ enemy is grounded. `MOVE_LEFT`, `MOVE_RIGHT`, and
 Controllers make one synchronous decision per host tick. Decisions are not
 retained if a controller is removed or agent control is disabled, and unselected
 enemies continue their original patrol behavior.
+
+### SPADE queue bridge
+
+For an external SPADE agent, select the Goomba with
+`node.agent_integration.control_enemy_with_spade("enemy-1")` and enable the
+integration. The application publishes a `GoombaPerceptionMessage` every five
+simulation ticks (12 Hz at the configured 60 Hz tick rate). SPADE can poll
+`node.agent_integration.bridge.poll_perception()` without blocking and return
+an `ActionRequest` to `bridge.submit_action(...)`, carrying the same
+`observation_sequence` as the consumed message. Both thread-safe queues are
+bounded to 64 messages and discard their oldest item on overflow. Requests with
+missing/future sequence numbers, or older than 10 ticks by default, are
+discarded. The last accepted action is reused until it expires; an expired
+response becomes `STOP`, so a delayed SPADE decision never blocks or stalls the
+simulation and never hands the selected Goomba back to its original patrol AI.
+The bridge uses only Python's standard-library queues; running and scheduling
+the SPADE agents remains the responsibility of the composition layer.

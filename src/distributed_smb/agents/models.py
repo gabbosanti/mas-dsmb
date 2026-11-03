@@ -91,6 +91,14 @@ class GoombaPerception:
 EnemyObservation = GoombaPerception
 
 
+@dataclass(frozen=True, slots=True)
+class GoombaPerceptionMessage:
+    """Queue envelope that ties a perception to its simulation tick."""
+
+    simulation_sequence: int
+    perception: GoombaPerception
+
+
 class EnemyAction(str, Enum):
     MOVE_LEFT = "MOVE_LEFT"
     MOVE_RIGHT = "MOVE_RIGHT"
@@ -110,6 +118,7 @@ class MovementCommand(str, Enum):
 class ActionRequest:
     enemy_id: str
     action: EnemyAction
+    observation_sequence: int | None = None
 
 
 class ActionStatus(str, Enum):

@@ -8,6 +8,7 @@ from distributed_smb.agents.models import (
     EnemyAction,
     EnemyObservation,
     GoombaPerception,
+    GoombaPerceptionMessage,
     MovementCommand,
     ObstacleKind,
     SightDirection,
@@ -16,6 +17,7 @@ from distributed_smb.agents.controller import PursuitController
 from distributed_smb.application.agent_integration import (
     AgentGameIntegration,
     EnemyNotFoundError,
+    SpadeAgentBridge,
 )
 from distributed_smb.domain.entity import DestructibleBlock, Platform
 from distributed_smb.domain.game_engine import GameEngine
@@ -191,3 +193,73 @@ def test_action_requests_cannot_take_over_an_unselected_enemy():
 
     assert results["enemy-2"].status is ActionStatus.INVALID_TARGET
     assert enemy.x == pytest.approx(initial_x + initial_vx * 0.1)
+
+
+def test_spade_bridge_publishes_only_at_configured_tick_cadence():
+    engine = GameEngine()
+    integration = AgentGameIntegration(engine, enabled=True)
+    integration.control_enemy_with_spade("enemy-1")
+
+    for _ in range(4):
+        integration.tick(1 / 60, {})
+
+    assert integration.bridge.poll_perception() is None
+
+    integration.tick(1 / 60, {})
+    message = integration.bridge.poll_perception()
+
+    assert isinstance(message, GoombaPerceptionMessage)
+    assert message.simulation_sequence == 5
+    assert message.perception.goomba_id == "enemy-1"
+
+
+def test_spade_actions_are_applied_nonblocking_then_stopped_when_stale():
+    engine = GameEngine()
+    enemy = engine.world_state.environment.enemies["enemy-1"]
+    enemy.x, enemy.y = 500, 300
+    enemy.left_bound, enemy.right_bound = 0, 1000
+    integration = AgentGameIntegration(
+        engine,
+        enabled=True,
+        perception_interval_ticks=1,
+        action_max_age_ticks=1,
+    )
+    integration.control_enemy_with_spade("enemy-1")
+
+    integration.tick(1 / 60, {})
+    first_perception = integration.bridge.poll_perception()
+    assert first_perception is not None
+    integration.bridge.submit_action(
+        ActionRequest(
+            "enemy-1",
+            EnemyAction.MOVE_RIGHT,
+            observation_sequence=first_perception.simulation_sequence,
+        )
+    )
+
+    integration.tick(1 / 60, {})
+    moved_x = enemy.x
+    assert moved_x > 500
+    integration.bridge.poll_perception()
+
+    integration.tick(1 / 60, {})
+    assert enemy.x > moved_x
+    integration.bridge.poll_perception()
+
+    integration.tick(1 / 60, {})
+    assert enemy.x == pytest.approx(moved_x + enemy.movement_speed / 60)
+    assert integration.last_results["enemy-1"].requested_action is EnemyAction.STOP
+    integration.bridge.poll_perception()
+
+
+def test_spade_bridge_drops_oldest_messages_when_a_queue_is_full():
+    from queue import Queue
+
+    engine = GameEngine()
+    perception = AgentGameIntegration(engine).observe("enemy-1")
+    bridge = SpadeAgentBridge(perceptions=Queue(maxsize=1))
+    bridge.publish(GoombaPerceptionMessage(1, perception))
+    bridge.publish(GoombaPerceptionMessage(2, perception))
+
+    assert bridge.dropped_perceptions == 1
+    assert bridge.poll_perception().simulation_sequence == 2
