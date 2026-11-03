@@ -3,13 +3,12 @@
 import asyncio
 import logging
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
+from typing import Any, TypeAlias
 
 LOGGER = logging.getLogger(__name__)
 
-AsyncRuntime = Callable[[], Awaitable[None]]
-
-
+AsyncRuntime: TypeAlias= Callable[[], Coroutine[Any, Any, None]]
 class SpadeThread:
     """Run an async runtime on a dedicated thread and own its lifecycle."""
 

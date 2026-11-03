@@ -310,7 +310,7 @@ class NodeController(
         )
         try:
             if self.role is PlayerRole.HOST:
-                self._start_spade_runtime()
+                self._start_spade_thread()
             outcome = app.run()
         finally:
             self.spade_runtime.request_stop()
@@ -319,7 +319,7 @@ class NodeController(
             self.udp_handler.close_socket()
         return outcome
 
-    def _start_spade_runtime(self) -> None:
+    def _start_spade_thread(self) -> None:
         """Start the BDI runtime only on the authoritative host."""
         if self.role is PlayerRole.HOST:
             self.spade_thread.start()

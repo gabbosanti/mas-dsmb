@@ -14,8 +14,8 @@ from distributed_smb.agents.bdi.goomba import GoombaAgent
 from distributed_smb.agents.dto.goombaAction import GoombaActionDTO
 from distributed_smb.agents.dto.goombaPerception import GoombaPerceptionDTO
 
-PerceptionQueue: TypeAlias = dict[AgentType, Queue[GoombaPerceptionDTO]]
-ActionQueue: TypeAlias = dict[AgentType, Queue[GoombaActionDTO]]
+PerceptionQueue: TypeAlias = dict[AgentType, Queue]
+ActionQueue: TypeAlias = dict[AgentType, Queue]
 
 
 class SpadeRuntime:
@@ -38,6 +38,8 @@ class SpadeRuntime:
     
     async def run(self) -> None:
         """Start configured agents, run until requested to stop, then stop them."""
+        
+        #Goomba configuration
         asl_path = Path(__file__).with_name("goomba.asl")
         
         goombaAgent = GoombaAgent(
