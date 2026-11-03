@@ -258,4 +258,5 @@ class ElectionMixin:
 
         # Switch role — next process_frame() routes to _process_host_frame()
         self.role = PlayerRole.HOST
+        self._start_spade_runtime()
         LOGGER.info("election: promotion complete — role=HOST")
