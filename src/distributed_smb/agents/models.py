@@ -17,6 +17,11 @@ class ObstacleKind(str, Enum):
     BLOCK = "block"
 
 
+class SightDirection(str, Enum):
+    LEFT = "left"
+    RIGHT = "right"
+
+
 @dataclass(frozen=True, slots=True)
 class ObstacleObservation:
     kind: ObstacleKind
@@ -27,14 +32,63 @@ class ObstacleObservation:
 
 
 @dataclass(frozen=True, slots=True)
-class EnemyObservation:
-    """Read-only view of one enemy and its nearest player target."""
+class PlayerPerception:
+    player_id: str
+    position: Position
+    width: float
+    height: float
 
-    enemy_id: str
-    enemy_position: Position
-    target_player_id: str | None
-    mario_position: Position | None
-    nearby_obstacles: tuple[ObstacleObservation, ...] = ()
+
+@dataclass(frozen=True, slots=True)
+class GoombaPerception:
+    """Immutable visual perception assembled for a Goomba agent."""
+
+    goomba_id: str
+    position: Position
+    direction: SightDirection
+    visible_players: tuple[PlayerPerception, ...] = ()
+    visible_obstacles: tuple[ObstacleObservation, ...] = ()
+
+    @property
+    def enemy_id(self) -> str:
+        """Compatibility name used by the existing controller contract."""
+        return self.goomba_id
+
+    @property
+    def enemy_position(self) -> Position:
+        """Compatibility name used by the existing controller contract."""
+        return self.position
+
+    @property
+    def target_player_id(self) -> str | None:
+        target = self._nearest_visible_player()
+        return target.player_id if target is not None else None
+
+    @property
+    def mario_position(self) -> Position | None:
+        """Return the nearest visible player's position for older controllers."""
+        target = self._nearest_visible_player()
+        return target.position if target is not None else None
+
+    @property
+    def nearby_obstacles(self) -> tuple[ObstacleObservation, ...]:
+        """Compatibility name; these obstacles are now filtered by line of sight."""
+        return self.visible_obstacles
+
+    def _nearest_visible_player(self) -> PlayerPerception | None:
+        return min(
+            self.visible_players,
+            key=lambda player: (
+                (player.position.x - self.position.x) ** 2
+                + (player.position.y - self.position.y) ** 2,
+                player.player_id,
+            ),
+            default=None,
+        )
+
+
+# Existing action-controller clients can continue using the general name.
+EnemyObservation = GoombaPerception
 
 
 class EnemyAction(str, Enum):

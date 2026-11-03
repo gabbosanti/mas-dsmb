@@ -9,17 +9,20 @@ from distributed_smb.agents.models import (
     ActionResult,
     ActionStatus,
     EnemyAction,
-    EnemyObservation,
+    GoombaPerception,
     MovementCommand,
     ObstacleKind,
     ObstacleObservation,
+    PlayerPerception,
     Position,
+    SightDirection,
 )
-from distributed_smb.domain.entity import Enemy, Player
+from distributed_smb.domain.entity import Player
 from distributed_smb.domain.game_engine import EnemyMovementCommand, GameEngine
 from distributed_smb.shared.input import InputState
 
-OBSTACLE_SIGHT_DISTANCE = 200.0
+GOOMBA_SIGHT_DISTANCE = 200.0
+OBSTACLE_SIGHT_DISTANCE = GOOMBA_SIGHT_DISTANCE
 
 
 class EnemyNotFoundError(LookupError):
@@ -31,42 +34,37 @@ class EnemyPerceptor:
     """Build immutable observations without exposing mutable simulation objects."""
 
     engine: GameEngine
-    obstacle_sight_distance: float = OBSTACLE_SIGHT_DISTANCE
+    sight_distance: float = GOOMBA_SIGHT_DISTANCE
 
     def __post_init__(self) -> None:
-        if self.obstacle_sight_distance < 0:
-            raise ValueError("obstacle_sight_distance must be non-negative")
+        if self.sight_distance < 0:
+            raise ValueError("sight_distance must be non-negative")
 
-    def observe(self, enemy_id: str) -> EnemyObservation:
+    def observe(self, enemy_id: str) -> GoombaPerception:
         enemy = self.engine.world_state.environment.enemies.get(enemy_id)
         if enemy is None:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
 
-        target = self._nearest_player(enemy)
-        return EnemyObservation(
-            enemy_id=enemy.enemy_id,
-            enemy_position=Position(enemy.x, enemy.y),
-            target_player_id=target.player_id if target is not None else None,
-            mario_position=(
-                Position(target.x, target.y) if target is not None else None
+        obstacles = self._obstacle_candidates()
+        origin = Position(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2)
+        direction = SightDirection.LEFT if enemy.vx < 0 else SightDirection.RIGHT
+        return GoombaPerception(
+            goomba_id=enemy.enemy_id,
+            position=Position(enemy.x, enemy.y),
+            direction=direction,
+            visible_players=tuple(
+                self._perceive_player(player)
+                for player in sorted(
+                    self.engine.world_state.characters.values(),
+                    key=lambda visible_player: visible_player.player_id,
+                )
+                if self._can_see_player(player, origin, direction, obstacles)
             ),
-            nearby_obstacles=self._nearby_obstacles(enemy),
+            visible_obstacles=self._visible_obstacles(origin, direction, obstacles),
         )
 
-    def _nearest_player(self, enemy: Enemy) -> Player | None:
-        players = self.engine.world_state.characters.values()
-        return min(
-            players,
-            key=lambda player: (
-                (player.x - enemy.x) ** 2 + (player.y - enemy.y) ** 2,
-                player.join_index,
-                player.player_id,
-            ),
-            default=None,
-        )
-
-    def _nearby_obstacles(self, enemy: Enemy) -> tuple[ObstacleObservation, ...]:
-        obstacles = [
+    def _obstacle_candidates(self) -> tuple[ObstacleObservation, ...]:
+        return tuple(
             ObstacleObservation(
                 kind=ObstacleKind.PLATFORM,
                 x=platform.x,
@@ -75,8 +73,7 @@ class EnemyPerceptor:
                 height=platform.height,
             )
             for platform in self.engine.platforms
-        ]
-        obstacles.extend(
+        ) + tuple(
             ObstacleObservation(
                 kind=ObstacleKind.BLOCK,
                 x=block.x,
@@ -88,25 +85,110 @@ class EnemyPerceptor:
             if not block.destroyed
         )
 
-        enemy_center_x = enemy.x + enemy.width / 2
-        enemy_center_y = enemy.y + enemy.height / 2
+    def _can_see_player(
+        self,
+        player: Player,
+        origin: Position,
+        direction: SightDirection,
+        obstacles: tuple[ObstacleObservation, ...],
+    ) -> bool:
+        target = Position(player.x + player.width / 2, player.y + player.height / 2)
+        return self._is_in_sight(origin, target, direction) and self._has_clear_line(
+            origin, target, obstacles
+        )
+
+    @staticmethod
+    def _perceive_player(player: Player) -> PlayerPerception:
+        return PlayerPerception(
+            player_id=player.player_id,
+            position=Position(player.x, player.y),
+            width=player.width,
+            height=player.height,
+        )
+
+    def _visible_obstacles(
+        self,
+        origin: Position,
+        direction: SightDirection,
+        obstacles: tuple[ObstacleObservation, ...],
+    ) -> tuple[ObstacleObservation, ...]:
         return tuple(
             obstacle
-            for obstacle in obstacles
-            if hypot(
-                max(
-                    obstacle.x - enemy_center_x,
-                    0,
-                    enemy_center_x - obstacle.x - obstacle.width,
-                ),
-                max(
-                    obstacle.y - enemy_center_y,
-                    0,
-                    enemy_center_y - obstacle.y - obstacle.height,
-                ),
+            for index, obstacle in enumerate(obstacles)
+            if self._is_in_sight(origin, self._center_of(obstacle), direction)
+            and self._has_clear_line(
+                origin, self._center_of(obstacle), obstacles, index
             )
-            <= self.obstacle_sight_distance
         )
+
+    def _is_in_sight(
+        self, origin: Position, target: Position, direction: SightDirection
+    ) -> bool:
+        delta_x = target.x - origin.x
+        is_forward = delta_x <= 0 if direction is SightDirection.LEFT else delta_x >= 0
+        return is_forward and hypot(delta_x, target.y - origin.y) <= self.sight_distance
+
+    @staticmethod
+    def _center_of(obstacle: ObstacleObservation) -> Position:
+        return Position(
+            obstacle.x + obstacle.width / 2,
+            obstacle.y + obstacle.height / 2,
+        )
+
+    @staticmethod
+    def _has_clear_line(
+        origin: Position,
+        target: Position,
+        obstacles: tuple[ObstacleObservation, ...],
+        ignored_obstacle_index: int | None = None,
+    ) -> bool:
+        for index, obstacle in enumerate(obstacles):
+            if index == ignored_obstacle_index:
+                continue
+            intersection = EnemyPerceptor._segment_rectangle_intersection(
+                origin,
+                target,
+                obstacle.x,
+                obstacle.y,
+                obstacle.x + obstacle.width,
+                obstacle.y + obstacle.height,
+            )
+            if intersection is not None:
+                entry, exit = intersection
+                if entry < 1.0 - 1e-9 and exit > 1e-9:
+                    return False
+        return True
+
+    @staticmethod
+    def _segment_rectangle_intersection(
+        start: Position,
+        end: Position,
+        left: float,
+        top: float,
+        right: float,
+        bottom: float,
+    ) -> tuple[float, float] | None:
+        """Return the segment parameters inside an axis-aligned rectangle."""
+        delta_x = end.x - start.x
+        delta_y = end.y - start.y
+        entry, exit = 0.0, 1.0
+        for origin, delta, minimum, maximum in (
+            (start.x, delta_x, left, right),
+            (start.y, delta_y, top, bottom),
+        ):
+            if delta == 0:
+                if origin < minimum or origin > maximum:
+                    return None
+                continue
+            first = (minimum - origin) / delta
+            second = (maximum - origin) / delta
+            if first > second:
+                first, second = second, first
+            entry = max(entry, first)
+            exit = min(exit, second)
+            if entry > exit:
+                return None
+        return entry, exit
 
 
 @dataclass(slots=True)
@@ -137,7 +219,7 @@ class AgentGameIntegration:
     def release_enemy(self, enemy_id: str) -> None:
         self.controllers.pop(enemy_id, None)
 
-    def observe(self, enemy_id: str) -> EnemyObservation:
+    def observe(self, enemy_id: str) -> GoombaPerception:
         return self.perceptor.observe(enemy_id)
 
     def tick(
