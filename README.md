@@ -46,10 +46,13 @@ node.agent_integration.control_enemy("enemy-1", PursuitController())
 node.agent_integration.enabled = True
 ```
 
-An agent receives an immutable `EnemyObservation`, including the nearest active
-player (the game has multiplayer `Player` entities rather than a unique Mario),
-and platforms or non-destroyed blocks within 200 world pixels. The enemy model
-does not track whether an enemy is grounded. `MOVE_LEFT`, `MOVE_RIGHT`, and
+An agent receives an immutable `GoombaPerception`: its direction, every player
+visible within 200 world pixels, and platforms or non-destroyed blocks in its
+line of sight. Facing is derived from the Goomba's horizontal velocity. Visibility
+uses a forward horizontal half-plane and a clear segment to each object's center;
+platforms and intact blocks occlude objects behind them. Player and obstacle
+coordinates remain in world pixels. The enemy model does not track whether an
+enemy is grounded. `MOVE_LEFT`, `MOVE_RIGHT`, and
 `STOP` are translated into commands consumed by the ordinary enemy update;
 `JUMP` is reported as unsupported and holds the selected enemy for that tick.
 Controllers make one synchronous decision per host tick. Decisions are not
