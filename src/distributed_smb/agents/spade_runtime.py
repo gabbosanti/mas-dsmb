@@ -1,15 +1,19 @@
 """SPADE agents and their asyncio event loop."""
 
+from __future__ import annotations
+
 import asyncio
 import threading
 from pathlib import Path
 from queue import Queue
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.bdi.goomba import GoombaAgent
 from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
 from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
+
+if TYPE_CHECKING:
+    from distributed_smb.agents.bdi.goomba import GoombaAgent
 
 PerceptionQueue: TypeAlias = dict[AgentType, Queue]
 ActionQueue: TypeAlias = dict[AgentType, Queue]
@@ -39,11 +43,7 @@ class SpadeRuntime:
         #Goomba configuration
         asl_path = Path(__file__).with_name("goomba.asl")
         
-        goombaAgent = GoombaAgent(
-                    "goomba@localhost",
-            "goomba_password",
-            str(asl_path),
-        )
+        goombaAgent = self._create_goomba_agent(asl_path)
         goombaAgent.spade_runtime = self
                         
         try:
@@ -56,6 +56,17 @@ class SpadeRuntime:
         finally:
             if goombaAgent.is_alive():
                 await goombaAgent.stop()
+
+    @staticmethod
+    def _create_goomba_agent(asl_path: Path) -> GoombaAgent:
+        """Import SPADE only when the real agent runtime is actually started."""
+        from distributed_smb.agents.bdi.goomba import GoombaAgent
+
+        return GoombaAgent(
+            "goomba@localhost",
+            "goomba_password",
+            str(asl_path),
+        )
 
     def get_perception(
         self, agent_type: AgentType, timeout: float | None = 0
