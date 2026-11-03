@@ -8,11 +8,14 @@ from distributed_smb.agents.models import (
     ActionResult,
     ActionStatus,
     EnemyAction,
-    ObstacleKind,
     EnemyObservation,
+    GoombaPerception,
+    ObstacleKind,
     MovementCommand,
     ObstacleObservation,
+    PlayerPerception,
     Position,
+    SightDirection,
 )
 
 __all__ = [
@@ -23,10 +26,13 @@ __all__ = [
     "EnemyAction",
     "EnemyController",
     "EnemyObservation",
+    "GoombaPerception",
     "MovementCommand",
     "ObstacleKind",
     "ObstacleObservation",
+    "PlayerPerception",
     "Position",
     "PursuitController",
     "SpadeThread",
+    "SightDirection",
 ]
