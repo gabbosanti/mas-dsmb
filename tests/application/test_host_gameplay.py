@@ -1,10 +1,9 @@
 from distributed_smb.agents.models import (
-    ActionRequest,
     ActionStatus,
     EnemyAction,
-    EnemyObservation,
 )
 from distributed_smb.application.node_controller import NodeController
+from distributed_smb.domain.entity import Player
 from distributed_smb.domain.game_engine import GameEngine
 from distributed_smb.network.serializer import Serializer
 from distributed_smb.shared.config import TICK_INTERVAL
@@ -143,9 +142,36 @@ def test_a_rejoining_player_is_added_once_however_often_the_lobby_says_so():
     assert [p.player_id for p in controller.roster.get_all_players()] == ["player3"]
 
 
-class MoveEnemyLeft:
-    def decide(self, observation: EnemyObservation) -> ActionRequest:
-        return ActionRequest(observation.enemy_id, EnemyAction.MOVE_LEFT)
+def test_a_rejoining_player_restores_its_original_slot_and_character_state():
+    controller = NodeController()
+    controller.local_player_id = "player2"
+    controller.roster.add_player(
+        RosterEntry(
+            player_id="player1",
+            host="10.0.0.1",
+            udp_port=50010,
+            join_index=0,
+            is_host=True,
+        )
+    )
+    controller.engine.world_state.add_player(
+        Player(player_id="player1", x=231, y=92, vx=45, join_index=0)
+    )
+
+    controller._evict_player("player1")
+    rejoined = RosterEntry(
+        player_id="player1",
+        host="10.0.0.1",
+        udp_port=49500,
+        join_index=0,
+    )
+    controller.ws_handler = FakeWsHandler([_roster_update_with(rejoined)])
+    controller._check_for_rejoining_players()
+
+    player = controller.engine.world_state.get_player("player1")
+    assert player is not None
+    assert (player.x, player.y, player.vx, player.join_index) == (231, 92, 45, 0)
+    assert controller.rejoin_states == {}
 
 
 def test_process_host_frame_ticks_engine_at_fixed_interval(monkeypatch):
@@ -178,7 +204,7 @@ def test_authoritative_host_frame_applies_the_selected_agent_action():
     enemy = controller.engine.world_state.environment.enemies["enemy-1"]
     enemy.x = 520
     controller.agent_integration.enabled = True
-    controller.agent_integration.control_enemy("enemy-1", MoveEnemyLeft())
+    controller.agent_integration.control_enemy("enemy-1", EnemyAction.MOVE_LEFT)
 
     controller._process_host_frame(InputState())
 

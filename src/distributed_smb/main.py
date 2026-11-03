@@ -341,6 +341,17 @@ def main(
         artificial_latency_ms=artificial_latency_ms,
         use_discovery=use_discovery,
     )
+    if role is PlayerRole.CLIENT and session_id:
+        metadata = read_session_metadata()
+        if metadata is not None and metadata.session_id == session_id:
+            controller.rejoin_join_index = metadata.join_index
+            if metadata.join_index is not None:
+                controller.join_index = metadata.join_index
+                controller.local_player_id = metadata.local_player_id
+                if hasattr(controller.prediction_engine, "local_player_id"):
+                    controller.prediction_engine.local_player_id = (
+                        metadata.local_player_id
+                    )
     controller.local_ip = local_ip or _detect_local_ip()
     logging.info("Advertising local IP %s to peers", controller.local_ip)
 

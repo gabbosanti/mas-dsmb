@@ -206,6 +206,11 @@ class ElectionMixin:
             connect_with_retries(lobby_ws, label="election: lobby")
             all_players = self.roster.get_all_players()
             next_ji = (max(e.join_index for e in all_players) + 1) if all_players else 0
+            reserved_join_indices = {
+                entry.join_index
+                for entry in all_players
+                if entry.player_id != self.local_player_id
+            } | set(self.rejoin_states)
             lobby_ws.send(
                 SessionRecreate(
                     session_id=self.session_id,
@@ -213,6 +218,7 @@ class ElectionMixin:
                     host_ip=self.local_ip,
                     host_udp_port=HOST_UDP_PORT,
                     host_join_index=self.join_index,
+                    reserved_join_indices=sorted(reserved_join_indices),
                 )
             )
             got_ack = False
@@ -252,4 +258,5 @@ class ElectionMixin:
 
         # Switch role — next process_frame() routes to _process_host_frame()
         self.role = PlayerRole.HOST
+        self._start_spade_runtime()
         LOGGER.info("election: promotion complete — role=HOST")

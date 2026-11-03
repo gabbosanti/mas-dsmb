@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from distributed_smb.shared.config import MAX_PLAYERS, player_id_for
 from distributed_smb.shared.enums import MessageType
 from distributed_smb.shared.messages.common import (
     MessageValidationError,
@@ -32,6 +33,7 @@ class SessionJoin:
     player_id: str
     ip: str
     port: int
+    rejoin_join_index: int | None = None
     message_type: MessageType = field(init=False, default=MessageType.SESSION_JOIN)
 
     def __post_init__(self):
@@ -41,6 +43,19 @@ class SessionJoin:
             raise MessageValidationError(f"Invalid session_id: {self.session_id}")
         if not self.ip or not isinstance(self.ip, str):
             raise MessageValidationError(f"Invalid ip: {self.ip}")
+        if (
+            self.rejoin_join_index is not None
+            and not 0 <= self.rejoin_join_index < MAX_PLAYERS
+        ):
+            raise MessageValidationError(
+                f"Invalid rejoin_join_index: {self.rejoin_join_index}"
+            )
+        if self.rejoin_join_index is not None and self.player_id != player_id_for(
+            self.rejoin_join_index
+        ):
+            raise MessageValidationError(
+                "player_id must match rejoin_join_index when requesting a rejoin"
+            )
 
 
 @dataclass(slots=True)
@@ -117,6 +132,7 @@ class SessionRecreate:
     host_ip: str
     host_udp_port: int
     host_join_index: int
+    reserved_join_indices: list[int] = field(default_factory=list)
     message_type: MessageType = field(init=False, default=MessageType.SESSION_RECREATE)
 
     def __post_init__(self):
@@ -129,10 +145,20 @@ class SessionRecreate:
         if not self.host_ip or not isinstance(self.host_ip, str):
             raise MessageValidationError(f"Invalid host_ip: {self.host_ip}")
         validate_port(self.host_udp_port)
-        if self.host_join_index < 0:
+        if not 0 <= self.host_join_index < MAX_PLAYERS:
             raise MessageValidationError(
                 f"Invalid host_join_index: {self.host_join_index}"
             )
+        if len(self.reserved_join_indices) != len(set(self.reserved_join_indices)):
+            raise MessageValidationError("reserved_join_indices must be unique")
+        for join_index in self.reserved_join_indices:
+            validate_join_index(join_index)
+            if join_index >= MAX_PLAYERS:
+                raise MessageValidationError(
+                    f"Invalid reserved join_index: {join_index}"
+                )
+        if self.host_join_index in self.reserved_join_indices:
+            raise MessageValidationError("host_join_index cannot be reserved")
 
 
 @dataclass(slots=True)

@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from distributed_smb.shared.config import MAX_PLAYERS
+
 
 class PlayerInputSchema(BaseModel):
     """Schema for UDP PlayerInputPacket validation."""
@@ -34,6 +36,7 @@ class SessionJoinSchema(BaseModel):
     player_id: str = Field(..., min_length=1)
     ip: str = Field(..., min_length=1)
     port: int = Field(..., ge=1024, le=65535)
+    rejoin_join_index: int | None = Field(default=None, ge=0, lt=MAX_PLAYERS)
     message_type: str = Field(default="session_join")
 
 
@@ -44,7 +47,10 @@ class SessionRecreateSchema(BaseModel):
     next_join_index: int = Field(..., ge=0)
     host_ip: str = Field(..., min_length=1)
     host_udp_port: int = Field(..., ge=1024, le=65535)
-    host_join_index: int = Field(..., ge=0)
+    host_join_index: int = Field(..., ge=0, lt=MAX_PLAYERS)
+    reserved_join_indices: list[int] = Field(
+        default_factory=list, max_length=MAX_PLAYERS
+    )
     message_type: str = Field(default="session_recreate")
 
 

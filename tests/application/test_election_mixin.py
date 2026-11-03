@@ -7,7 +7,7 @@ import pytest
 
 from distributed_smb.application.election import SelfElected
 from distributed_smb.application.node_controller import NodeController
-from distributed_smb.domain.entity import DestructibleBlock
+from distributed_smb.domain.entity import DestructibleBlock, Player
 from distributed_smb.domain.world import EnvironmentalState, WorldState
 from distributed_smb.network.transport.udp import UdpHandler
 from distributed_smb.shared.config import (
@@ -41,18 +41,21 @@ def test_a_sole_survivor_promotes_immediately_without_claiming():
     ends in the same state a direct promotion would reach."""
     nc, broker = make_controller(with_host_in_roster=True)
 
-    nc._on_self_elected(SelfElected(my_ip="10.0.0.2"))
+    try:
+        nc._on_self_elected(SelfElected(my_ip="10.0.0.2"))
 
-    assert nc._promotion_done is True
-    assert nc.role is PlayerRole.HOST
-    assert nc.engine.is_authoritative is True
-    assert broker.promoted_port == GAME_EVENT_WS_PORT
-    assert nc.roster.get_player("player1") is None  # the crashed host is gone
-    assert nc.roster.get_host().player_id == "player2"
+        assert nc._promotion_done is True
+        assert nc.role is PlayerRole.HOST
+        assert nc.engine.is_authoritative is True
+        assert broker.promoted_port == GAME_EVENT_WS_PORT
+        assert nc.roster.get_player("player1") is None  # the crashed host is gone
+        assert nc.roster.get_host().player_id == "player2"
 
-    broker.promoted_port = None
-    nc._promote_to_host()
-    assert broker.promoted_port is None  # promoting twice does nothing
+        broker.promoted_port = None
+        nc._promote_to_host()
+        assert broker.promoted_port is None  # promoting twice does nothing
+    finally:
+        nc.udp_handler.close_socket()
 
 
 def test_with_surviving_peers_the_claim_is_broadcast_and_the_promotion_deferred():
@@ -76,22 +79,25 @@ def test_promotion_waits_for_every_pending_ack_and_ignores_spurious_ones():
     nc, _ = make_controller()
     awaiting_acks(nc, "10.0.0.3", "10.0.0.4")
 
-    nc._on_election_ack(ack("10.0.0.99"))
-    nc._on_election_ack(ack("10.0.0.3"))
+    try:
+        nc._on_election_ack(ack("10.0.0.99"))
+        nc._on_election_ack(ack("10.0.0.3"))
 
-    assert nc._promotion_done is False
-    assert nc.role is PlayerRole.CLIENT
-    assert nc._pending_election_acks == {"10.0.0.4"}
+        assert nc._promotion_done is False
+        assert nc.role is PlayerRole.CLIENT
+        assert nc._pending_election_acks == {"10.0.0.4"}
 
-    nc._on_election_ack(ack("10.0.0.4"))
+        nc._on_election_ack(ack("10.0.0.4"))
 
-    assert nc._promotion_done is True
-    assert nc.role is PlayerRole.HOST
-    assert nc.engine.is_authoritative is True
+        assert nc._promotion_done is True
+        assert nc.role is PlayerRole.HOST
+        assert nc.engine.is_authoritative is True
 
-    promoted_role = nc.role
-    nc._on_election_ack(ack("10.0.0.4"))  # relay echo, after the fact
-    assert nc.role is promoted_role
+        promoted_role = nc.role
+        nc._on_election_ack(ack("10.0.0.4"))  # relay echo, after the fact
+        assert nc.role is promoted_role
+    finally:
+        nc.udp_handler.close_socket()
 
 
 def test_the_claim_goes_out_over_udp_to_every_surviving_peer():
@@ -174,6 +180,10 @@ def test_our_own_claim_echoed_back_by_the_relay_is_ignored():
 def test_the_promoted_host_re_registers_the_session_for_rejoining_nodes(monkeypatch):
     """Runs on a background thread, so join it before asserting."""
     nc, _ = make_controller()
+    nc.roster.add_player(peer("player3", "10.0.0.3", 50012, 2))
+    nc.engine.world_state.add_player(
+        Player(player_id="player1", x=250, y=100, join_index=0)
+    )
     nc.lobby_service = SpyLobbyService()
     fake_ws = FakeWsHandler()
     monkeypatch.setattr(
@@ -189,8 +199,9 @@ def test_the_promoted_host_re_registers_the_session_for_rejoining_nodes(monkeypa
     message = fake_ws.sent[0]
     assert isinstance(message, SessionRecreate)
     assert message.session_id == SESSION
-    # Only the promoted node (join_index=1) is left, so the next index is 2.
-    assert message.next_join_index == 2
+    assert message.next_join_index == 3
+    assert message.reserved_join_indices == [0, 2]
+    nc.udp_handler.close_socket()
 
 
 def _following_a_new_host() -> NodeController:

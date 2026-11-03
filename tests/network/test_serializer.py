@@ -64,6 +64,13 @@ WS_MESSAGES = [
     SessionCreate(player_id="player1", ip="10.0.0.1", udp_port=50010),
     SessionCreated(session_id="abc123", join_index=1),
     SessionJoin(session_id="abc123", player_id="player2", ip="10.0.0.2", port=50011),
+    SessionJoin(
+        session_id="abc123",
+        player_id="player1",
+        ip="10.0.0.1",
+        port=50010,
+        rejoin_join_index=0,
+    ),
     SessionJoined(join_index=2),
     SessionJoinRejected(
         session_id="abc123", reason="The session already has 4 players"
@@ -74,6 +81,7 @@ WS_MESSAGES = [
         host_ip="10.0.0.2",
         host_udp_port=50010,
         host_join_index=1,
+        reserved_join_indices=[0, 2],
     ),
     SessionClosed(session_id="abc123"),
     SessionLeave(session_id="abc123", join_index=2),

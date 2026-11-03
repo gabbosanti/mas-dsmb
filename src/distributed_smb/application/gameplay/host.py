@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from copy import deepcopy
 
 from distributed_smb.shared.config import TICK_INTERVAL
 from distributed_smb.shared.input import InputState
@@ -142,6 +143,73 @@ class HostGameplayMixin:
         self._maybe_broadcast_roster()
         self._maybe_log_host_diagnostics()
         return self.engine.world_state
+
+    def _check_for_rejoining_players(self) -> None:
+        """Detect players that rejoined through the lobby and add them to the running game."""
+        msg = self.ws_handler.poll()
+        if not isinstance(msg, RosterUpdate):
+            return
+        new_entries = []
+        for entry in msg.roster.get_all_players():
+            if entry.player_id == self.local_player_id:
+                continue
+            existing = next(
+                (
+                    player
+                    for player in self.roster.get_all_players()
+                    if player.join_index == entry.join_index
+                ),
+                None,
+            )
+            if existing is not None and existing.player_id != entry.player_id:
+                LOGGER.warning(
+                    "rejoin: refusing %s because join_index=%d belongs to %s",
+                    entry.player_id,
+                    entry.join_index,
+                    existing.player_id,
+                )
+                continue
+
+            restored = self.rejoin_states.get(entry.join_index)
+            if (
+                existing is not None
+                and existing.host == entry.host
+                and existing.udp_port == entry.udp_port
+                and restored is None
+            ):
+                continue
+
+            restored = self.rejoin_states.pop(entry.join_index, None)
+            if existing is None:
+                self.roster.add_player(entry)
+            else:
+                self.roster.remove_player(existing.player_id)
+                self.roster.add_player(entry)
+
+            if restored is not None:
+                restored.player_id = entry.player_id
+                restored.join_index = entry.join_index
+                self.engine.world_state.add_player(deepcopy(restored))
+            elif existing is None:
+                x, y = self._spawn_position_for(entry.join_index)
+                self.engine.spawn_player(
+                    entry.player_id, x=x, y=y, join_index=entry.join_index
+                )
+
+            self.last_input_time[entry.player_id] = time.time()
+            LOGGER.info(
+                "rejoin: %s (join_index=%d) re-entered the game",
+                entry.player_id,
+                entry.join_index,
+            )
+            new_entries.append(entry)
+        if new_entries:
+            sync = InitialStateSync(world_state=self.engine.world_state.to_dict())
+            self.ws_handler.send(sync)
+            LOGGER.info(
+                "rejoin: sent InitialStateSync to %d rejoining player(s)",
+                len(new_entries),
+            )
 
     def _maybe_broadcast_roster(self) -> None:
         """Periodically publish the authoritative roster to every client."""

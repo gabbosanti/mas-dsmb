@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
+from distributed_smb.shared.config import MAX_PLAYERS, player_id_for
+
 SESSION_METADATA_FILENAME = "session_metadata.json"
 
 
@@ -20,6 +22,7 @@ class SessionMetadata:
     session_id: str
     local_player_id: str
     peers: list[CachedPeer]
+    join_index: int | None = None
 
 
 def _session_metadata_path(base_dir: Path | str | None = None) -> Path:
@@ -74,10 +77,25 @@ def read_session_metadata(
         if not isinstance(session_id, str) or not isinstance(local_player_id, str):
             return None
 
+        join_index = raw.get("join_index")
+        if join_index is not None and (
+            not isinstance(join_index, int)
+            or isinstance(join_index, bool)
+            or not 0 <= join_index < MAX_PLAYERS
+        ):
+            return None
+        if join_index is None and local_player_id.startswith("player"):
+            suffix = local_player_id.removeprefix("player")
+            if suffix.isdigit() and 0 < int(suffix) <= MAX_PLAYERS:
+                join_index = int(suffix) - 1
+        if join_index is not None and local_player_id != player_id_for(join_index):
+            return None
+
         return SessionMetadata(
             session_id=session_id,
             local_player_id=local_player_id,
             peers=peers,
+            join_index=join_index,
         )
     except (OSError, json.JSONDecodeError, ValueError, TypeError):
         return None

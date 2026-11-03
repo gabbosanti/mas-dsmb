@@ -258,6 +258,7 @@ class LobbyMixin:
                 player_id=self.local_player_id,
                 ip=self.local_ip,
                 port=self.udp_handler.port,
+                rejoin_join_index=self.rejoin_join_index,
             )
         )
 

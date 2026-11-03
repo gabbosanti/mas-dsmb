@@ -34,7 +34,11 @@ def _create_session(ws, player_id: str = "host1") -> str:
 
 
 def _join_session(
-    ws, session_id: str, player_id: str = "client1", port: int = 50011
+    ws,
+    session_id: str,
+    player_id: str = "client1",
+    port: int = 50011,
+    rejoin_join_index: int | None = None,
 ) -> int:
     """Client side of the handshake: returns the assigned join_index."""
     _send(
@@ -44,6 +48,7 @@ def _join_session(
         player_id=player_id,
         ip="127.0.0.1",
         port=port,
+        rejoin_join_index=rejoin_join_index,
     )
     join_index = _next(ws)["join_index"]
     _next(ws)  # roster_update
@@ -148,6 +153,7 @@ def test_a_recreated_session_keeps_its_id_and_lets_a_node_rejoin_mid_game():
             host_ip="192.168.1.10",
             host_udp_port=50010,
             host_join_index=1,
+            reserved_join_indices=[2],
         )
 
         ack = _next(host_ws)
@@ -160,7 +166,11 @@ def test_a_recreated_session_keeps_its_id_and_lets_a_node_rejoin_mid_game():
         with client.websocket_connect("/lobby") as rejoining:
             assert (
                 _join_session(
-                    rejoining, "restored-session-abc", player_id="player3", port=49500
+                    rejoining,
+                    "restored-session-abc",
+                    player_id="player3",
+                    port=49500,
+                    rejoin_join_index=2,
                 )
                 == 2
             )
@@ -168,6 +178,81 @@ def test_a_recreated_session_keeps_its_id_and_lets_a_node_rejoin_mid_game():
             game_start = _next(rejoining)
             assert game_start["message_type"] == MessageType.GAME_START
             assert game_start["session_id"] == "restored-session-abc"
+
+
+def test_rejoins_reclaim_reserved_player_slots_without_exceeding_the_player_limit():
+    with client.websocket_connect("/lobby") as host_ws:
+        _send(
+            host_ws,
+            "session_recreate",
+            session_id="migrated-session",
+            next_join_index=3,
+            host_ip="192.168.1.10",
+            host_udp_port=50010,
+            host_join_index=1,
+            reserved_join_indices=[0, 2],
+        )
+        _next(host_ws)
+
+        with client.websocket_connect("/lobby") as former_host:
+            assert (
+                _join_session(
+                    former_host,
+                    "migrated-session",
+                    player_id="player1",
+                    port=49500,
+                    rejoin_join_index=0,
+                )
+                == 0
+            )
+            _next(former_host)  # game_start
+
+            with client.websocket_connect("/lobby") as other_rejoin:
+                assert (
+                    _join_session(
+                        other_rejoin,
+                        "migrated-session",
+                        player_id="player3",
+                        port=49501,
+                        rejoin_join_index=2,
+                    )
+                    == 2
+                )
+                _next(other_rejoin)  # game_start
+
+                with client.websocket_connect("/lobby") as fourth_player:
+                    assert (
+                        _join_session(
+                            fourth_player,
+                            "migrated-session",
+                            player_id="new-player",
+                            port=49502,
+                        )
+                        == 3
+                    )
+                    _next(fourth_player)  # game_start
+
+                    with client.websocket_connect("/lobby") as too_many:
+                        _send(
+                            too_many,
+                            "session_join",
+                            session_id="migrated-session",
+                            player_id="fifth",
+                            ip="127.0.0.1",
+                            port=49503,
+                        )
+                        refusal = _next(too_many)
+
+    assert refusal["message_type"] == MessageType.SESSION_JOIN_REJECTED
+    roster = lobby_manager.get_roster("migrated-session")
+    assert [
+        (entry.player_id, entry.join_index) for entry in roster.get_all_players()
+    ] == [
+        ("player1", 0),
+        ("player2", 1),
+        ("player3", 2),
+        ("player4", 3),
+    ]
 
 
 def test_a_client_that_leaves_disappears_from_everyone_else_roster():

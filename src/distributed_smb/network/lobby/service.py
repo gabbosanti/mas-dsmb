@@ -43,6 +43,7 @@ class _SessionRecord:
     connections: list[WebSocket] = field(default_factory=list)
     is_active: bool = False
     next_join_index: int = 0
+    reserved_join_indices: set[int] = field(default_factory=set)
 
 
 class LobbyManager:
@@ -75,11 +76,54 @@ class LobbyManager:
         return session_id, 0
 
     def join_session(
-        self, session_id: str, player_id: str, host: str, udp_port: int
-    ) -> int:
-        """Add a joining player. Returns the assigned join_index."""
-        record = self._sessions[session_id]
-        join_index = record.next_join_index
+        self,
+        session_id: str,
+        player_id: str,
+        host: str,
+        udp_port: int,
+        rejoin_join_index: int | None = None,
+    ) -> int | None:
+        """Add a player in a free slot, or reclaim its reserved slot after a crash."""
+        record = self._sessions.get(session_id)
+        if record is None:
+            return None
+        current_indices = {entry["join_index"] for entry in record.entries}
+
+        if rejoin_join_index is not None:
+            existing = next(
+                (
+                    entry
+                    for entry in record.entries
+                    if entry["join_index"] == rejoin_join_index
+                ),
+                None,
+            )
+            if existing is not None:
+                if existing["player_id"] != player_id:
+                    return None
+                existing["host"] = host
+                existing["udp_port"] = udp_port
+                record.reserved_join_indices.discard(rejoin_join_index)
+                return rejoin_join_index
+            if rejoin_join_index not in record.reserved_join_indices:
+                return None
+            join_index = rejoin_join_index
+            record.reserved_join_indices.remove(join_index)
+        else:
+            occupied_indices = current_indices | record.reserved_join_indices
+            if len(occupied_indices) >= MAX_PLAYERS:
+                return None
+            join_index = next(
+                (
+                    index
+                    for index in range(MAX_PLAYERS)
+                    if index not in occupied_indices
+                ),
+                None,
+            )
+            if join_index is None:
+                return None
+
         entry = {
             "player_id": player_id_for(join_index),
             "host": host,
@@ -89,7 +133,7 @@ class LobbyManager:
             "is_host": False,
         }
         record.entries.append(entry)
-        record.next_join_index += 1
+        record.next_join_index = max(record.next_join_index, join_index + 1)
         return join_index
 
     def add_connection(self, session_id: str, ws: WebSocket) -> None:
@@ -113,10 +157,24 @@ class LobbyManager:
         record.entries = [e for e in record.entries if e["join_index"] != join_index]
         return bool(leaving["is_host"])
 
-    def is_full(self, session_id: str) -> bool:
+    def is_full(self, session_id: str, rejoin_join_index: int | None = None) -> bool:
         """A session holds at most MAX_PLAYERS participants, host included."""
         record = self._sessions.get(session_id)
-        return record is not None and len(record.entries) >= MAX_PLAYERS
+        if record is None:
+            return False
+        if rejoin_join_index is not None:
+            return rejoin_join_index not in record.reserved_join_indices and not any(
+                entry["join_index"] == rejoin_join_index
+                and entry["player_id"] != player_id_for(rejoin_join_index)
+                for entry in record.entries
+            )
+        return (
+            len(
+                {entry["join_index"] for entry in record.entries}
+                | record.reserved_join_indices
+            )
+            >= MAX_PLAYERS
+        )
 
     def has_session(self, session_id: str) -> bool:
         return session_id in self._sessions
@@ -147,7 +205,11 @@ class LobbyManager:
         return record.is_active if record else False
 
     def register_active_session(
-        self, session_id: str, roster: GlobalRoster, next_join_index: int
+        self,
+        session_id: str,
+        roster: GlobalRoster,
+        next_join_index: int,
+        reserved_join_indices: set[int] | None = None,
     ) -> None:
         """Pre-seed an already-running session so rejoining nodes can connect."""
         entries = [
@@ -166,6 +228,7 @@ class LobbyManager:
             entries=entries,
             is_active=True,
             next_join_index=next_join_index,
+            reserved_join_indices=set(reserved_join_indices or ()),
         )
 
     async def broadcast(self, session_id: str, payload: dict) -> None:
@@ -213,7 +276,7 @@ async def lobby_endpoint(ws: WebSocket) -> None:
             elif message_type == MessageType.SESSION_JOIN:
                 msg: SessionJoin = _serializer.decode_ws_message(data)
                 session_id = msg.session_id
-                if lobby_manager.is_full(session_id):
+                if lobby_manager.is_full(session_id, msg.rejoin_join_index):
                     LOGGER.info(
                         "lobby: session %s is full, refusing a join", session_id
                     )
@@ -227,8 +290,22 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                     session_id = None
                     continue
                 join_index = lobby_manager.join_session(
-                    session_id, msg.player_id, msg.ip, msg.port
+                    session_id,
+                    msg.player_id,
+                    msg.ip,
+                    msg.port,
+                    msg.rejoin_join_index,
                 )
+                if join_index is None:
+                    rejected = SessionJoinRejected(
+                        session_id=session_id,
+                        reason="The requested player slot is unavailable",
+                    )
+                    await ws.send_text(
+                        json.dumps(_serializer.encode_ws_message(rejected))
+                    )
+                    session_id = None
+                    continue
                 lobby_manager.add_connection(session_id, ws)
                 joined = SessionJoined(join_index=join_index)
                 await ws.send_text(json.dumps(_serializer.encode_ws_message(joined)))
@@ -267,7 +344,10 @@ async def lobby_endpoint(ws: WebSocket) -> None:
                     )
                 )
                 lobby_manager.register_active_session(
-                    session_id, host_roster, msg.next_join_index
+                    session_id,
+                    host_roster,
+                    msg.next_join_index,
+                    set(msg.reserved_join_indices),
                 )
                 lobby_manager.add_connection(session_id, ws)
                 LOGGER.info(

@@ -170,16 +170,19 @@ def test_a_crashed_host_is_verified_then_replaced_and_its_world_survives(
     candidate._on_self_elected(event)
     assert candidate._pending_election_acks == {"10.0.0.3"}
 
-    candidate._on_election_ack(ElectionAck(from_ip="10.0.0.3", session_id=SESSION))
+    try:
+        candidate._on_election_ack(ElectionAck(from_ip="10.0.0.3", session_id=SESSION))
 
-    assert candidate.role is PlayerRole.HOST
-    assert candidate.engine.is_authoritative is True
-    assert candidate.engine.world_state is world
-    assert (
-        candidate.engine.world_state.environment.destructible_blocks[0].destroyed
-        is True
-    )
-    assert candidate.last_snapshot_sequence == 7
+        assert candidate.role is PlayerRole.HOST
+        assert candidate.engine.is_authoritative is True
+        assert candidate.engine.world_state is world
+        assert (
+            candidate.engine.world_state.environment.destructible_blocks[0].destroyed
+            is True
+        )
+        assert candidate.last_snapshot_sequence == 7
+    finally:
+        candidate.udp_handler.close_socket()
 
 
 def test_every_survivor_follows_the_ack_the_new_host_broadcast(close_udp_sockets):
@@ -191,15 +194,18 @@ def test_every_survivor_follows_the_ack_the_new_host_broadcast(close_udp_sockets
         nodes=close_udp_sockets,
     )
 
-    promoted._promote_to_host()
+    try:
+        promoted._promote_to_host()
 
-    acks = [
-        msg
-        for msg in promoted.game_event_broker.sent
-        if msg["message_type"] == MessageType.RECONNECTION_ACK.value
-    ]
-    assert len(acks) == 1
-    ack = Serializer().decode_ws_message(acks[0])
+        acks = [
+            msg
+            for msg in promoted.game_event_broker.sent
+            if msg["message_type"] == MessageType.RECONNECTION_ACK.value
+        ]
+        assert len(acks) == 1
+        ack = Serializer().decode_ws_message(acks[0])
+    finally:
+        promoted.udp_handler.close_socket()
 
     for peer_ip, peer_id, peer_index in (
         ("10.0.0.3", "player3", 2),

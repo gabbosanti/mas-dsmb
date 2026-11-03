@@ -31,6 +31,26 @@ def test_main_resolves_the_local_ip_and_points_the_client_at_the_host():
     assert client.remote_host == "192.168.1.10"
 
 
+def test_main_restores_the_saved_player_slot_for_a_rejoining_client():
+    metadata = SessionMetadata(
+        session_id="session-abc",
+        local_player_id="player1",
+        peers=[],
+        join_index=0,
+    )
+    with patch("distributed_smb.main.read_session_metadata", return_value=metadata):
+        client = main(
+            role=PlayerRole.CLIENT,
+            host_ip="192.168.1.10",
+            local_ip="192.168.1.20",
+            session_id="session-abc",
+        )
+
+    assert client.rejoin_join_index == 0
+    assert client.join_index == 0
+    assert client.local_player_id == "player1"
+
+
 class _FakeConnection:
     def __init__(self, calls):
         self._calls = calls

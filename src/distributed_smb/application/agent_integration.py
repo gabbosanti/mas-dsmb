@@ -354,10 +354,12 @@ class AgentGameIntegration:
 
             positions_before[enemy_id] = Position(enemy.x, enemy.y)
             if request is None:
-                if enemy_id in self.controllers:
-                    request = self.controllers[enemy_id].decide(self.observe(enemy_id))
-                else:
-                    request = self._spade_action_for(enemy_id, current_sequence)
+                controller = self.controllers[enemy_id]
+                request = (
+                    ActionRequest(enemy_id, controller)
+                    if isinstance(controller, EnemyAction)
+                    else controller.decide(self.observe(enemy_id))
+                )
             if not isinstance(request, ActionRequest):
                 raise TypeError("Enemy controllers must return an ActionRequest")
             if request.enemy_id != enemy_id:

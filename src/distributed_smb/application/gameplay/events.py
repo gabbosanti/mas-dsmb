@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from copy import deepcopy
 
 from distributed_smb.application.gameplay.mapper import event_to_message
 from distributed_smb.shared.config import UDP_INPUT_TIMEOUT
@@ -37,6 +38,10 @@ class GameEventMixin:
 
     def _evict_player(self, pid: str) -> None:
         """Remove a player from the local world and clean up associated state."""
+        entry = self.roster.get_player(pid)
+        player = self.engine.world_state.get_player(pid)
+        if entry is not None and player is not None:
+            self.rejoin_states[entry.join_index] = deepcopy(player)
         self.engine.world_state.remove_player(pid)
         self.roster.remove_player(pid)
         self.cached_remote_inputs.pop(pid, None)

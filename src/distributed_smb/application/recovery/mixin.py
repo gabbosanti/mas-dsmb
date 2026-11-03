@@ -25,6 +25,7 @@ class RecoveryMixin:
                 session_id=self.session_id,
                 local_player_id=self.local_player_id,
                 peers=peers,
+                join_index=self.join_index,
             )
         )
 
