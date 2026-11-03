@@ -5,7 +5,7 @@ from spade_bdi.bdi import BDIAgent
 from spade.behaviour import CyclicBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
+from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO, ActionType
 from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
 
 if TYPE_CHECKING:
@@ -28,24 +28,29 @@ class GoombaAgent(BDIAgent):
 
             agent = self.goomba_agent
 
-            perception = agent.spade_runtime.get_perception(AgentType.GOOMBA)
-            if not isinstance(perception, GoombaPerceptionDTO):
+            goombaPerception = agent.spade_runtime.get_perception(AgentType.GOOMBA)
+            if not isinstance(goombaPerception, GoombaPerceptionDTO):
                 raise TypeError(
                     "The GOOMBA perception queue must contain "
                     "GoombaPerceptionDTO instances"
                 )
 
-            print(f"[Agent] Perception received: {perception}")
+            print(f"[Agent] Perception received: {goombaPerception}")
         
-            if perception.obstacle_ahead:  # Se c'è un ostacolo davanti
-                agent.bdi.set_belief("obstacle_ahead")  # aggiorno la belief
+            goombaAction = GoombaActionDTO(action = None)
+                
+            if goombaPerception.obstacle_ahead: 
+                agent.bdi.set_belief("obstacle_ahead") 
+                goombaAction.__setattr__("action", ActionType.TURN_AROUND)
+                
+            elif goombaPerception.direction == "right" :
+                goombaAction.__setattr__("action", ActionType.MOVE_RIGHT)
 
-            #asl ragiona ed elabora un piano....
-        
-            agent.spade_runtime.put_action(AgentType.GOOMBA, GoombaActionDTO())
+            elif goombaPerception.direction == "left" :
+                goombaAction.__setattr__("action", ActionType.MOVE_LEFT)
+                        
+            agent.spade_runtime.put_action(AgentType.GOOMBA, goombaAction)
             print("[Agent] Action sent")
-
-            print("[SPADE] Agent started")
 
 
         async def on_end(self):
