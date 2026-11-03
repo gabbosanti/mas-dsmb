@@ -199,12 +199,8 @@ class NodeController(
     _relaunch_thread: Any | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.perception_queue = {
-            agent_type: Queue() for agent_type in AgentType
-        }
-        self.action_queue = {
-            agent_type: Queue() for agent_type in AgentType
-        }
+        self.perception_queue = {agent_type: Queue() for agent_type in AgentType}
+        self.action_queue = {agent_type: Queue() for agent_type in AgentType}
         self.spade_runtime = SpadeRuntime(
             perception_queue=self.perception_queue,
             action_queue=self.action_queue,
@@ -323,6 +319,10 @@ class NodeController(
         """Start the BDI runtime only on the authoritative host."""
         if self.role is PlayerRole.HOST:
             self.spade_thread.start()
+
+    def _start_spade_runtime(self) -> None:
+        """Start the SPADE runtime after a role promotion when this node is host."""
+        self._start_spade_thread()
 
     def _configure_role(
         self, *, packet_drop_rate: float, artificial_latency_ms: int = 0

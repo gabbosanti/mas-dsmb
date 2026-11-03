@@ -262,7 +262,7 @@ class AgentGameIntegration:
     enabled: bool = False
     perception_interval_ticks: int = 5
     action_max_age_ticks: int | None = None
-    controllers: dict[str, EnemyController] = field(default_factory=dict)
+    controllers: dict[str, EnemyController | EnemyAction] = field(default_factory=dict)
     spade_controlled_enemy_ids: set[str] = field(default_factory=set)
     bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
     last_results: dict[str, ActionResult] = field(default_factory=dict, init=False)
@@ -286,7 +286,9 @@ class AgentGameIntegration:
             return self.action_max_age_ticks
         return 2 * self.perception_interval_ticks
 
-    def control_enemy(self, enemy_id: str, controller: EnemyController) -> None:
+    def control_enemy(
+        self, enemy_id: str, controller: EnemyController | EnemyAction
+    ) -> None:
         if enemy_id not in self.engine.world_state.environment.enemies:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
         self.spade_controlled_enemy_ids.discard(enemy_id)
@@ -354,12 +356,13 @@ class AgentGameIntegration:
 
             positions_before[enemy_id] = Position(enemy.x, enemy.y)
             if request is None:
-                controller = self.controllers[enemy_id]
-                request = (
-                    ActionRequest(enemy_id, controller)
-                    if isinstance(controller, EnemyAction)
-                    else controller.decide(self.observe(enemy_id))
-                )
+                controller = self.controllers.get(enemy_id)
+                if isinstance(controller, EnemyAction):
+                    request = ActionRequest(enemy_id, controller)
+                elif controller is not None:
+                    request = controller.decide(self.observe(enemy_id))
+                else:
+                    request = self._spade_action_for(enemy_id, current_sequence)
             if not isinstance(request, ActionRequest):
                 raise TypeError("Enemy controllers must return an ActionRequest")
             if request.enemy_id != enemy_id:
