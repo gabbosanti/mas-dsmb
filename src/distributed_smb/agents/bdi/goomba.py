@@ -1,26 +1,48 @@
 import asyncio
+from typing import TYPE_CHECKING
+
 from spade_bdi.bdi import BDIAgent
 from spade.behaviour import CyclicBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
+from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
+from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
+
+if TYPE_CHECKING:
+    from distributed_smb.agents.spade_runtime import SpadeRuntime
 
 class GoombaAgent(BDIAgent):
+    # Injected by SpadeRuntime after construction to avoid a module import cycle.
+    spade_runtime: "SpadeRuntime"
+
     class PatrolBehaviour(CyclicBehaviour):
         async def on_start(self):
             print("Starting behaviour . . .")
-
+            agent = self.agent
+            if not isinstance(agent, GoombaAgent):
+                raise RuntimeError("PatrolBehaviour is not attached to a GoombaAgent")
+            self.goomba_agent = agent
+            
         async def run(self):
             await asyncio.sleep(1)
-            #ricevo la percezione in formato json string
-            goombaPerception = self.get_perception(AgentType.GOOMBA)
-            print(f"[Agent] Perception received: {goombaPerception}")
+
+            agent = self.goomba_agent
+
+            perception = agent.spade_runtime.get_perception(AgentType.GOOMBA)
+            if not isinstance(perception, GoombaPerceptionDTO):
+                raise TypeError(
+                    "The GOOMBA perception queue must contain "
+                    "GoombaPerceptionDTO instances"
+                )
+
+            print(f"[Agent] Perception received: {perception}")
         
-            if (goombaPerception.obstacle_ahead == True) : #Se c'è un ostacolo davanti
-                self.bdi.set_belief("obstacle_ahead")  #aggiorno la belief
+            if perception.obstacle_ahead:  # Se c'è un ostacolo davanti
+                agent.bdi.set_belief("obstacle_ahead")  # aggiorno la belief
 
             #asl ragiona ed elabora un piano....
         
-            self.put_action(AgentType.GOOMBA, action)
+            agent.spade_runtime.put_action(AgentType.GOOMBA, GoombaActionDTO())
             print("[Agent] Action sent")
 
             print("[SPADE] Agent started")
@@ -60,10 +82,3 @@ class GoombaAgent(BDIAgent):
 
             yield
             
-    def get_perception(self, agent_type: AgentType, timeout: float | None = 0) -> object :
-        # Read a perception from the queue for an agent type
-        self.perception_queue[AgentType(agent_type)].get(timeout=timeout)
-
-    def put_action(self, agent_type: AgentType, action: object) -> None :
-        # Send an action to the queue for his agent type
-        return self.action_queue[AgentType(agent_type)].put(action)

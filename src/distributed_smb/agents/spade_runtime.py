@@ -2,17 +2,14 @@
 
 import asyncio
 import threading
-from collections.abc import Mapping
 from pathlib import Path
 from queue import Queue
 from typing import TypeAlias
 
-import spade
-
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.bdi.goomba import GoombaAgent
-from distributed_smb.agents.dto.goombaAction import GoombaActionDTO
-from distributed_smb.agents.dto.goombaPerception import GoombaPerceptionDTO
+from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
+from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
 
 PerceptionQueue: TypeAlias = dict[AgentType, Queue]
 ActionQueue: TypeAlias = dict[AgentType, Queue]
@@ -44,16 +41,14 @@ class SpadeRuntime:
         
         goombaAgent = GoombaAgent(
                     "goomba@localhost",
-                    "goomba_password",
-                    str(asl_path)
+            "goomba_password",
+            str(asl_path),
         )
+        goombaAgent.spade_runtime = self
                         
         try:
             print("[SPADE] Starting agent...")
             await goombaAgent.start()
-            
-            print("Wait until user interrupts with ctrl+C")
-            await spade.wait_until_finished(goombaAgent)
             
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
@@ -62,3 +57,12 @@ class SpadeRuntime:
             if goombaAgent.is_alive():
                 await goombaAgent.stop()
 
+    def get_perception(
+        self, agent_type: AgentType, timeout: float | None = 0
+    ) -> object:
+        """Read a perception from the queue belonging to an agent type."""
+        return self.perception_queue[AgentType(agent_type)].get(timeout=timeout)
+
+    def put_action(self, agent_type: AgentType, action: object) -> None:
+        """Send an action to the queue belonging to an agent type."""
+        self.action_queue[AgentType(agent_type)].put(action)
