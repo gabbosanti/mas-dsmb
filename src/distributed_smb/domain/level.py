@@ -110,6 +110,11 @@ class TiledLevel:
                 )
 
             elif obj.type == "Enemies":
+                enemy_type = obj.properties.get("enemy_type")
+                if enemy_type is None:
+                    enemy_type = getattr(obj, "enemy_type", None)
+                if enemy_type is None:
+                    enemy_type = EnemyType.KOOPA.value
                 level.enemies.append(
                     Enemy(
                         enemy_id=obj.name,
@@ -120,9 +125,7 @@ class TiledLevel:
                         vx=float(obj.properties.get("vx", 50.0)),
                         left_bound=float(obj.properties["left_bound"]),
                         right_bound=float(obj.properties["right_bound"]),
-                        enemy_type=EnemyType(
-                            obj.properties.get("enemy_type", EnemyType.KOOPA.value)
-                        ),
+                        enemy_type=EnemyType(str(enemy_type).casefold()),
                     )
                 )
 
