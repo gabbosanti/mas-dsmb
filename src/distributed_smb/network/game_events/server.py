@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, WebSocket
+from starlette.websockets import WebSocketDisconnect
 
 from distributed_smb.shared.config import (
     GAME_EVENT_HEARTBEAT_INTERVAL,
@@ -48,8 +49,6 @@ async def game_event_endpoint(ws: WebSocket, player_id: str = "") -> None:
         _ws_to_player[id(ws)] = player_id
     try:
         await disconnect_event.wait()
-    except Exception:
-        pass
     finally:
         _ws_to_event.pop(id(ws), None)
         if ws in _connections:
@@ -73,7 +72,7 @@ async def _broadcast(payload: bytes) -> None:
     for ws in _connections:
         try:
             await ws.send_text(text)
-        except Exception:
+        except (OSError, RuntimeError, WebSocketDisconnect):
             dead.append(ws)
     for ws in dead:
         event = _ws_to_event.get(id(ws))
@@ -89,7 +88,7 @@ async def _heartbeat_loop() -> None:
         for ws in _connections:
             try:
                 await ws.send_text('{"type":"ping"}')
-            except Exception:
+            except (OSError, RuntimeError, WebSocketDisconnect):
                 dead.append(ws)
         for ws in dead:
             event = _ws_to_event.get(id(ws))

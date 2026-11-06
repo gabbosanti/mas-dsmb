@@ -32,7 +32,9 @@ def test_tiled_level_reads_enemy_type(monkeypatch, properties, expected_type):
         objects=[enemy_object],
         properties={},
     )
-    monkeypatch.setattr("distributed_smb.domain.level.pytmx.TiledMap", lambda _: tiled_map)
+    monkeypatch.setattr(
+        "distributed_smb.domain.level.pytmx.TiledMap", lambda _: tiled_map
+    )
 
     level = TiledLevel("unused.tmx").build()
 

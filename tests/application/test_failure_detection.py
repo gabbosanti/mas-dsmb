@@ -28,9 +28,9 @@ def _host_looks_gone(monkeypatch, record: list | None = None):
     monkeypatch.setattr(
         UdpHandler,
         "send_packet_nowait",
-        lambda self, payload, host, port: record.append((host, port))
-        if record is not None
-        else None,
+        lambda self, payload, host, port: (
+            record.append((host, port)) if record is not None else None
+        ),
     )
     return nc
 

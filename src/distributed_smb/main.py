@@ -40,6 +40,8 @@ from distributed_smb.shared.session_metadata import (
     read_session_metadata,
 )
 
+LOGGER = logging.getLogger(__name__)
+
 
 class ReturnToMenu(Exception):
     """Raised when the node leaves a lobby and should go back to the main menu."""
@@ -260,27 +262,27 @@ class _LobbyRunner:
                 role=self.controller.role,
                 roster=self.controller.roster,
             ):
-                logging.info("Gameplay start cancelled during transition")
+                LOGGER.info("Gameplay start cancelled during transition")
                 self.teardown()
                 return False
         except LobbyCancelledError:
             self.teardown()
             if self.screen.leave_requested and not self.screen.is_closed:
-                logging.info("Left the lobby — returning to the main menu")
+                LOGGER.info("Left the lobby — returning to the main menu")
                 raise ReturnToMenu from None
-            logging.info("Lobby closed before game start")
+            LOGGER.info("Lobby closed before game start")
             return False
         except SessionJoinRejectedError as exc:
-            logging.info("Lobby refused the join: %s", exc)
+            LOGGER.info("Lobby refused the join: %s", exc)
             self.teardown()
             self.screen.show_error(title="Cannot join this session", message=str(exc))
             raise ReturnToMenu from None
         except SessionClosedError:
-            logging.info("The host left the lobby — returning to the main menu")
+            LOGGER.info("The host left the lobby — returning to the main menu")
             self.teardown()
             raise ReturnToMenu from None
         except Exception as exc:
-            logging.exception("Lobby failed before game start")
+            LOGGER.exception("Lobby failed before game start")
             self.teardown()
             self.screen.show_error(title="Lobby connection failed", message=str(exc))
             return False
@@ -332,7 +334,7 @@ def main(
     """Bootstrap the local node and start the graphical application."""
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     use_discovery = host_ip is None
-    logging.info(
+    LOGGER.info(
         "Starting Distributed SMB in %s mode (discovery=%s)", role, use_discovery
     )
     controller = build_controller(
@@ -353,7 +355,7 @@ def main(
                         metadata.local_player_id
                     )
     controller.local_ip = local_ip or _detect_local_ip()
-    logging.info("Advertising local IP %s to peers", controller.local_ip)
+    LOGGER.info("Advertising local IP %s to peers", controller.local_ip)
 
     if run_app:
         lobby_screen = LobbyScreen()
@@ -365,7 +367,7 @@ def main(
                 session_id=session_id,
             )
             if joined is None:
-                logging.info("Client join cancelled before connecting to lobby")
+                LOGGER.info("Client join cancelled before connecting to lobby")
                 controller.udp_handler.close_socket()
                 lobby_screen.close()
                 delete_session_metadata()

@@ -1,5 +1,6 @@
 """Pygame lobby screen shown before the gameplay loop starts."""
 
+import logging
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -10,6 +11,8 @@ import pygame.scrap
 from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
 from distributed_smb.shared.enums import PlayerRole
 from distributed_smb.shared.roster import GlobalRoster
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -135,9 +138,12 @@ class LobbyScreen:
                         session_id = session_id[:-1]
                     elif event.key == pygame.K_v and event.mod & pygame.KMOD_CTRL:
                         session_id = (session_id + self._get_clipboard_text())[:96]
-                elif event.type == pygame.TEXTINPUT and event.text.isprintable():
-                    if len(session_id) < 96:
-                        session_id += event.text
+                elif (
+                    event.type == pygame.TEXTINPUT
+                    and event.text.isprintable()
+                    and len(session_id) < 96
+                ):
+                    session_id += event.text
 
             self._render_session_id_form(
                 session_id=session_id, error_message=error_message
@@ -204,8 +210,8 @@ class LobbyScreen:
                 else pygame.SYSTEM_CURSOR_ARROW
             )
             pygame.mouse.set_cursor(cursor)
-        except Exception:
-            pass
+        except pygame.error as exc:
+            LOGGER.debug("Could not update lobby mouse cursor: %s", exc)
 
         self._screen.fill(self.background_color)
         self._draw_text(

@@ -1,11 +1,14 @@
 """Pygame main menu — lets the player choose to host or join a session."""
 
+import logging
 from dataclasses import dataclass, field
 
 import pygame
 
 from distributed_smb.shared.config import WINDOW_HEIGHT, WINDOW_WIDTH
 from distributed_smb.shared.enums import PlayerRole
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -63,8 +66,8 @@ class MenuScreen:
                     else pygame.SYSTEM_CURSOR_ARROW
                 )
                 pygame.mouse.set_cursor(cursor)
-            except Exception:
-                pass
+            except pygame.error as exc:
+                LOGGER.debug("Could not update menu mouse cursor: %s", exc)
 
             self._render(host_btn, join_btn, host_hovered, join_hovered)
             clock.tick(30)

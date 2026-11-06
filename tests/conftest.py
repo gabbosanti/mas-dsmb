@@ -48,7 +48,7 @@ def run_lobby_pair():
                     start_requested=lambda: len(host.roster.players) >= 2,
                     on_update=keep_waiting,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
         def run_client():
@@ -57,7 +57,7 @@ def run_lobby_pair():
                 time.sleep(0.05)
             try:
                 client.lobby_phase(session_id=host.session_id, on_update=keep_waiting)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
         threads = [

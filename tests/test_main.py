@@ -124,12 +124,14 @@ def _fake_screen_class(calls, *, start_requested=True):
 
 
 def _run_main(controller, calls, *, start_requested=True, **kwargs):
-    with patch("distributed_smb.main.build_controller", return_value=controller):
-        with patch(
+    with (
+        patch("distributed_smb.main.build_controller", return_value=controller),
+        patch(
             "distributed_smb.main.LobbyScreen",
             _fake_screen_class(calls, start_requested=start_requested),
-        ):
-            return main(run_app=True, **kwargs)
+        ),
+    ):
+        return main(run_app=True, **kwargs)
 
 
 def test_recovery_is_skipped_without_metadata_or_if_the_player_closes_it():
@@ -159,18 +161,19 @@ def test_recovery_probes_the_cached_peers_and_returns_the_session_it_found():
         peers=[CachedPeer(player_id="player-2", ip="127.0.0.2", join_index=1)],
     )
 
-    with patch("distributed_smb.main.read_session_metadata", return_value=metadata):
-        with patch("distributed_smb.main.LobbyScreen") as screen_cls:
-            screen = MagicMock()
-            screen.render.return_value = True
-            screen_cls.return_value = screen
+    with (
+        patch("distributed_smb.main.read_session_metadata", return_value=metadata),
+        patch("distributed_smb.main.LobbyScreen") as screen_cls,
+        patch("distributed_smb.main.RecoveryProber") as prober_cls,
+    ):
+        screen = MagicMock()
+        screen.render.return_value = True
+        screen_cls.return_value = screen
+        prober = MagicMock()
+        prober.find_current_host.return_value = "10.0.0.2"
+        prober_cls.return_value = prober
 
-            with patch("distributed_smb.main.RecoveryProber") as prober_cls:
-                prober = MagicMock()
-                prober.find_current_host.return_value = "10.0.0.2"
-                prober_cls.return_value = prober
-
-                result = _try_recover_session("127.0.0.1")
+        result = _try_recover_session("127.0.0.1")
 
     assert result == ("10.0.0.2", "session-abc")
     prober.find_current_host.assert_called_once_with(
@@ -198,13 +201,15 @@ def test_prober_fails_cleans_up_and_returns_none():
     def fake_delete():
         deleted.append(True)
 
-    with patch("distributed_smb.main.read_session_metadata", return_value=metadata):
-        with patch("distributed_smb.main.delete_session_metadata", fake_delete):
-            result = _try_recover_session(
-                "127.0.0.1",
-                lobby_screen=mock_screen,
-                prober=mock_prober,
-            )
+    with (
+        patch("distributed_smb.main.read_session_metadata", return_value=metadata),
+        patch("distributed_smb.main.delete_session_metadata", fake_delete),
+    ):
+        result = _try_recover_session(
+            "127.0.0.1",
+            lobby_screen=mock_screen,
+            prober=mock_prober,
+        )
 
     assert result is None
     assert deleted == [True]

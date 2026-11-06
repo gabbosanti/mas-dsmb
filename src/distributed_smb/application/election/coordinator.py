@@ -25,7 +25,6 @@ class ElectionEvent:
     """Base class for election events emitted by ElectionCoordinator.tick()."""
 
 
-
 @dataclass(slots=True)
 class SelfElected(ElectionEvent):
     """Emitted when self-election timer expires without override from lower-indexed peer."""

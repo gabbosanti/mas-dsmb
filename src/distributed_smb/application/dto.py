@@ -61,7 +61,7 @@ class RenderEnemy:
     y: float
     width: int
     height: int
-    enemy_type: EnemyType = EnemyType.KOOPA
+    enemy_type: str = EnemyType.KOOPA.value
 
 
 @dataclass(slots=True)
@@ -179,7 +179,7 @@ def build_render_frame(
                 y=enemy.y,
                 width=enemy.width,
                 height=enemy.height,
-                enemy_type=enemy.enemy_type,
+                enemy_type=enemy.enemy_type.value,
             )
             for enemy_id, enemy in world_state.environment.enemies.items()
         },

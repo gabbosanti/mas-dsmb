@@ -107,13 +107,13 @@ def test_replay_lobby_phase_resets_engine_without_new_session(run_lobby_pair):
                     start_requested=lambda: True,
                     on_update=lambda *a: not stop_replay.is_set(),
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(exc)
 
     def replay_client():
         try:
             client.replay_lobby_phase(on_update=lambda *a: not stop_replay.is_set())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(exc)
 
     t_host = threading.Thread(target=replay_host, daemon=True)

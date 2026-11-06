@@ -5,6 +5,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from websockets.exceptions import WebSocketException
+
 from distributed_smb.network.transport.websocket import connect_with_retries
 from distributed_smb.shared.config import (
     GAME_EVENT_WS_PATH,
@@ -152,7 +154,13 @@ class LobbyMixin:
             self.ws_handler.send(
                 SessionLeave(session_id=self.session_id, join_index=self.join_index)
             )
-        except Exception as exc:
+        except (
+            ConnectionError,
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            WebSocketException,
+        ) as exc:
             LOGGER.info("lobby: could not announce departure (%s)", exc)
 
     def _notify_lobby_update(

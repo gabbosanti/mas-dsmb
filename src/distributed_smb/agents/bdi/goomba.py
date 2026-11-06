@@ -21,7 +21,7 @@ class GoombaAgent(BDIAgent):
             print("Starting behaviour . . .")
             agent = self.agent
             if not isinstance(agent, GoombaAgent):
-                raise RuntimeError("PatrolBehaviour is not attached to a GoombaAgent")
+                raise TypeError("PatrolBehaviour is not attached to a GoombaAgent")
             self.goomba_agent = agent
 
         async def run(self):

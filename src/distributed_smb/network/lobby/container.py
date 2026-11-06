@@ -47,6 +47,7 @@ class LobbyContainerManager:
                     name,
                     image,
                 ],
+                check=False,
                 capture_output=True,
             )
             if result.returncode != 0:
@@ -64,6 +65,7 @@ class LobbyContainerManager:
     def _is_running(self, name: str) -> bool:
         result = subprocess.run(
             ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            check=False,
             capture_output=True,
         )
         return result.returncode == 0 and result.stdout.strip() == b"true"
@@ -72,7 +74,9 @@ class LobbyContainerManager:
         """Block until `name` is fully gone (container removed, not just stopped)."""
         deadline = time.time() + _REMOVAL_TIMEOUT_S
         while time.time() < deadline:
-            result = subprocess.run(["docker", "inspect", name], capture_output=True)
+            result = subprocess.run(
+                ["docker", "inspect", name], check=False, capture_output=True
+            )
             if result.returncode != 0:
                 return
             time.sleep(_REMOVAL_POLL_INTERVAL_S)

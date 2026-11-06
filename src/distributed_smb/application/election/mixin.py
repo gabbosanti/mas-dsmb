@@ -5,6 +5,8 @@ import logging
 import threading
 import time
 
+from websockets.exceptions import WebSocketException
+
 from distributed_smb.application.election import FollowingHost, SelfElected
 from distributed_smb.network.transport.websocket import WsHandler, connect_with_retries
 from distributed_smb.shared.config import (
@@ -241,7 +243,13 @@ class ElectionMixin:
                     "election: lobby did not ack SESSION_RECREATE (session=%s) — rejoin disabled",
                     self.session_id,
                 )
-        except Exception as exc:
+        except (
+            ConnectionError,
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            WebSocketException,
+        ) as exc:
             LOGGER.warning(
                 "election: lobby registration failed (%s: %s) — rejoin disabled",
                 type(exc).__name__,

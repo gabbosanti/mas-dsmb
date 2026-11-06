@@ -9,7 +9,6 @@ class RosterValidationError(ValueError):
     """Raised when roster validation fails."""
 
 
-
 @dataclass(slots=True)
 class RosterEntry:
     """Represents a known participant in the session."""

@@ -74,7 +74,7 @@ def test_build_render_frame_maps_every_field():
     assert frame.power_ups["pu-a"].collected is True
     assert frame.gates["gate-a"].state == "open"
     assert frame.enemies["enemy-a"].x == 5.0
-    assert frame.enemies["enemy-a"].enemy_type is EnemyType.GOOMBA
+    assert frame.enemies["enemy-a"].enemy_type == EnemyType.GOOMBA.value
 
     assert frame.coins_collected == 3
     assert frame.coins_to_win == 5

@@ -31,7 +31,7 @@ class HttpGameEventBroker:
             try:
                 httpx.post(self._url, content=payload, timeout=1.0)
                 LOGGER.debug("HTTP POST ok → %s (%d bytes)", self._url, len(payload))
-            except Exception as exc:
+            except httpx.HTTPError as exc:
                 LOGGER.warning("HTTP POST failed → %s: %s", self._url, exc)
 
     def get_disconnected_player(self) -> str | None:

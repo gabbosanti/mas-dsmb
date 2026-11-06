@@ -10,8 +10,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from websockets.asyncio.client import connect as ws_connect
+from websockets.exceptions import WebSocketException
 
-from distributed_smb.network.serializer import Serializer, WsMessage
+from distributed_smb.network.serializer import (
+    DeserializationError,
+    Serializer,
+    WsMessage,
+)
 from distributed_smb.shared.config import LOBBY_WS_PATH, LOBBY_WS_URL_TEMPLATE
 
 LOGGER = logging.getLogger(__name__)
@@ -65,11 +70,11 @@ class WsHandler:
                     try:
                         msg = _serializer.decode_ws_message(json.loads(raw))
                         self.inbox.put(msg)
-                    except Exception as exc:
+                    except (DeserializationError, TypeError, ValueError) as exc:
                         LOGGER.debug(
                             "WsHandler: failed to decode %r: %s", raw[:120], exc
                         )
-        except Exception as exc:
+        except (OSError, TimeoutError, WebSocketException) as exc:
             LOGGER.warning("WsHandler: receive loop ended for %s: %s", self._url(), exc)
             self._connection_error = exc
             ready.set()

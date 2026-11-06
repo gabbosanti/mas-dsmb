@@ -2,7 +2,6 @@ class MessageValidationError(ValueError):
     """Raised when a message fails validation."""
 
 
-
 def validate_player_id(player_id: str) -> None:
     """Validate that player_id is non-empty string."""
     if not player_id or not isinstance(player_id, str):

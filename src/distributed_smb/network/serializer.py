@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import asdict, is_dataclass
-from typing import Any, Union
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -72,34 +72,33 @@ from distributed_smb.shared.messages.sync import InitialStateSync, WorldStateSna
 from distributed_smb.shared.roster import GlobalRoster, RosterEntry
 
 # Union type for all WebSocket coordination messages
-WsMessage = Union[
-    SessionCreate,
-    SessionCreated,
-    SessionJoin,
-    SessionJoined,
-    SessionRecreate,
-    SessionClosed,
-    SessionLeave,
-    SessionJoinRejected,
-    RosterUpdate,
-    GameStart,
-    InitialStateSync,
-    BlockDestroyedMessage,
-    PowerUpCollectedMessage,
-    GateStateChangedMessage,
-    PlayerLeft,
-    PlayerDeathMessage,
-    PlayerDisconnected,
-    LevelResetMessage,
-    NewHostClaim,
-    ElectionAck,
-    ReconnectionAck,
-]
+WsMessage = (
+    SessionCreate
+    | SessionCreated
+    | SessionJoin
+    | SessionJoined
+    | SessionRecreate
+    | SessionClosed
+    | SessionLeave
+    | SessionJoinRejected
+    | RosterUpdate
+    | GameStart
+    | InitialStateSync
+    | BlockDestroyedMessage
+    | PowerUpCollectedMessage
+    | GateStateChangedMessage
+    | PlayerLeft
+    | PlayerDeathMessage
+    | PlayerDisconnected
+    | LevelResetMessage
+    | NewHostClaim
+    | ElectionAck
+    | ReconnectionAck
+)
 
 
 class DeserializationError(ValueError):
     """Raised when deserialization fails."""
-
 
 
 class Serializer:

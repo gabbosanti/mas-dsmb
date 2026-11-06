@@ -102,23 +102,23 @@ def test_a_session_refuses_the_fifth_player():
         with (
             client.websocket_connect("/lobby") as c1,
             client.websocket_connect("/lobby") as c2,
+            client.websocket_connect("/lobby") as c3,
         ):
-            with client.websocket_connect("/lobby") as c3:
-                for index, ws in enumerate((c1, c2, c3), start=1):
-                    assert _join_session(
-                        ws, session_id, player_id=f"c{index}", port=50010 + index
-                    )
+            for index, ws in enumerate((c1, c2, c3), start=1):
+                assert _join_session(
+                    ws, session_id, player_id=f"c{index}", port=50010 + index
+                )
 
-                with client.websocket_connect("/lobby") as too_many:
-                    _send(
-                        too_many,
-                        "session_join",
-                        session_id=session_id,
-                        player_id="c4",
-                        ip="127.0.0.1",
-                        port=50020,
-                    )
-                    refusal = _next(too_many)
+            with client.websocket_connect("/lobby") as too_many:
+                _send(
+                    too_many,
+                    "session_join",
+                    session_id=session_id,
+                    player_id="c4",
+                    ip="127.0.0.1",
+                    port=50020,
+                )
+                refusal = _next(too_many)
 
     assert refusal["message_type"] == MessageType.SESSION_JOIN_REJECTED
     assert "4" in refusal["reason"]

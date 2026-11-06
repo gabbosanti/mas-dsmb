@@ -240,8 +240,8 @@ class LobbyManager:
         for ws in list(record.connections):
             try:
                 await ws.send_text(data)
-            except Exception:
-                pass
+            except (OSError, RuntimeError, WebSocketDisconnect) as exc:
+                LOGGER.debug("lobby: failed to send broadcast: %s", exc)
 
 
 lobby_manager = LobbyManager()
@@ -375,7 +375,14 @@ async def lobby_endpoint(ws: WebSocket) -> None:
     except WebSocketDisconnect:
         if session_id:
             lobby_manager.remove_connection(session_id, ws)
-    except Exception as exc:
+    except (
+        AttributeError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
         LOGGER.error(
             "lobby: unhandled exception in WebSocket handler: %s: %s",
             type(exc).__name__,
