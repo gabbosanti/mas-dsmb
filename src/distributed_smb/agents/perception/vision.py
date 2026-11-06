@@ -24,7 +24,7 @@ _EPSILON = 1e-9
 class VisualField:
     """What an observer sees at a given instant."""
 
-    players: tuple[PlayerPerception, ...] = ()
+    #players: tuple[PlayerPerception, ...] = ()
     obstacles: tuple[ObstacleObservation, ...] = ()
 
 
@@ -42,6 +42,18 @@ class Vision:
         if self.sight_distance < 0:
             raise ValueError("sight_distance must be non-negative")
 
+    def obstacle_ahead(
+        self,
+        position: Position,
+        direction: SightDirection | None,
+        obstacles: Iterable[ObstacleObservation],
+    ) -> bool :
+        obstacles = tuple(obstacles)
+        for index, obstacle in enumerate(obstacles) :
+            if self.can_see(position, direction, obstacle.center, obstacles, ignored_index=index)      
+                return True
+        return False
+
     def look(
         self,
         position: Position,
@@ -51,7 +63,7 @@ class Vision:
     ) -> VisualField:
         obstacles = tuple(obstacles)
         return VisualField(
-            players=self.visible_players(position, direction, players, obstacles),
+            #players=self.visible_players(position, direction, players, obstacles),
             obstacles=self.visible_obstacles(position, direction, obstacles),
         )
 
@@ -66,7 +78,7 @@ class Vision:
         return tuple(
             player
             for player in players
-            if self.can_see(position, direction, player.center, obstacles)
+                if self.can_see(position, direction, player.center, obstacles)
         )
 
     def visible_obstacles(
@@ -79,7 +91,7 @@ class Vision:
         return tuple(
             obstacle
             for index, obstacle in enumerate(obstacles)
-            if self.can_see(position, direction, obstacle.center, obstacles, ignored_index=index)
+                if self.can_see(position, direction, obstacle.center, obstacles, ignored_index=index)
         )
 
     def can_see(
@@ -91,11 +103,12 @@ class Vision:
         *,
         ignored_index: int | None = None,
     ) -> bool:
-        """True if ``target`` is ahead, within range and not occluded."""
+        #True if target is ahead within range (is_in_range) and not occluded (has_clear_line)
         return self.is_in_range(position, direction, target) and has_clear_line(
             position, target, obstacles, ignored_index=ignored_index
         )
 
+    
     def is_in_range(
         self, position: Position, direction: SightDirection | None, target: Position
     ) -> bool:
@@ -107,10 +120,11 @@ class Vision:
         return hypot(delta_x, target.y - position.y) <= self.sight_distance
 
 
+#Not used in Milestone 1
 def nearest_player(
     position: Position, players: Iterable[PlayerPerception]
 ) -> PlayerPerception | None:
-    """Closest player to ``position``; ties are broken by player id."""
+    #Return the closest player to position ; ties are broken by player id.
     return min(
         players,
         key=lambda player: (
@@ -128,7 +142,7 @@ def has_clear_line(
     *,
     ignored_index: int | None = None,
 ) -> bool:
-    """True if the segment start→end crosses no obstacle's interior."""
+    # True if the segment start→end crosses no obstacle's interior.
     for index, obstacle in enumerate(obstacles):
         if index == ignored_index:
             continue
@@ -155,7 +169,7 @@ def _segment_rectangle_intersection(
     right: float,
     bottom: float,
 ) -> tuple[float, float] | None:
-    """Return the segment parameters inside an axis-aligned rectangle."""
+    ##Return the segment parameters inside an axis-aligned rectangle.
     delta_x = end.x - start.x
     delta_y = end.y - start.y
     entry, exit = 0.0, 1.0

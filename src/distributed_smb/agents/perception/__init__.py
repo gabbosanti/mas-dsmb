@@ -1,6 +1,6 @@
 """Reusable agent-side interpretation of raw perceptions."""
 
-from distributed_smb.agents.perception.terrain import (
+from distributed_smb.agents.perception.ground_sensor import (
     DEFAULT_GROUND_TOLERANCE,
     DEFAULT_LOOKAHEAD,
     GroundSensor,
