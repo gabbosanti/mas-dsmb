@@ -1,8 +1,8 @@
 """Agent-side sight: decide what an observer sees in a raw world snapshot.
 
 This module has no game-engine dependency and works for any observer that
-has an eye position and, optionally, a facing direction, so Goombas,
-Koopas and autonomous players can all share it.
+has a position (the point it looks from) and, optionally, a direction, so
+Goombas, Koopas and autonomous players can all share it.
 """
 
 from collections.abc import Iterable
@@ -30,8 +30,10 @@ class VisualField:
 
 @dataclass(frozen=True, slots=True)
 class Vision:
-    """Field of view limited by distance, facing direction and occlusion.
-    ``facing=None`` means the observer looks in every direction.
+    """Field of view limited by distance, direction and occlusion.
+
+    ``position`` is the point the observer looks from (usually its center);
+    ``direction=None`` means the observer looks in every direction.
     """
 
     sight_distance: float = DEFAULT_SIGHT_DISTANCE
@@ -42,21 +44,21 @@ class Vision:
 
     def look(
         self,
-        eye: Position,
-        facing: SightDirection | None,
+        position: Position,
+        direction: SightDirection | None,
         players: Iterable[PlayerPerception],
         obstacles: Iterable[ObstacleObservation],
     ) -> VisualField:
         obstacles = tuple(obstacles)
         return VisualField(
-            players=self.visible_players(eye, facing, players, obstacles),
-            obstacles=self.visible_obstacles(eye, facing, obstacles),
+            players=self.visible_players(position, direction, players, obstacles),
+            obstacles=self.visible_obstacles(position, direction, obstacles),
         )
 
     def visible_players(
         self,
-        eye: Position,
-        facing: SightDirection | None,
+        position: Position,
+        direction: SightDirection | None,
         players: Iterable[PlayerPerception],
         obstacles: Iterable[ObstacleObservation],
     ) -> tuple[PlayerPerception, ...]:
@@ -64,55 +66,55 @@ class Vision:
         return tuple(
             player
             for player in players
-            if self.can_see(eye, facing, player.center, obstacles)
+            if self.can_see(position, direction, player.center, obstacles)
         )
 
     def visible_obstacles(
         self,
-        eye: Position,
-        facing: SightDirection | None,
+        position: Position,
+        direction: SightDirection | None,
         obstacles: Iterable[ObstacleObservation],
     ) -> tuple[ObstacleObservation, ...]:
         obstacles = tuple(obstacles)
         return tuple(
             obstacle
             for index, obstacle in enumerate(obstacles)
-            if self.can_see(eye, facing, obstacle.center, obstacles, ignored_index=index)
+            if self.can_see(position, direction, obstacle.center, obstacles, ignored_index=index)
         )
 
     def can_see(
         self,
-        eye: Position,
-        facing: SightDirection | None,
+        position: Position,
+        direction: SightDirection | None,
         target: Position,
         obstacles: tuple[ObstacleObservation, ...],
         *,
         ignored_index: int | None = None,
     ) -> bool:
         """True if ``target`` is ahead, within range and not occluded."""
-        return self.is_in_range(eye, facing, target) and has_clear_line(
-            eye, target, obstacles, ignored_index=ignored_index
+        return self.is_in_range(position, direction, target) and has_clear_line(
+            position, target, obstacles, ignored_index=ignored_index
         )
 
     def is_in_range(
-        self, eye: Position, facing: SightDirection | None, target: Position
+        self, position: Position, direction: SightDirection | None, target: Position
     ) -> bool:
-        delta_x = target.x - eye.x
-        if facing is SightDirection.LEFT and delta_x > 0:
+        delta_x = target.x - position.x
+        if direction is SightDirection.LEFT and delta_x > 0:
             return False
-        if facing is SightDirection.RIGHT and delta_x < 0:
+        if direction is SightDirection.RIGHT and delta_x < 0:
             return False
-        return hypot(delta_x, target.y - eye.y) <= self.sight_distance
+        return hypot(delta_x, target.y - position.y) <= self.sight_distance
 
 
 def nearest_player(
-    eye: Position, players: Iterable[PlayerPerception]
+    position: Position, players: Iterable[PlayerPerception]
 ) -> PlayerPerception | None:
-    """Closest player to ``eye``; ties are broken by player id."""
+    """Closest player to ``position``; ties are broken by player id."""
     return min(
         players,
         key=lambda player: (
-            hypot(player.center.x - eye.x, player.center.y - eye.y),
+            hypot(player.center.x - position.x, player.center.y - position.y),
             player.player_id,
         ),
         default=None,

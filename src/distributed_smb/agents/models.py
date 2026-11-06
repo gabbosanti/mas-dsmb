@@ -11,11 +11,6 @@ class Position:
     y: float
 
 
-class ObstacleKind(str, Enum):
-    PLATFORM = "platform"
-    BLOCK = "block"
-
-
 class SightDirection(str, Enum):
     LEFT = "left"
     RIGHT = "right"
@@ -23,7 +18,8 @@ class SightDirection(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class ObstacleObservation:
-    kind: ObstacleKind
+    """A solid rectangle: it blocks sight and can be walked on."""
+
     x: float
     y: float
     width: float

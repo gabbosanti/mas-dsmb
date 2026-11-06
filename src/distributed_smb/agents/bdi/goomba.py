@@ -6,7 +6,7 @@ from spade.behaviour import CyclicBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import EnemyAction, GoombaPerceptionMessage, ActionResult
-from distributed_smb.agents.perception import Vision
+from distributed_smb.agents.perception import GroundSensor, Vision
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
@@ -14,6 +14,7 @@ class GoombaAgent(BDIAgent):
     # Injected by SpadeRuntime after construction to avoid a module import cycle.
     spade_runtime: "SpadeRuntime"
     vision = Vision()
+    ground_sensor = GroundSensor()
 
     class PatrolBehaviour(CyclicBehaviour):
         async def on_start(self):
@@ -50,9 +51,21 @@ class GoombaAgent(BDIAgent):
             for obstacle in view.obstacles:
                 print(f"[Agent] Visible obstacle: {obstacle}")
 
+            void_ahead = agent.ground_sensor.is_void_ahead(
+                goombaPerception.position,
+                goombaPerception.width,
+                goombaPerception.height,
+                goombaPerception.direction,
+                goombaPerception.obstacles,
+            )
+
             action: EnemyAction
 
-            if goombaPerception.obstacle_ahead: 
+            if void_ahead:
+                agent.bdi.set_belief("void_ahead")
+                action = EnemyAction.TURN_AROUND
+
+            elif goombaPerception.obstacle_ahead:
                 agent.bdi.set_belief("obstacle_ahead") 
                 action = EnemyAction.TURN_AROUND
 
@@ -91,6 +104,7 @@ class GoombaAgent(BDIAgent):
         def turn_around(agent, term, intention):
             
             self.bdi.remove_belief("obstacle_ahead")
+            self.bdi.remove_belief("void_ahead")
             
             if(self.bdi.get_belief("direction") == "right"):
                 self.bdi.set_belief("direction", "left")

@@ -8,7 +8,6 @@ from distributed_smb.agents.models import (
     EnemyAction,
     GoombaPerception,
     GoombaPerceptionMessage,
-    ObstacleKind,
     SightDirection,
 )
 from distributed_smb.application.agent_integration import (
@@ -58,11 +57,8 @@ def test_observation_is_an_immutable_raw_snapshot_without_sight_filtering():
         "player-a",
         "player-b",
     ]
-    assert [(obstacle.kind, obstacle.x) for obstacle in observation.obstacles] == [
-        (ObstacleKind.PLATFORM, 150),
-        (ObstacleKind.PLATFORM, 5000),
-        (ObstacleKind.BLOCK, 180),
-    ]
+    # Platforms and intact blocks alike; the destroyed block is gone.
+    assert [obstacle.x for obstacle in observation.obstacles] == [150, 5000, 180]
     with pytest.raises(FrozenInstanceError):
         observation.position.x = 0
 

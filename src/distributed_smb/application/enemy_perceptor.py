@@ -9,7 +9,6 @@ from dataclasses import dataclass
 
 from distributed_smb.agents.models import (
     GoombaPerception,
-    ObstacleKind,
     ObstacleObservation,
     PlayerPerception,
     Position,
@@ -60,24 +59,22 @@ class EnemyPerceptor:
         )
 
     def _perceive_obstacles(self) -> tuple[ObstacleObservation, ...]:
-        """Every solid obstacle in the world: platforms and intact blocks."""
+        """Every solid rectangle in the world: platforms and intact blocks.
+
+        To an agent they are the same thing: something that blocks sight and
+        can be walked on.
+        """
+        solids = [
+            *self.engine.platforms,
+            *(
+                block
+                for block in self.engine.world_state.environment.destructible_blocks
+                if not block.destroyed
+            ),
+        ]
         return tuple(
             ObstacleObservation(
-                kind=ObstacleKind.PLATFORM,
-                x=platform.x,
-                y=platform.y,
-                width=platform.width,
-                height=platform.height,
+                x=solid.x, y=solid.y, width=solid.width, height=solid.height
             )
-            for platform in self.engine.platforms
-        ) + tuple(
-            ObstacleObservation(
-                kind=ObstacleKind.BLOCK,
-                x=block.x,
-                y=block.y,
-                width=block.width,
-                height=block.height,
-            )
-            for block in self.engine.world_state.environment.destructible_blocks
-            if not block.destroyed
+            for solid in solids
         )
