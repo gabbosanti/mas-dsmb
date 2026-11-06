@@ -4,17 +4,13 @@ import pytest
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
-    ActionRequest,
-    ActionStatus,
+    ActionResult,
     EnemyAction,
-    EnemyObservation,
     GoombaPerception,
     GoombaPerceptionMessage,
-    MovementCommand,
     ObstacleKind,
     SightDirection,
 )
-from distributed_smb.agents.controller import PursuitController
 from distributed_smb.application.agent_integration import (
     AgentGameIntegration,
     EnemyNotFoundError,
@@ -24,14 +20,16 @@ from distributed_smb.domain.entity import DestructibleBlock, Platform
 from distributed_smb.domain.game_engine import GameEngine
 
 
-class FixedActionController:
-    def __init__(self, action: EnemyAction) -> None:
-        self.action = action
-        self.observation: EnemyObservation | None = None
+def spade_integration(engine: GameEngine, *enemy_ids: str) -> AgentGameIntegration:
+    integration = AgentGameIntegration(engine, enabled=True)
+    for enemy_id in enemy_ids:
+        integration.control_enemy_with_spade(enemy_id)
+    return integration
 
-    def decide(self, observation: EnemyObservation) -> ActionRequest:
-        self.observation = observation
-        return ActionRequest(observation.enemy_id, self.action)
+
+def send(integration: AgentGameIntegration, enemy_id: str, action: object) -> None:
+    """Act as the SPADE thread: put an agent decision on the GOOMBA action queue."""
+    integration.bridge.submit_action(AgentType.GOOMBA, ActionResult(enemy_id, action))
 
 
 def test_observation_is_immutable_and_contains_only_nearby_world_facts():
@@ -108,7 +106,7 @@ def test_observation_rejects_an_unknown_enemy():
         integration.observe("missing-enemy")
 
 
-def test_agent_control_is_selective_and_other_enemies_keep_patrolling():
+def test_spade_action_moves_only_the_selected_enemy():
     engine = GameEngine()
     controlled = engine.world_state.environment.enemies["enemy-1"]
     uncontrolled = engine.world_state.environment.enemies["enemy-2"]
@@ -116,98 +114,112 @@ def test_agent_control_is_selective_and_other_enemies_keep_patrolling():
     uncontrolled.x = 1120
     initial_uncontrolled_x = uncontrolled.x
     initial_uncontrolled_vx = uncontrolled.vx
+    integration = spade_integration(engine, "enemy-1")
 
-    integration = AgentGameIntegration(engine, enabled=True)
-    controller = FixedActionController(EnemyAction.MOVE_LEFT)
-    integration.control_enemy("enemy-1", controller)
-    results = integration.tick(0.1, {})
+    send(integration, "enemy-1", EnemyAction.MOVE_LEFT)
+    integration.tick(0.1, {})
 
-    assert isinstance(controller.observation, GoombaPerception)
-    assert controller.observation.goomba_id == "enemy-1"
     assert controlled.x == pytest.approx(515)
     assert uncontrolled.x == pytest.approx(
         initial_uncontrolled_x + initial_uncontrolled_vx * 0.1
     )
-    assert results["enemy-1"].status is ActionStatus.APPLIED
-    assert results["enemy-1"].engine_command is MovementCommand.MOVE_LEFT
-    assert results["enemy-1"].position_after.x == pytest.approx(controlled.x)
 
 
-def test_fixed_action_controls_selected_enemy_without_a_controller():
+def test_a_move_persists_until_the_agent_decides_otherwise():
     engine = GameEngine()
     enemy = engine.world_state.environment.enemies["enemy-1"]
     enemy.x = 520
-    integration = AgentGameIntegration(engine, enabled=True)
-    integration.control_enemy("enemy-1", EnemyAction.MOVE_LEFT)
+    integration = spade_integration(engine, "enemy-1")
 
-    results = integration.tick(0.1, {})
+    send(integration, "enemy-1", EnemyAction.MOVE_LEFT)
+    integration.tick(0.1, {})
+    integration.tick(0.1, {})  # no new action: the engine keeps the velocity
 
+    assert enemy.x == pytest.approx(510)
+
+
+def test_turn_around_reverses_the_current_heading():
+    engine = GameEngine()
+    enemy = engine.world_state.environment.enemies["enemy-1"]
+    enemy.x, enemy.vx = 520, 50
+    integration = spade_integration(engine, "enemy-1")
+
+    send(integration, "enemy-1", EnemyAction.TURN_AROUND)
+    integration.tick(0.1, {})
     assert enemy.x == pytest.approx(515)
-    assert results["enemy-1"].status is ActionStatus.APPLIED
-    assert results["enemy-1"].requested_action is EnemyAction.MOVE_LEFT
+
+    send(integration, "enemy-1", EnemyAction.TURN_AROUND)
+    integration.tick(0.1, {})
+    assert enemy.x == pytest.approx(520)
 
 
-def test_unsupported_jump_stops_only_the_selected_enemy_for_one_tick():
+def test_stop_holds_the_enemy_until_a_new_action_arrives():
+    engine = GameEngine()
+    enemy = engine.world_state.environment.enemies["enemy-1"]
+    enemy.x = 520
+    integration = spade_integration(engine, "enemy-1")
+
+    send(integration, "enemy-1", EnemyAction.STOP)
+    integration.tick(0.1, {})
+    integration.tick(0.1, {})
+    assert enemy.x == 520
+
+    send(integration, "enemy-1", EnemyAction.MOVE_RIGHT)
+    integration.tick(0.1, {})
+    assert enemy.x == pytest.approx(525)
+
+
+def test_invalid_agent_messages_never_reach_the_engine():
     engine = GameEngine()
     controlled = engine.world_state.environment.enemies["enemy-1"]
     uncontrolled = engine.world_state.environment.enemies["enemy-2"]
-    controlled.x = 520
-    uncontrolled.x = 1120
+    controlled.x, controlled.vx = 520, 50
     initial_uncontrolled_x = uncontrolled.x
     initial_uncontrolled_vx = uncontrolled.vx
+    integration = spade_integration(engine, "enemy-1")
 
-    integration = AgentGameIntegration(engine, enabled=True)
-    integration.control_enemy("enemy-1", FixedActionController(EnemyAction.JUMP))
-    results = integration.tick(0.1, {})
+    integration.bridge.submit_action(AgentType.GOOMBA, "not an ActionResult")
+    send(integration, "enemy-1", EnemyAction.JUMP)  # unsupported by the engine
+    send(integration, "enemy-2", EnemyAction.STOP)  # not handed to SPADE
+    send(integration, "missing-enemy", EnemyAction.STOP)
+    integration.tick(0.1, {})
 
-    assert controlled.x == 520
-    assert controlled.vx != 0
+    assert controlled.x == pytest.approx(525)
     assert uncontrolled.x == pytest.approx(
         initial_uncontrolled_x + initial_uncontrolled_vx * 0.1
     )
-    assert results["enemy-1"].status is ActionStatus.UNSUPPORTED
-    assert results["enemy-1"].engine_command is MovementCommand.STOP
-
-    integration.control_enemy("enemy-1", FixedActionController(EnemyAction.MOVE_RIGHT))
-    integration.tick(0.1, {})
-    assert controlled.x == pytest.approx(525)
-    integration.release_enemy("enemy-1")
-    integration.enabled = False
-    integration.tick(0.1, {})
-    assert controlled.x == pytest.approx(530)
+    assert integration.bridge.poll_action(AgentType.GOOMBA) is None
 
 
-def test_pursuit_controller_uses_observation_and_produces_stop_without_a_target():
+def test_disabled_integration_discards_agent_traffic_and_patrols():
     engine = GameEngine()
     enemy = engine.world_state.environment.enemies["enemy-1"]
-    enemy.x, enemy.y = 520, 800
-    engine.spawn_player("player1", x=600, y=800)
-    integration = AgentGameIntegration(engine)
-    observation = integration.observe("enemy-1")
+    enemy.x, enemy.vx = 520, 50
+    integration = spade_integration(engine, "enemy-1")
+    integration.enabled = False
 
-    request = PursuitController().decide(observation)
-    assert request == ActionRequest("enemy-1", EnemyAction.MOVE_RIGHT)
+    send(integration, "enemy-1", EnemyAction.STOP)
+    integration.bridge.publish(AgentType.GOOMBA, "stale perception")
+    integration.tick(0.1, {})
 
-    engine.world_state.characters.clear()
-    no_target = PursuitController().decide(integration.observe("enemy-1"))
-    assert no_target == ActionRequest("enemy-1", EnemyAction.STOP)
+    assert enemy.x == pytest.approx(525)
+    assert integration.bridge.poll_action(AgentType.GOOMBA) is None
+    assert integration.bridge.poll_perception(AgentType.GOOMBA) is None
 
 
-def test_action_requests_cannot_take_over_an_unselected_enemy():
+def test_released_enemy_ignores_its_agent_and_resumes_patrolling():
     engine = GameEngine()
-    enemy = engine.world_state.environment.enemies["enemy-2"]
-    initial_x = enemy.x
-    initial_vx = enemy.vx
-    integration = AgentGameIntegration(engine, enabled=True)
+    enemy = engine.world_state.environment.enemies["enemy-1"]
+    enemy.x, enemy.vx = 520, 50
+    integration = spade_integration(engine, "enemy-1")
 
-    results = integration.tick(
-        0.1,
-        {},
-        {"enemy-2": ActionRequest("enemy-2", EnemyAction.STOP)},
-    )
+    send(integration, "enemy-1", EnemyAction.STOP)
+    integration.tick(0.1, {})
+    integration.release_enemy("enemy-1")
+    send(integration, "enemy-1", EnemyAction.STOP)
+    integration.tick(0.1, {})
 
-    assert results["enemy-2"].status is ActionStatus.INVALID_TARGET
-    assert enemy.x == pytest.approx(initial_x + initial_vx * 0.1)
+    assert enemy.x == pytest.approx(525)
 
 
 def test_spade_bridge_publishes_only_at_configured_tick_cadence():
@@ -226,46 +238,6 @@ def test_spade_bridge_publishes_only_at_configured_tick_cadence():
     assert isinstance(message, GoombaPerceptionMessage)
     assert message.simulation_sequence == 5
     assert message.perception.goomba_id == "enemy-1"
-
-
-def test_spade_actions_are_applied_nonblocking_then_stopped_when_stale():
-    engine = GameEngine()
-    enemy = engine.world_state.environment.enemies["enemy-1"]
-    enemy.x, enemy.y = 500, 300
-    enemy.left_bound, enemy.right_bound = 0, 1000
-    integration = AgentGameIntegration(
-        engine,
-        enabled=True,
-        perception_interval_ticks=1,
-        action_max_age_ticks=1,
-    )
-    integration.control_enemy_with_spade("enemy-1")
-
-    integration.tick(1 / 60, {})
-    first_perception = integration.bridge.poll_perception(AgentType.GOOMBA)
-    assert first_perception is not None
-    integration.bridge.submit_action(
-        AgentType.GOOMBA,
-        ActionRequest(
-            "enemy-1",
-            EnemyAction.MOVE_RIGHT,
-            observation_sequence=first_perception.simulation_sequence,
-        )
-    )
-
-    integration.tick(1 / 60, {})
-    moved_x = enemy.x
-    assert moved_x > 500
-    integration.bridge.poll_perception(AgentType.GOOMBA)
-
-    integration.tick(1 / 60, {})
-    assert enemy.x > moved_x
-    integration.bridge.poll_perception(AgentType.GOOMBA)
-
-    integration.tick(1 / 60, {})
-    assert enemy.x == pytest.approx(moved_x + enemy.movement_speed / 60)
-    assert integration.last_results["enemy-1"].requested_action is EnemyAction.STOP
-    integration.bridge.poll_perception(AgentType.GOOMBA)
 
 
 def test_spade_bridge_drops_oldest_messages_when_a_queue_is_full():

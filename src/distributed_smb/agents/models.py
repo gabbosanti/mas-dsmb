@@ -107,35 +107,9 @@ class EnemyAction(str, Enum):
     JUMP = "JUMP"
 
 
-class MovementCommand(str, Enum):
-    """The horizontal commands currently accepted by the game engine."""
-
-    MOVE_LEFT = "MOVE_LEFT"
-    MOVE_RIGHT = "MOVE_RIGHT"
-    STOP = "STOP"
-
-
-@dataclass(frozen=True, slots=True)
-class ActionRequest:
-    enemy_id: str
-    action: EnemyAction
-    observation_sequence: int | None = None
-
-
-class ActionStatus(str, Enum):
-    APPLIED = "applied"
-    UNSUPPORTED = "unsupported"
-    INVALID_ACTION = "invalid_action"
-    INVALID_TARGET = "invalid_target"
-    DISABLED = "disabled"
-
-
 @dataclass(frozen=True, slots=True)
 class ActionResult:
+    """Outcome of an agent's deliberation, put on the action queue by SPADE."""
+
     enemy_id: str
-    # requested_action: EnemyAction | None 
-    status: ActionStatus
-    engine_command: MovementCommand | None = None
-    position_before: Position | None = None
-    position_after: Position | None = None
-    message: str = ""
+    action: EnemyAction

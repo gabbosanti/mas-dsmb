@@ -1,25 +1,30 @@
-"""Application adapters between agent contracts and the game simulation."""
+"""Game-side actuator/sensor for SPADE-controlled enemies.
+
+All deliberation happens in the SPADE thread. On every simulation tick this
+adapter only:
+
+1. drains the ``ActionResult`` messages produced by the agents and translates
+   them into engine movement commands;
+2. advances the engine;
+3. periodically publishes fresh perceptions for the agents.
+"""
 
 import logging
 from dataclasses import dataclass, field
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.controller import EnemyController
 from distributed_smb.agents.models import (
-    ActionRequest,
     ActionResult,
-    ActionStatus,
     EnemyAction,
     GoombaPerception,
     GoombaPerceptionMessage,
-    MovementCommand,
-    Position,
 )
 from distributed_smb.application.enemy_perceptor import (
     EnemyNotFoundError,
     EnemyPerceptor,
 )
 from distributed_smb.application.spade_agent_bridge import SpadeAgentBridge
+from distributed_smb.domain.entity import Enemy
 from distributed_smb.domain.game_engine import EnemyMovementCommand, GameEngine
 from distributed_smb.shared.input import InputState
 
@@ -34,259 +39,135 @@ __all__ = [
 
 @dataclass(slots=True)
 class AgentGameIntegration:
-    """Selectively runs agent controllers in the authoritative simulation tick.
+    """Connect selected enemies to their SPADE agents without ever blocking.
 
-    Each decision is consumed by exactly one engine tick. Disabled or
-    unselected enemies continue using the engine's original patrol behavior.
+    Enemies not handed to SPADE (or every enemy, while ``enabled`` is False)
+    keep the engine's original patrol behaviour.
     """
 
     engine: GameEngine
     enabled: bool = False
     perception_interval_ticks: int = 5
-    action_max_age_ticks: int | None = None
-    controllers: dict[str, EnemyController | EnemyAction] = field(default_factory=dict)
-    spade_controlled_enemy_ids: set[str] = field(default_factory=set)
     bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
-    last_results: dict[str, ActionResult] = field(default_factory=dict, init=False)
+    spade_controlled_enemy_ids: set[str] = field(default_factory=set)
     perceptor: EnemyPerceptor = field(init=False)
-    _latest_spade_actions: dict[str, ActionRequest] = field(
-        default_factory=dict, init=False, repr=False
-    )
+    # The engine honours STOP for a single tick only, so a STOP chosen by an
+    # agent is re-sent every tick until that agent picks another action.
+    _stopped_enemy_ids: set[str] = field(default_factory=set, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.perception_interval_ticks < 1:
             raise ValueError("perception_interval_ticks must be at least one")
-        if self.action_max_age_ticks is None:
-            self.action_max_age_ticks = 2 * self.perception_interval_ticks
-        elif self.action_max_age_ticks < 0:
-            raise ValueError("action_max_age_ticks must be non-negative")
         self.perceptor = EnemyPerceptor(self.engine)
-
-    @property
-    def _max_action_age_ticks(self) -> int:
-        if self.action_max_age_ticks is not None:
-            return self.action_max_age_ticks
-        return 2 * self.perception_interval_ticks
-
-    def control_enemy(
-        self, enemy_id: str, controller: EnemyController | EnemyAction
-    ) -> None:
-        if enemy_id not in self.engine.world_state.environment.enemies:
-            raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
-        self.spade_controlled_enemy_ids.discard(enemy_id)
-        self.controllers[enemy_id] = controller
 
     def control_enemy_with_spade(self, enemy_id: str) -> None:
         if enemy_id not in self.engine.world_state.environment.enemies:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
-        if enemy_id in self.controllers:
-            raise ValueError(f"Enemy {enemy_id!r} already has a synchronous controller")
         self.spade_controlled_enemy_ids.add(enemy_id)
 
     def release_enemy(self, enemy_id: str) -> None:
-        self.controllers.pop(enemy_id, None)
         self.spade_controlled_enemy_ids.discard(enemy_id)
-        self._latest_spade_actions.pop(enemy_id, None)
+        self._stopped_enemy_ids.discard(enemy_id)
 
     def observe(self, enemy_id: str) -> GoombaPerception:
         return self.perceptor.observe(enemy_id)
 
-    def tick(
-        self,
-        dt: float,
-        player_inputs: dict[str, InputState],
-        action_requests: dict[str, ActionRequest] | None = None,
-    ) -> dict[str, ActionResult]:
+    def tick(self, dt: float, player_inputs: dict[str, InputState]) -> None:
         """Run one simulation tick without waiting for SPADE."""
-        requests = action_requests or {}
-        if any(not isinstance(request, ActionRequest) for request in requests.values()):
-            raise TypeError("action_requests values must be ActionRequest instances")
         if not self.enabled:
-            self._latest_spade_actions.clear()
+            self._stopped_enemy_ids.clear()
             self.bridge.discard_actions()
             self.bridge.discard_perceptions()
             self.engine.tick(dt, player_inputs)
-            self.last_results = {
-                enemy_id: ActionResult(
-                    enemy_id=enemy_id,
-                    requested_action=request.action,
-                    status=ActionStatus.DISABLED,
-                    message="Agent control is disabled",
-                )
-                for enemy_id, request in requests.items()
-            }
-            return self.last_results
+            return
 
-        current_sequence = self.engine.world_state.sequence_number
-        self._drain_spade_actions(current_sequence)
-        directions: dict[str, EnemyMovementCommand] = {}
-        pending_results: dict[str, ActionResult] = {}
-        positions_before: dict[str, Position] = {}
+        # 1. Act: drain the agents' decisions and turn them into engine commands.
+        enemy_commands = self._drain_agent_actions()
 
-        controlled_ids = self.controllers.keys() | self.spade_controlled_enemy_ids
-        for enemy_id in controlled_ids:
-            enemy = self.engine.world_state.environment.enemies.get(enemy_id)
-            request = requests.get(enemy_id)
-            if enemy is None:
-                pending_results[enemy_id] = ActionResult(
-                    enemy_id=enemy_id,
-                    requested_action=request.action if request is not None else None,
-                    status=ActionStatus.INVALID_TARGET,
-                    message=f"Enemy {enemy_id!r} does not exist",
-                )
-                continue
+        # 2. Advance the authoritative simulation.
+        self.engine.tick(dt, player_inputs, enemy_commands=enemy_commands)
 
-            positions_before[enemy_id] = Position(enemy.x, enemy.y)
-            if request is None:
-                controller = self.controllers.get(enemy_id)
-                if isinstance(controller, EnemyAction):
-                    request = ActionRequest(enemy_id, controller)
-                elif controller is not None:
-                    request = controller.decide(self.observe(enemy_id))
-                else:
-                    request = self._spade_action_for(enemy_id, current_sequence)
-            if not isinstance(request, ActionRequest):
-                raise TypeError("Enemy controllers must return an ActionRequest")
-            if request.enemy_id != enemy_id:
-                pending_results[enemy_id] = ActionResult(
-                    enemy_id=enemy_id,
-                    requested_action=request.action,
-                    status=ActionStatus.INVALID_TARGET,
-                    engine_command=MovementCommand.STOP,
-                    position_before=positions_before[enemy_id],
-                    message="An agent may only control its selected enemy",
-                )
-                directions[enemy_id] = EnemyMovementCommand.STOP
-                continue
-
-            command, status, message = self._translate_action(request.action)
-            directions[enemy_id] = self._engine_command(command)
-            pending_results[enemy_id] = ActionResult(
-                enemy_id=enemy_id,
-                requested_action=(
-                    request.action if isinstance(request.action, EnemyAction) else None
-                ),
-                status=status,
-                engine_command=command,
-                position_before=positions_before[enemy_id],
-                message=message,
-            )
-
-        for enemy_id, request in requests.items():
-            if enemy_id in controlled_ids:
-                continue
-            pending_results[enemy_id] = ActionResult(
-                enemy_id=enemy_id,
-                requested_action=request.action,
-                status=ActionStatus.INVALID_TARGET,
-                message=f"Enemy {enemy_id!r} is not selected for agent control",
-            )
-
-        if directions:
-            self.engine.tick(dt, player_inputs, enemy_commands=directions)
-        else:
-            self.engine.tick(dt, player_inputs)
-
+        # 3. Sense: observe the new world state and hand it to the agents.
         sequence = self.engine.world_state.sequence_number
-        if sequence % self.perception_interval_ticks == 0:
-            self._publish_perceptions(sequence)
-
-        self.last_results = {
-            enemy_id: ActionResult(
-                enemy_id=result.enemy_id,
-                requested_action=result.requested_action,
-                status=result.status,
-                engine_command=result.engine_command,
-                position_before=result.position_before,
-                position_after=self._position_of(enemy_id),
-                message=result.message,
-            )
-            for enemy_id, result in pending_results.items()
-        }
-        return self.last_results
-
-    def _publish_perceptions(self, sequence: int) -> None:
-        for enemy_id in sorted(self.spade_controlled_enemy_ids):
-            if enemy_id not in self.engine.world_state.environment.enemies:
-                continue
+        if sequence % self.perception_interval_ticks != 0:
+            return
+        for enemy_id in self._live_spade_enemy_ids():
+            perception = self.observe(enemy_id)
             self.bridge.publish(
                 AgentType.GOOMBA,
                 GoombaPerceptionMessage(
                     simulation_sequence=sequence,
-                    perception=self.observe(enemy_id),
+                    perception=perception,
                 ),
             )
 
-    def _drain_spade_actions(self, current_sequence: int) -> None:
-        while (request := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
-            if not isinstance(request, ActionRequest):
+    def _live_spade_enemy_ids(self) -> list[str]:
+        """SPADE-controlled enemies still present in the world, in stable order."""
+        enemies = self.engine.world_state.environment.enemies
+        return sorted(
+            enemy_id for enemy_id in self.spade_controlled_enemy_ids if enemy_id in enemies
+        )
+
+    def _drain_agent_actions(self) -> dict[str, EnemyMovementCommand]:
+        """Pop every queued ActionResult and translate it into an engine command."""
+        enemies = self.engine.world_state.environment.enemies
+        self._stopped_enemy_ids &= enemies.keys()
+        commands = {
+            enemy_id: EnemyMovementCommand.STOP for enemy_id in self._stopped_enemy_ids
+        }
+
+        while (result := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
+            if not isinstance(result, ActionResult):
                 # Never let a malformed agent message crash the game thread.
                 LOGGER.warning(
-                    "Discarding GOOMBA action of type %s: expected ActionRequest",
-                    type(request).__name__,
+                    "Discarding GOOMBA action of type %s: expected ActionResult",
+                    type(result).__name__,
                 )
                 continue
 
-            observation_sequence = request.observation_sequence
-            if (
-                request.enemy_id not in self.spade_controlled_enemy_ids
-                or not isinstance(observation_sequence, int)
-                or isinstance(observation_sequence, bool)
-                or observation_sequence > current_sequence
-                or current_sequence - observation_sequence > self._max_action_age_ticks
-            ):
+            enemy = enemies.get(result.enemy_id)
+            if enemy is None or result.enemy_id not in self.spade_controlled_enemy_ids:
+                LOGGER.debug("Discarding action for uncontrolled enemy %r", result.enemy_id)
                 continue
 
-            previous = self._latest_spade_actions.get(request.enemy_id)
-            if (
-                previous is None
-                or previous.observation_sequence is None
-                or observation_sequence >= previous.observation_sequence
-            ):
-                self._latest_spade_actions[request.enemy_id] = request
+            command = self._to_engine_command(enemy, result.action, commands.get(enemy.enemy_id))
+            if command is None:
+                LOGGER.warning(
+                    "Enemy %r cannot perform %s", result.enemy_id, result.action
+                )
+                continue
 
-    def _spade_action_for(self, enemy_id: str, current_sequence: int) -> ActionRequest:
-        request = self._latest_spade_actions.get(enemy_id)
-        if (
-            request is None
-            or request.observation_sequence is None
-            or current_sequence - request.observation_sequence
-            > self._max_action_age_ticks
-        ):
-            self._latest_spade_actions.pop(enemy_id, None)
-            return ActionRequest(enemy_id=enemy_id, action=EnemyAction.STOP)
-        return request
+            commands[result.enemy_id] = command
+            if command is EnemyMovementCommand.STOP:
+                self._stopped_enemy_ids.add(result.enemy_id)
+            else:
+                self._stopped_enemy_ids.discard(result.enemy_id)
+
+        return commands
 
     @staticmethod
-    def _translate_action(
+    def _to_engine_command(
+        enemy: Enemy,
         action: EnemyAction,
-    ) -> tuple[MovementCommand, ActionStatus, str]:
+        pending: EnemyMovementCommand | None,
+    ) -> EnemyMovementCommand | None:
+        """Map an agent action onto what the engine can execute, if anything."""
         if action is EnemyAction.MOVE_LEFT:
-            return MovementCommand.MOVE_LEFT, ActionStatus.APPLIED, ""
+            return EnemyMovementCommand.MOVE_LEFT
         if action is EnemyAction.MOVE_RIGHT:
-            return MovementCommand.MOVE_RIGHT, ActionStatus.APPLIED, ""
+            return EnemyMovementCommand.MOVE_RIGHT
         if action is EnemyAction.STOP:
-            return MovementCommand.STOP, ActionStatus.APPLIED, ""
-        if action is EnemyAction.JUMP:
+            return EnemyMovementCommand.STOP
+        if action is EnemyAction.TURN_AROUND:
+            # Turn relative to a move already chosen this tick, else to the
+            # current velocity (STOP keeps vx, so a stopped enemy still has one).
+            if pending in (EnemyMovementCommand.MOVE_LEFT, EnemyMovementCommand.MOVE_RIGHT):
+                heading_left = pending is EnemyMovementCommand.MOVE_LEFT
+            else:
+                heading_left = enemy.vx < 0
             return (
-                MovementCommand.STOP,
-                ActionStatus.UNSUPPORTED,
-                "Enemies do not support jumping",
+                EnemyMovementCommand.MOVE_RIGHT
+                if heading_left
+                else EnemyMovementCommand.MOVE_LEFT
             )
-        return (
-            MovementCommand.STOP,
-            ActionStatus.INVALID_ACTION,
-            f"Unsupported action {action!r}",
-        )
-
-    @staticmethod
-    def _engine_command(command: MovementCommand) -> EnemyMovementCommand:
-        return {
-            MovementCommand.MOVE_LEFT: EnemyMovementCommand.MOVE_LEFT,
-            MovementCommand.MOVE_RIGHT: EnemyMovementCommand.MOVE_RIGHT,
-            MovementCommand.STOP: EnemyMovementCommand.STOP,
-        }[command]
-
-    def _position_of(self, enemy_id: str) -> Position | None:
-        enemy = self.engine.world_state.environment.enemies.get(enemy_id)
-        return Position(enemy.x, enemy.y) if enemy is not None else None
+        return None
