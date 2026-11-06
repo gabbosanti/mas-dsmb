@@ -6,12 +6,14 @@ from spade.behaviour import CyclicBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import EnemyAction, GoombaPerceptionMessage, ActionResult
+from distributed_smb.agents.perception import Vision
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
 class GoombaAgent(BDIAgent):
     # Injected by SpadeRuntime after construction to avoid a module import cycle.
     spade_runtime: "SpadeRuntime"
+    vision = Vision()
 
     class PatrolBehaviour(CyclicBehaviour):
         async def on_start(self):
@@ -36,9 +38,16 @@ class GoombaAgent(BDIAgent):
             print(f"[Agent] Perception received: {goombaPerceptionMessage.perception}")
             goombaPerception = goombaPerceptionMessage.perception
 
-            visible_obstacles = goombaPerception.visible_obstacles
+            # Interpreting the raw snapshot is the agent's job
+            view = agent.vision.look(
+                goombaPerception.center,
+                goombaPerception.direction,
+                goombaPerception.players,
+                goombaPerception.obstacles,
+            )
 
-            for obstacle in visible_obstacles:
+            
+            for obstacle in view.obstacles:
                 print(f"[Agent] Visible obstacle: {obstacle}")
 
             action: EnemyAction

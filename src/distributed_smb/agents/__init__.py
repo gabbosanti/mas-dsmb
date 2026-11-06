@@ -5,7 +5,6 @@ from distributed_smb.agents.spade_thread import SpadeThread
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
-    EnemyObservation,
     GoombaPerception,
     GoombaPerceptionMessage,
     ObstacleKind,
@@ -19,7 +18,6 @@ __all__ = [
     "ActionResult",
     "AgentType",
     "EnemyAction",
-    "EnemyObservation",
     "GoombaPerception",
     "GoombaPerceptionMessage",
     "ObstacleKind",

@@ -3,10 +3,9 @@
 from dataclasses import dataclass
 from enum import Enum
 
-
+# Top-left world coordinates in pixels.
 @dataclass(frozen=True, slots=True)
 class Position:
-    """Top-left world coordinates in pixels."""
 
     x: float
     y: float
@@ -30,6 +29,10 @@ class ObstacleObservation:
     width: float
     height: float
 
+    @property
+    def center(self) -> Position:
+        return Position(self.x + self.width / 2, self.y + self.height / 2)
+
 
 @dataclass(frozen=True, slots=True)
 class PlayerPerception:
@@ -38,57 +41,34 @@ class PlayerPerception:
     width: float
     height: float
 
-
-@dataclass(frozen=True, slots=True)
-class GoombaPerception:
-    """Immutable visual perception assembled for a Goomba agent."""
-
-    goomba_id: str
-    position: Position
-    direction: SightDirection
-    visible_players: tuple[PlayerPerception, ...] = ()
-    visible_obstacles: tuple[ObstacleObservation, ...] = ()
-
     @property
-    def enemy_id(self) -> str:
-        """Compatibility name used by the existing controller contract."""
-        return self.goomba_id
-
-    @property
-    def enemy_position(self) -> Position:
-        """Compatibility name used by the existing controller contract."""
-        return self.position
-
-    @property
-    def target_player_id(self) -> str | None:
-        target = self._nearest_visible_player()
-        return target.player_id if target is not None else None
-
-    @property
-    def mario_position(self) -> Position | None:
-        """Return the nearest visible player's position for older controllers."""
-        target = self._nearest_visible_player()
-        return target.position if target is not None else None
-
-    @property
-    def nearby_obstacles(self) -> tuple[ObstacleObservation, ...]:
-        """Compatibility name; these obstacles are now filtered by line of sight."""
-        return self.visible_obstacles
-
-    def _nearest_visible_player(self) -> PlayerPerception | None:
-        return min(
-            self.visible_players,
-            key=lambda player: (
-                (player.position.x - self.position.x) ** 2
-                + (player.position.y - self.position.y) ** 2,
-                player.player_id,
-            ),
-            default=None,
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
         )
 
 
-# Existing action-controller clients can continue using the general name.
-EnemyObservation = GoombaPerception
+@dataclass(frozen=True, slots=True)
+class GoombaPerception:
+    """Raw, immutable snapshot of the world sent to a Goomba agent.
+
+    It carries facts only: what the Goomba can actually see, or which player
+    is closest, is decided agent-side (see ``distributed_smb.agents.perception``).
+    """
+
+    goomba_id: str
+    position: Position
+    width: float
+    height: float
+    direction: SightDirection
+    players: tuple[PlayerPerception, ...] = ()
+    obstacles: tuple[ObstacleObservation, ...] = ()
+
+    @property
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
+        )
 
 
 @dataclass(frozen=True, slots=True)

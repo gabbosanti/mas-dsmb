@@ -32,71 +32,39 @@ def send(integration: AgentGameIntegration, enemy_id: str, action: object) -> No
     integration.bridge.submit_action(AgentType.GOOMBA, ActionResult(enemy_id, action))
 
 
-def test_observation_is_immutable_and_contains_only_nearby_world_facts():
+def test_observation_is_an_immutable_raw_snapshot_without_sight_filtering():
     engine = GameEngine()
     engine.platforms = [
         Platform(x=150, y=100, width=50, height=10),
-        Platform(x=1000, y=100, width=50, height=10),
+        Platform(x=5000, y=100, width=50, height=10),  # far away: still reported
     ]
     engine.world_state.environment.destructible_blocks = [
         DestructibleBlock(x=180, y=145),
         DestructibleBlock(x=110, y=130, destroyed=True),
     ]
     enemy = engine.world_state.environment.enemies["enemy-1"]
-    enemy.x, enemy.y = 100, 100
-    engine.spawn_player("far-player", x=300, y=100, join_index=1)
-    engine.spawn_player("near-player", x=140, y=100, join_index=0)
+    enemy.x, enemy.y, enemy.vx = 100, 100, -50
+    engine.spawn_player("player-b", x=3000, y=100, join_index=1)
+    engine.spawn_player("player-a", x=20, y=100, join_index=0)  # behind the Goomba
 
     observation = AgentGameIntegration(engine).observe("enemy-1")
 
-    assert observation.enemy_id == "enemy-1"
-    assert (observation.enemy_position.x, observation.enemy_position.y) == (100, 100)
     assert isinstance(observation, GoombaPerception)
-    assert observation.direction is SightDirection.RIGHT
-    assert observation.target_player_id == "near-player"
-    assert observation.mario_position.x == 140
-    assert [obstacle.kind for obstacle in observation.nearby_obstacles] == [
-        ObstacleKind.PLATFORM,
-        ObstacleKind.BLOCK,
+    assert observation.goomba_id == "enemy-1"
+    assert (observation.position.x, observation.position.y) == (100, 100)
+    assert (observation.width, observation.height) == (enemy.width, enemy.height)
+    assert observation.direction is SightDirection.LEFT
+    assert [player.player_id for player in observation.players] == [
+        "player-a",
+        "player-b",
+    ]
+    assert [(obstacle.kind, obstacle.x) for obstacle in observation.obstacles] == [
+        (ObstacleKind.PLATFORM, 150),
+        (ObstacleKind.PLATFORM, 5000),
+        (ObstacleKind.BLOCK, 180),
     ]
     with pytest.raises(FrozenInstanceError):
-        observation.enemy_position.x = 0
-
-
-def test_goomba_perception_includes_only_forward_entities_with_clear_line_of_sight():
-    engine = GameEngine()
-    engine.platforms = [
-        Platform(x=200, y=80, width=20, height=100),
-        Platform(x=260, y=80, width=20, height=100),
-    ]
-    enemy = engine.world_state.environment.enemies["enemy-1"]
-    enemy.x, enemy.y, enemy.vx = 100, 100, 50
-    engine.spawn_player("visible", x=145, y=100)
-    engine.spawn_player("behind-wall", x=300, y=100)
-    engine.spawn_player("behind-goomba", x=20, y=100)
-
-    observation = AgentGameIntegration(engine).observe("enemy-1")
-
-    assert [player.player_id for player in observation.visible_players] == ["visible"]
-    assert [obstacle.x for obstacle in observation.visible_obstacles] == [200]
-
-
-def test_goomba_perception_faces_left_and_ignores_destroyed_obstacles():
-    engine = GameEngine()
-    engine.platforms = [Platform(x=20, y=80, width=20, height=100)]
-    engine.world_state.environment.destructible_blocks = [
-        DestructibleBlock(x=60, y=80, destroyed=True)
-    ]
-    enemy = engine.world_state.environment.enemies["enemy-1"]
-    enemy.x, enemy.y, enemy.vx = 100, 100, -50
-    engine.spawn_player("in-front", x=50, y=100)
-    engine.spawn_player("behind", x=200, y=100)
-
-    observation = AgentGameIntegration(engine).observe("enemy-1")
-
-    assert observation.direction is SightDirection.LEFT
-    assert [player.player_id for player in observation.visible_players] == ["in-front"]
-    assert [obstacle.x for obstacle in observation.visible_obstacles] == [20]
+        observation.position.x = 0
 
 
 def test_observation_rejects_an_unknown_enemy():
