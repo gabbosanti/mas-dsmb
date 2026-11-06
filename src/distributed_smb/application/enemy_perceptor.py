@@ -56,6 +56,7 @@ class EnemyPerceptor:
             visible_obstacles=self._visible_obstacles(origin, direction, obstacles),
         )
 
+    #Returns a tuple of all the obstacles in the game world, including platforms and destructible blocks.
     def _obstacle_candidates(self) -> tuple[ObstacleObservation, ...]:
         return tuple(
             ObstacleObservation(
@@ -78,6 +79,7 @@ class EnemyPerceptor:
             if not block.destroyed
         )
 
+    #Determine if the enemy can see a player, based on the enemy's position, direction, and obstacles in the environment.
     def _can_see_player(
         self,
         player: Player,

@@ -26,29 +26,33 @@ class GoombaAgent(BDIAgent):
 
             agent = self.goomba_agent
 
-            goombaPerception = agent.spade_runtime.get_perception(AgentType.GOOMBA)
-            if not isinstance(goombaPerception, GoombaPerceptionMessage):
+            goombaPerceptionMessage = agent.spade_runtime.get_perception(AgentType.GOOMBA)
+            if not isinstance(goombaPerceptionMessage, GoombaPerceptionMessage):
                 raise TypeError(
                     "The GOOMBA perception queue must contain "
                     "GoombaPerceptionMessage instances"
                 )
 
-            print(f"[Agent] Perception received: {goombaPerception}")
-        
-            goombaAction = ActionResult(enemy_id=goombaPerception.enemy_id, score=0)
-                
+            print(f"[Agent] Perception received: {goombaPerceptionMessage.perception}")
+            goombaPerception = goombaPerceptionMessage.perception
+
+            visible_obstacles = goombaPerception.visible_obstacles
+
+            for obstacle in visible_obstacles:
+                print(f"[Agent] Visible obstacle: {obstacle}")
+
+            action: EnemyAction
+
             if goombaPerception.obstacle_ahead: 
                 agent.bdi.set_belief("obstacle_ahead") 
-                goombaAction.__setattr__("action", EnemyAction.TURN_AROUND)
-                
+                action = EnemyAction.TURN_AROUND
+
             elif goombaPerception.direction == "right" :
-                goombaAction.__setattr__("action", EnemyAction.MOVE_RIGHT)
+                action = EnemyAction.MOVE_RIGHT
 
             elif goombaPerception.direction == "left" :
-                goombaAction.__setattr__("action", EnemyAction.MOVE_LEFT)
-
-            goombaAction.__setattr__("score", 1)
-            
+                action = EnemyAction.MOVE_LEFT
+                        
             agent.spade_runtime.put_action(AgentType.GOOMBA, goombaAction)
             print("[Agent] Action sent")
 
