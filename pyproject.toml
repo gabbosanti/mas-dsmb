@@ -15,7 +15,8 @@ dependencies = [
     "websockets (>=16.0,<17.0)",
     "httpx (>=0.28.1,<0.29.0)",
     "pytmx (>=3.32,<4.0)",
-    "spade-bdi (>=0.3.3,<0.4.0)"
+    "spade-bdi (>=0.3.3,<0.4.0)",
+    "ruff>=0.14.0"
 ]
 
 [build-system]
