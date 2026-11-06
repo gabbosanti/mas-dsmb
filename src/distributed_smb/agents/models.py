@@ -100,6 +100,7 @@ class GoombaPerceptionMessage:
 
 
 class EnemyAction(str, Enum):
+    TURN_AROUND = "TURN_AROUND"
     MOVE_LEFT = "MOVE_LEFT"
     MOVE_RIGHT = "MOVE_RIGHT"
     STOP = "STOP"
@@ -132,7 +133,7 @@ class ActionStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class ActionResult:
     enemy_id: str
-    requested_action: EnemyAction | None
+    # requested_action: EnemyAction | None 
     status: ActionStatus
     engine_command: MovementCommand | None = None
     position_before: Position | None = None

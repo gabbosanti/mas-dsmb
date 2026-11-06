@@ -1,10 +1,9 @@
 """Application adapters between agent contracts and the game simulation."""
 
+import logging
 from dataclasses import dataclass, field
-from math import hypot
-from queue import Empty, Full, Queue
-from typing import TypeVar
 
+from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.controller import EnemyController
 from distributed_smb.agents.models import (
     ActionRequest,
@@ -14,26 +13,24 @@ from distributed_smb.agents.models import (
     GoombaPerception,
     GoombaPerceptionMessage,
     MovementCommand,
-    ObstacleKind,
-    ObstacleObservation,
-    PlayerPerception,
     Position,
-    SightDirection,
 )
-from distributed_smb.application.enemy_perceptor import EnemyPerceptor
+from distributed_smb.application.enemy_perceptor import (
+    EnemyNotFoundError,
+    EnemyPerceptor,
+)
 from distributed_smb.application.spade_agent_bridge import SpadeAgentBridge
-from distributed_smb.domain.entity import Player
 from distributed_smb.domain.game_engine import EnemyMovementCommand, GameEngine
 from distributed_smb.shared.input import InputState
 
-GOOMBA_SIGHT_DISTANCE = 200.0
-OBSTACLE_SIGHT_DISTANCE = GOOMBA_SIGHT_DISTANCE
-AGENT_QUEUE_CAPACITY = 64
-QueueItem = TypeVar("QueueItem")
+LOGGER = logging.getLogger(__name__)
 
+__all__ = [
+    "AgentGameIntegration",
+    "EnemyNotFoundError",
+    "SpadeAgentBridge",
+]
 
-class EnemyNotFoundError(LookupError):
-    """Raised when an observation is requested for an unknown enemy."""
 
 @dataclass(slots=True)
 class AgentGameIntegration:
@@ -106,7 +103,7 @@ class AgentGameIntegration:
             raise TypeError("action_requests values must be ActionRequest instances")
         if not self.enabled:
             self._latest_spade_actions.clear()
-            self._discard_queued_actions()
+            self.bridge.discard_actions()
             self.bridge.discard_perceptions()
             self.engine.tick(dt, player_inputs)
             self.last_results = {
@@ -213,18 +210,22 @@ class AgentGameIntegration:
             if enemy_id not in self.engine.world_state.environment.enemies:
                 continue
             self.bridge.publish(
+                AgentType.GOOMBA,
                 GoombaPerceptionMessage(
                     simulation_sequence=sequence,
                     perception=self.observe(enemy_id),
-                )
+                ),
             )
 
     def _drain_spade_actions(self, current_sequence: int) -> None:
-        while True:
-            try:
-                request = self.bridge.action_requests.get_nowait()
-            except Empty:
-                return
+        while (request := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
+            if not isinstance(request, ActionRequest):
+                # Never let a malformed agent message crash the game thread.
+                LOGGER.warning(
+                    "Discarding GOOMBA action of type %s: expected ActionRequest",
+                    type(request).__name__,
+                )
+                continue
 
             observation_sequence = request.observation_sequence
             if (
@@ -255,13 +256,6 @@ class AgentGameIntegration:
             self._latest_spade_actions.pop(enemy_id, None)
             return ActionRequest(enemy_id=enemy_id, action=EnemyAction.STOP)
         return request
-
-    def _discard_queued_actions(self) -> None:
-        while True:
-            try:
-                self.bridge.action_requests.get_nowait()
-            except Empty:
-                return
 
     @staticmethod
     def _translate_action(

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from math import hypot
-from typing import TypeVar
 
 from distributed_smb.agents.models import (
     GoombaPerception,
@@ -12,14 +11,15 @@ from distributed_smb.agents.models import (
     Position,
     SightDirection,
 )
-from distributed_smb.application.agent_integration import EnemyNotFoundError
 from distributed_smb.domain.entity import Player
 from distributed_smb.domain.game_engine import GameEngine
 
 GOOMBA_SIGHT_DISTANCE = 200.0
 OBSTACLE_SIGHT_DISTANCE = GOOMBA_SIGHT_DISTANCE
-AGENT_QUEUE_CAPACITY = 64
-QueueItem = TypeVar("QueueItem")
+
+
+class EnemyNotFoundError(LookupError):
+    """Raised when an observation is requested for an unknown enemy."""
 
 
 @dataclass(slots=True)

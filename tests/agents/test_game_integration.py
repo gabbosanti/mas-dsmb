@@ -2,6 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionRequest,
     ActionStatus,
@@ -217,10 +218,10 @@ def test_spade_bridge_publishes_only_at_configured_tick_cadence():
     for _ in range(4):
         integration.tick(1 / 60, {})
 
-    assert integration.bridge.poll_perception() is None
+    assert integration.bridge.poll_perception(AgentType.GOOMBA) is None
 
     integration.tick(1 / 60, {})
-    message = integration.bridge.poll_perception()
+    message = integration.bridge.poll_perception(AgentType.GOOMBA)
 
     assert isinstance(message, GoombaPerceptionMessage)
     assert message.simulation_sequence == 5
@@ -241,9 +242,10 @@ def test_spade_actions_are_applied_nonblocking_then_stopped_when_stale():
     integration.control_enemy_with_spade("enemy-1")
 
     integration.tick(1 / 60, {})
-    first_perception = integration.bridge.poll_perception()
+    first_perception = integration.bridge.poll_perception(AgentType.GOOMBA)
     assert first_perception is not None
     integration.bridge.submit_action(
+        AgentType.GOOMBA,
         ActionRequest(
             "enemy-1",
             EnemyAction.MOVE_RIGHT,
@@ -254,26 +256,48 @@ def test_spade_actions_are_applied_nonblocking_then_stopped_when_stale():
     integration.tick(1 / 60, {})
     moved_x = enemy.x
     assert moved_x > 500
-    integration.bridge.poll_perception()
+    integration.bridge.poll_perception(AgentType.GOOMBA)
 
     integration.tick(1 / 60, {})
     assert enemy.x > moved_x
-    integration.bridge.poll_perception()
+    integration.bridge.poll_perception(AgentType.GOOMBA)
 
     integration.tick(1 / 60, {})
     assert enemy.x == pytest.approx(moved_x + enemy.movement_speed / 60)
     assert integration.last_results["enemy-1"].requested_action is EnemyAction.STOP
-    integration.bridge.poll_perception()
+    integration.bridge.poll_perception(AgentType.GOOMBA)
 
 
 def test_spade_bridge_drops_oldest_messages_when_a_queue_is_full():
-    from queue import Queue
+    from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
     engine = GameEngine()
     perception = AgentGameIntegration(engine).observe("enemy-1")
-    bridge = SpadeAgentBridge(perceptions=Queue(maxsize=1))
-    bridge.publish(GoombaPerceptionMessage(1, perception))
-    bridge.publish(GoombaPerceptionMessage(2, perception))
+    bridge = SpadeAgentBridge(perceptions=make_agent_queues(capacity=1))
+    bridge.publish(AgentType.GOOMBA, GoombaPerceptionMessage(1, perception))
+    bridge.publish(AgentType.GOOMBA, GoombaPerceptionMessage(2, perception))
 
     assert bridge.dropped_perceptions == 1
-    assert bridge.poll_perception().simulation_sequence == 2
+    assert bridge.poll_perception(AgentType.GOOMBA).simulation_sequence == 2
+
+
+def test_spade_bridge_rejects_queue_maps_missing_an_agent_type():
+    from queue import Queue
+
+    with pytest.raises(ValueError):
+        SpadeAgentBridge(perceptions={AgentType.GOOMBA: Queue()})
+
+
+def test_game_and_spade_runtime_share_the_same_queues():
+    from distributed_smb.agents.spade_runtime import SpadeRuntime
+    from distributed_smb.application.spade_agent_bridge import make_agent_queues
+
+    perceptions, actions = make_agent_queues(), make_agent_queues()
+    runtime = SpadeRuntime(perceptions, actions)
+    bridge = SpadeAgentBridge(perceptions=perceptions, actions=actions)
+
+    bridge.publish(AgentType.GOOMBA, "perception")
+    assert runtime.get_perception(AgentType.GOOMBA) == "perception"
+
+    runtime.put_action(AgentType.GOOMBA, "action")
+    assert bridge.poll_action(AgentType.GOOMBA) == "action"

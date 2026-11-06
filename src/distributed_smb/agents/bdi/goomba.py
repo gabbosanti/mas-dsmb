@@ -5,9 +5,7 @@ from spade_bdi.bdi import BDIAgent
 from spade.behaviour import CyclicBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO, ActionType
-from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
-
+from distributed_smb.agents.models import EnemyAction, GoombaPerceptionMessage, ActionResult
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
@@ -29,26 +27,28 @@ class GoombaAgent(BDIAgent):
             agent = self.goomba_agent
 
             goombaPerception = agent.spade_runtime.get_perception(AgentType.GOOMBA)
-            if not isinstance(goombaPerception, GoombaPerceptionDTO):
+            if not isinstance(goombaPerception, GoombaPerceptionMessage):
                 raise TypeError(
                     "The GOOMBA perception queue must contain "
-                    "GoombaPerceptionDTO instances"
+                    "GoombaPerceptionMessage instances"
                 )
 
             print(f"[Agent] Perception received: {goombaPerception}")
         
-            goombaAction = GoombaActionDTO(action = None)
+            goombaAction = ActionResult(enemy_id=goombaPerception.enemy_id, score=0)
                 
             if goombaPerception.obstacle_ahead: 
                 agent.bdi.set_belief("obstacle_ahead") 
-                goombaAction.__setattr__("action", ActionType.TURN_AROUND)
+                goombaAction.__setattr__("action", EnemyAction.TURN_AROUND)
                 
             elif goombaPerception.direction == "right" :
-                goombaAction.__setattr__("action", ActionType.MOVE_RIGHT)
+                goombaAction.__setattr__("action", EnemyAction.MOVE_RIGHT)
 
             elif goombaPerception.direction == "left" :
-                goombaAction.__setattr__("action", ActionType.MOVE_LEFT)
-                        
+                goombaAction.__setattr__("action", EnemyAction.MOVE_LEFT)
+
+            goombaAction.__setattr__("score", 1)
+            
             agent.spade_runtime.put_action(AgentType.GOOMBA, goombaAction)
             print("[Agent] Action sent")
 
