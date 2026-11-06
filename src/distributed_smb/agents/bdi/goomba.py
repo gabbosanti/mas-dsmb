@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
 class GoombaAgent(BDIAgent):
-    # Injected by SpadeRuntime after construction to avoid a module import cycle.
     spade_runtime: "SpadeRuntime"
     vision = Vision()
     ground_sensor = GroundSensor()
@@ -28,7 +27,7 @@ class GoombaAgent(BDIAgent):
             await asyncio.sleep(1)
 
             agent = self.goomba_agent
-
+            
             goombaPerceptionMessage = agent.spade_runtime.get_perception(AgentType.GOOMBA)
             if not isinstance(goombaPerceptionMessage, GoombaPerceptionMessage):
                 raise TypeError(
@@ -38,43 +37,35 @@ class GoombaAgent(BDIAgent):
 
             print(f"[Agent] Perception received: {goombaPerceptionMessage.perception}")
             goombaPerception = goombaPerceptionMessage.perception
+            goombaID = goombaPerception.goomba_id
 
             # Interpreting the raw snapshot is the agent's job
-            view = agent.vision.look(
-                goombaPerception.center,
-                goombaPerception.direction,
-                goombaPerception.players,
-                goombaPerception.obstacles,
+            obstacle_ahead = agent.vision.obstacle_ahead(
+                position = goombaPerception.center,
+                direction = goombaPerception.direction,
+                obstacles =goombaPerception.obstacles,
             )
-
             
-            for obstacle in view.obstacles:
-                print(f"[Agent] Visible obstacle: {obstacle}")
-
             void_ahead = agent.ground_sensor.is_void_ahead(
-                goombaPerception.position,
-                goombaPerception.width,
-                goombaPerception.height,
-                goombaPerception.direction,
-                goombaPerception.obstacles,
+                position = goombaPerception.position,
+                width = goombaPerception.width,
+                height = goombaPerception.height,
+                direction = goombaPerception.direction,
+                obstacles = goombaPerception.obstacles,
             )
 
-            action: EnemyAction
-
+            action = EnemyAction.MOVE_RIGHT
+            
             if void_ahead:
                 agent.bdi.set_belief("void_ahead")
                 action = EnemyAction.TURN_AROUND
 
-            elif goombaPerception.obstacle_ahead:
-                agent.bdi.set_belief("obstacle_ahead") 
+            elif obstacle_ahead:
+                agent.bdi.set_belief("obstacle_ahead")
                 action = EnemyAction.TURN_AROUND
 
-            elif goombaPerception.direction == "right" :
-                action = EnemyAction.MOVE_RIGHT
-
-            elif goombaPerception.direction == "left" :
-                action = EnemyAction.MOVE_LEFT
-                        
+            goombaAction = ActionResult(goombaID, action)     
+    
             agent.spade_runtime.put_action(AgentType.GOOMBA, goombaAction)
             print("[Agent] Action sent")
 
