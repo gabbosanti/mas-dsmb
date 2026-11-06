@@ -6,15 +6,15 @@ import asyncio
 import threading
 from pathlib import Path
 from queue import Queue
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING
 
 from distributed_smb.agents.agent_type import AgentType
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
 
-PerceptionQueue: TypeAlias = dict[AgentType, Queue]
-ActionQueue: TypeAlias = dict[AgentType, Queue]
+type PerceptionQueue = dict[AgentType, Queue]
+type ActionQueue = dict[AgentType, Queue]
 
 
 class SpadeRuntime:

@@ -2,6 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from distributed_smb.agents.controller import PursuitController
 from distributed_smb.agents.models import (
     ActionRequest,
     ActionStatus,
@@ -13,7 +14,6 @@ from distributed_smb.agents.models import (
     ObstacleKind,
     SightDirection,
 )
-from distributed_smb.agents.controller import PursuitController
 from distributed_smb.application.agent_integration import (
     AgentGameIntegration,
     EnemyNotFoundError,

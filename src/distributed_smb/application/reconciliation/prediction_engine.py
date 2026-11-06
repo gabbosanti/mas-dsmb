@@ -2,9 +2,9 @@ import logging
 import math
 import time
 from collections import deque
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from typing import Callable, Deque
 
 from distributed_smb.domain.game_engine import GameEngine
 from distributed_smb.shared.config import TICK_INTERVAL
@@ -33,7 +33,7 @@ class InputHistoryEntry:
 class InputHistoryBuffer:
     def __init__(self, capacity: int = 64) -> None:
         self.capacity = capacity
-        self._entries: Deque[InputHistoryEntry] = deque(maxlen=capacity)
+        self._entries: deque[InputHistoryEntry] = deque(maxlen=capacity)
 
     def push(
         self,

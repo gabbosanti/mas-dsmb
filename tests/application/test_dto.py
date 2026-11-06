@@ -3,6 +3,7 @@ from distributed_smb.domain.entity import (
     CooperativeGate,
     DestructibleBlock,
     Enemy,
+    EnemyType,
     ExclusivePowerUp,
     Platform,
     Player,
@@ -24,7 +25,14 @@ def _world_state() -> WorldState:
             power_ups={
                 "pu-a": ExclusivePowerUp(x=3, y=4, powerup_id="pu-a", collected=True)
             },
-            enemies={"enemy-a": Enemy(enemy_id="enemy-a", x=5.0, y=6.0)},
+            enemies={
+                "enemy-a": Enemy(
+                    enemy_id="enemy-a",
+                    x=5.0,
+                    y=6.0,
+                    enemy_type=EnemyType.GOOMBA,
+                )
+            },
             cooperative_gates={
                 "gate-a": CooperativeGate(x=7, y=8, gate_id="gate-a", state="open")
             },
@@ -66,6 +74,7 @@ def test_build_render_frame_maps_every_field():
     assert frame.power_ups["pu-a"].collected is True
     assert frame.gates["gate-a"].state == "open"
     assert frame.enemies["enemy-a"].x == 5.0
+    assert frame.enemies["enemy-a"].enemy_type is EnemyType.GOOMBA
 
     assert frame.coins_collected == 3
     assert frame.coins_to_win == 5

@@ -1,6 +1,5 @@
 import socket
 import threading
-from typing import Optional
 
 from distributed_smb.application.recovery.prober import RecoveryProber
 from distributed_smb.network.serializer import Serializer
@@ -18,7 +17,7 @@ class _UdpResponder(threading.Thread):
         self.bind_port = bind_port
         self.bind_ip = bind_ip
         self.ready = threading.Event()
-        self._socket: Optional[socket.socket] = None
+        self._socket: socket.socket | None = None
 
     def run(self) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -28,7 +27,7 @@ class _UdpResponder(threading.Thread):
         self.ready.set()
         try:
             sock.settimeout(2.0)
-            data, addr = sock.recvfrom(4096)
+            _data, addr = sock.recvfrom(4096)
             response = Serializer().encode_message(
                 HostIdentityResponse(session_id=self.session_id, host_ip=self.host_ip)
             )

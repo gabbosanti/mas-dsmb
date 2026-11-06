@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 
 from distributed_smb.domain.events import (
     BlockDestroyedEvent,
@@ -84,6 +85,11 @@ class CooperativeGate:
         return GateStateChangedEvent(gate_id=self.gate_id, new_state=self.state)
 
 
+class EnemyType(str, Enum):
+    KOOPA = "koopa"
+    GOOMBA = "goomba"
+
+
 @dataclass(slots=True)
 class Enemy:
     enemy_id: str
@@ -95,8 +101,10 @@ class Enemy:
     left_bound: float = 0.0
     right_bound: float = 0.0
     movement_speed: float | None = None
+    enemy_type: EnemyType = EnemyType.KOOPA
 
     def __post_init__(self) -> None:
+        self.enemy_type = EnemyType(self.enemy_type)
         if self.movement_speed is None:
             self.movement_speed = abs(self.vx)
 

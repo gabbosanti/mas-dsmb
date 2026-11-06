@@ -12,10 +12,10 @@ from distributed_smb.application.reconciliation.shadow_copy import (
 )
 
 __all__ = [
+    "InterpolatedShadowCopy",
+    "NoopPredictionEngine",
+    "NoopShadowCopy",
     "PredictionEngine",
     "PredictionEngineProtocol",
-    "NoopPredictionEngine",
     "ShadowCopyProtocol",
-    "NoopShadowCopy",
-    "InterpolatedShadowCopy",
 ]

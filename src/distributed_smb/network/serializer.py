@@ -100,7 +100,6 @@ WsMessage = Union[
 class DeserializationError(ValueError):
     """Raised when deserialization fails."""
 
-    pass
 
 
 class Serializer:

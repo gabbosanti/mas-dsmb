@@ -9,8 +9,6 @@ from dataclasses import dataclass, field
 from queue import Queue
 from typing import Any
 
-from distributed_smb.application.agent_integration import AgentGameIntegration
-from distributed_smb.application.dto import RenderFrame, build_render_frame
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.spade_runtime import (
     ActionQueue,
@@ -18,6 +16,8 @@ from distributed_smb.agents.spade_runtime import (
     SpadeRuntime,
 )
 from distributed_smb.agents.spade_thread import SpadeThread
+from distributed_smb.application.agent_integration import AgentGameIntegration
+from distributed_smb.application.dto import RenderFrame, build_render_frame
 from distributed_smb.application.election import (
     ElectionCoordinator,
     EnvironmentalStateBuffer,
@@ -84,9 +84,9 @@ from distributed_smb.shared.roster import GlobalRoster
 LOGGER = logging.getLogger(__name__)
 
 __all__ = [
-    "NodeController",
     "LobbyCancelledError",
     "LobbyUpdateCallback",
+    "NodeController",
     "StartRequestedCallback",
 ]
 

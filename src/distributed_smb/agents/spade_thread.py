@@ -4,11 +4,11 @@ import asyncio
 import logging
 import threading
 from collections.abc import Callable, Coroutine
-from typing import Any, TypeAlias
+from typing import Any
 
 LOGGER = logging.getLogger(__name__)
 
-AsyncRuntime: TypeAlias = Callable[[], Coroutine[Any, Any, None]]
+type AsyncRuntime = Callable[[], Coroutine[Any, Any, None]]
 
 
 class SpadeThread:

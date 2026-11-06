@@ -40,14 +40,14 @@
 </data>
  </layer>
  <objectgroup id="7" name="Enemies" visible="0">
-  <object id="2" name="enemy-1" type="Enemies" x="520" y="877" width="64" height="96">
+  <object id="2" name="enemy-1" type="Enemies" x="520" y="877" width="64" height="96" enemy_type="Goomba">
    <properties>
     <property name="left_bound" type="int" value="460"/>
     <property name="right_bound" type="int" value="620"/>
     <property name="vx" type="float" value="50"/>
    </properties>
   </object>
-  <object id="3" name="enemy-2" type="Enemies" x="1120" y="877" width="64" height="96">
+  <object id="3" name="enemy-2" type="Enemies" x="1120" y="877" width="64" height="96" enemy_type="Goomba">
    <properties>
     <property name="left_bound" type="int" value="1060"/>
     <property name="right_bound" type="int" value="1200"/>

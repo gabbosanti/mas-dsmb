@@ -1,7 +1,6 @@
 class MessageValidationError(ValueError):
     """Raised when a message fails validation."""
 
-    pass
 
 
 def validate_player_id(player_id: str) -> None:

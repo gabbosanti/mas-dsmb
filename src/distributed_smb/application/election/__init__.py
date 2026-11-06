@@ -13,11 +13,11 @@ from distributed_smb.application.election.env_state_buffer import (
 from distributed_smb.application.election.timeout_watcher import HostTimeoutWatcher
 
 __all__ = [
-    "HostTimeoutWatcher",
     "ElectionCoordinator",
-    "ElectionState",
     "ElectionEvent",
-    "SelfElected",
-    "FollowingHost",
+    "ElectionState",
     "EnvironmentalStateBuffer",
+    "FollowingHost",
+    "HostTimeoutWatcher",
+    "SelfElected",
 ]

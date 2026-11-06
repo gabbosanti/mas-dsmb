@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import socket
-from typing import Iterable
+from collections.abc import Iterable
 
 from distributed_smb.network.serializer import Serializer
 from distributed_smb.shared.config import HOST_UDP_PORT

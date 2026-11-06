@@ -3,7 +3,7 @@
 import time
 from dataclasses import dataclass, field
 
-from distributed_smb.domain.entity import Platform
+from distributed_smb.domain.entity import EnemyType, Platform
 from distributed_smb.domain.level import Decoration
 from distributed_smb.domain.world import WorldState
 from distributed_smb.shared.config import PLAYER_HEIGHT, PLAYER_WIDTH
@@ -61,6 +61,7 @@ class RenderEnemy:
     y: float
     width: int
     height: int
+    enemy_type: EnemyType = EnemyType.KOOPA
 
 
 @dataclass(slots=True)
@@ -178,6 +179,7 @@ def build_render_frame(
                 y=enemy.y,
                 width=enemy.width,
                 height=enemy.height,
+                enemy_type=enemy.enemy_type,
             )
             for enemy_id, enemy in world_state.environment.enemies.items()
         },

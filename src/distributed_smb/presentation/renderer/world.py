@@ -7,6 +7,7 @@ from typing import Any
 import pygame
 
 from distributed_smb.application.dto import RenderFrame
+from distributed_smb.domain.entity import EnemyType
 from distributed_smb.presentation.renderer.assets import (
     DECORATION_SOURCE_RECTS,
     DISPLAY_TILE_SIZE,
@@ -98,8 +99,12 @@ class WorldRenderer:
                 pygame.draw.rect(sprite, (36, 24, 18), door, width=max(1, width // 18))
             return sprite
         if sprite_kind == "enemy":
+            source_rect = {
+                EnemyType.KOOPA: (100, 6, 18, 25),
+                EnemyType.GOOMBA: (4, 6, 18, 25),
+            }[EnemyType(state)]
             return self.sprite_factory._get_asset_sprite(
-                "Enemies.png", (100, 6, 18, 25), width, height
+                "Enemies.png", source_rect, width, height
             )
         return None
 
@@ -246,7 +251,7 @@ class WorldRenderer:
         for enemy in frame.enemies.values():
             screen.blit(
                 self._get_environment_sprite(
-                    "enemy", "default", enemy.width, enemy.height
+                    "enemy", enemy.enemy_type.value, enemy.width, enemy.height
                 ),
                 self.owner._to_screen_position(enemy.x, enemy.y, camera_offset),
             )

@@ -70,7 +70,7 @@ async def _broadcast(payload: bytes) -> None:
         "Broadcasting game event to %d connection(s): %s", len(_connections), text
     )
     dead: list[WebSocket] = []
-    for ws in list(_connections):
+    for ws in _connections:
         try:
             await ws.send_text(text)
         except Exception:
@@ -86,7 +86,7 @@ async def _heartbeat_loop() -> None:
     while True:
         await asyncio.sleep(GAME_EVENT_HEARTBEAT_INTERVAL)
         dead: list[WebSocket] = []
-        for ws in list(_connections):
+        for ws in _connections:
             try:
                 await ws.send_text('{"type":"ping"}')
             except Exception:

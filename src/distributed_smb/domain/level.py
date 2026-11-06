@@ -7,6 +7,7 @@ from distributed_smb.domain.entity import (
     CooperativeGate,
     DestructibleBlock,
     Enemy,
+    EnemyType,
     ExclusivePowerUp,
     Platform,
 )
@@ -119,6 +120,9 @@ class TiledLevel:
                         vx=float(obj.properties.get("vx", 50.0)),
                         left_bound=float(obj.properties["left_bound"]),
                         right_bound=float(obj.properties["right_bound"]),
+                        enemy_type=EnemyType(
+                            obj.properties.get("enemy_type", EnemyType.KOOPA.value)
+                        ),
                     )
                 )
 

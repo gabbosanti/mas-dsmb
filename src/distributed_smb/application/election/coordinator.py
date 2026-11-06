@@ -24,7 +24,6 @@ class ElectionState(Enum):
 class ElectionEvent:
     """Base class for election events emitted by ElectionCoordinator.tick()."""
 
-    pass
 
 
 @dataclass(slots=True)

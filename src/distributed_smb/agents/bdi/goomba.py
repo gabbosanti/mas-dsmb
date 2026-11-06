@@ -1,11 +1,11 @@
 import asyncio
 from typing import TYPE_CHECKING
 
-from spade_bdi.bdi import BDIAgent
 from spade.behaviour import CyclicBehaviour
+from spade_bdi.bdi import BDIAgent
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO, ActionType
+from distributed_smb.agents.dto.goomba.goombaAction import ActionType, GoombaActionDTO
 from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ class GoombaAgent(BDIAgent):
             print("[Agent] Action sent")
 
         async def on_end(self):
-            print("Behaviour finished with exit code {}.".format(self.exit_code))
+            print(f"Behaviour finished with exit code {self.exit_code}.")
 
     async def setup(self):
         print("Agent starting . . .")

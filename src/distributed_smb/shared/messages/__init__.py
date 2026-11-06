@@ -17,17 +17,17 @@ from distributed_smb.shared.messages.session import (
 from distributed_smb.shared.messages.sync import InitialStateSync
 
 __all__ = [
-    # Session coordination
-    "SessionCreate",
-    "SessionJoin",
-    "SessionCreated",
-    "SessionJoined",
-    "SessionJoinRejected",
+    "ElectionAck",
     "GameStart",
     "InitialStateSync",
-    "RosterUpdate",
     # Election
     "NewHostClaim",
-    "ElectionAck",
     "ReconnectionAck",
+    "RosterUpdate",
+    # Session coordination
+    "SessionCreate",
+    "SessionCreated",
+    "SessionJoin",
+    "SessionJoinRejected",
+    "SessionJoined",
 ]

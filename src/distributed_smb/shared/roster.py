@@ -8,7 +8,6 @@ from distributed_smb.shared.enums import ConnectionStatus
 class RosterValidationError(ValueError):
     """Raised when roster validation fails."""
 
-    pass
 
 
 @dataclass(slots=True)

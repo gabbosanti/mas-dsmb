@@ -7,6 +7,7 @@ from distributed_smb.domain.entity import (
     CooperativeGate,
     DestructibleBlock,
     Enemy,
+    EnemyType,
     ExclusivePowerUp,
     Player,
 )
@@ -165,7 +166,10 @@ def test_the_world_state_survives_both_transports():
     gate.contributions.update({"player1", "player2"})
     world_state.add_gate(gate)
     world_state.environment.enemies["goomba-1"] = Enemy(
-        enemy_id="goomba-1", x=500.0, y=64.0
+        enemy_id="goomba-1",
+        x=500.0,
+        y=64.0,
+        enemy_type="goomba",
     )
 
     over_udp = serializer.decode_message(
@@ -187,6 +191,7 @@ def test_the_world_state_survives_both_transports():
         "player2",
     }
     assert decoded.environment.enemies["goomba-1"].x == 500.0
+    assert decoded.environment.enemies["goomba-1"].enemy_type is EnemyType.GOOMBA
 
     over_ws = serializer.decode_ws_message(
         serializer.encode_ws_message(InitialStateSync(world_state=world_state))

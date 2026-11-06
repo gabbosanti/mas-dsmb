@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
 from distributed_smb.shared.config import MAX_PLAYERS, player_id_for
 
@@ -42,7 +41,7 @@ def write_session_metadata(
 
 def read_session_metadata(
     base_dir: Path | str | None = None,
-) -> Optional[SessionMetadata]:
+) -> SessionMetadata | None:
     session_metadata_path = _session_metadata_path(base_dir)
     if not session_metadata_path.exists():
         return None

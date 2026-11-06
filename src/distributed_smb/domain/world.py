@@ -69,7 +69,7 @@ class WorldState:
             del self.characters[player_id]
 
     def get_player(self, player_id: str) -> Player | None:
-        return self.characters[player_id] if player_id in self.characters else None
+        return self.characters.get(player_id, None)
 
     def get_all_players(self):
         return list(self.characters.values())
