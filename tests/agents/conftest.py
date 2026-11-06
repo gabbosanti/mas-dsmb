@@ -2,7 +2,6 @@
 
 import asyncio
 import threading
-import time
 from queue import Queue
 
 import pytest

@@ -11,6 +11,7 @@ from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionD
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
+
 class GoombaAgent(BDIAgent):
     # Injected by SpadeRuntime after construction to avoid a module import cycle.
     spade_runtime: "SpadeRuntime"
@@ -22,7 +23,7 @@ class GoombaAgent(BDIAgent):
             if not isinstance(agent, GoombaAgent):
                 raise RuntimeError("PatrolBehaviour is not attached to a GoombaAgent")
             self.goomba_agent = agent
-            
+
         async def run(self):
             await asyncio.sleep(1)
 
@@ -36,22 +37,21 @@ class GoombaAgent(BDIAgent):
                 )
 
             print(f"[Agent] Perception received: {goombaPerception}")
-        
-            goombaAction = GoombaActionDTO(action = None)
-                
-            if goombaPerception.obstacle_ahead: 
-                agent.bdi.set_belief("obstacle_ahead") 
+
+            goombaAction = GoombaActionDTO(action=None)
+
+            if goombaPerception.obstacle_ahead:
+                agent.bdi.set_belief("obstacle_ahead")
                 goombaAction.__setattr__("action", ActionType.TURN_AROUND)
-                
-            elif goombaPerception.direction == "right" :
+
+            elif goombaPerception.direction == "right":
                 goombaAction.__setattr__("action", ActionType.MOVE_RIGHT)
 
-            elif goombaPerception.direction == "left" :
+            elif goombaPerception.direction == "left":
                 goombaAction.__setattr__("action", ActionType.MOVE_LEFT)
-                        
+
             agent.spade_runtime.put_action(AgentType.GOOMBA, goombaAction)
             print("[Agent] Action sent")
-
 
         async def on_end(self):
             print("Behaviour finished with exit code {}.".format(self.exit_code))
@@ -61,9 +61,8 @@ class GoombaAgent(BDIAgent):
         self.patrol_behaviour = self.PatrolBehaviour()
         self.add_behaviour(self.patrol_behaviour)
         await asyncio.sleep(1)
-        
-    def add_custom_actions(self, actions):
 
+    def add_custom_actions(self, actions):
         @actions.add(".move_right", 0)
         def move_right(agent, term, intention):
             print("Goomba moves right!")
@@ -76,14 +75,12 @@ class GoombaAgent(BDIAgent):
 
         @actions.add(".turn_around", 0)
         def turn_around(agent, term, intention):
-            
             self.bdi.remove_belief("obstacle_ahead")
-            
-            if(self.bdi.get_belief("direction") == "right"):
+
+            if self.bdi.get_belief("direction") == "right":
                 self.bdi.set_belief("direction", "left")
 
-            elif(self.bdi.get_belief("direction") == "left"):
+            elif self.bdi.get_belief("direction") == "left":
                 self.bdi.set_belief("direction", "right")
 
             yield
-            

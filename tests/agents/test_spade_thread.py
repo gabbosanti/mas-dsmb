@@ -22,7 +22,7 @@ def test_runtime_routes_perceptions_and_actions_through_agent_queues(
     spade_runtime_thread,
 ):
     runtime, _thread, _fake_agent = spade_runtime_thread
-    
+
     perception = GoombaPerceptionDTO(obstacle_ahead=True, direction="left")
     runtime.perception_queue[AgentType.GOOMBA].put(perception)
     assert runtime.get_perception(AgentType.GOOMBA) is perception

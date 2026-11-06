@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum
 
+
 class ActionType(Enum):
-    #Supported autonomous-agent categories
+    # Supported autonomous-agent categories
 
     TURN_AROUND = "turn_around"
     MOVE_RIGHT = "move_right"

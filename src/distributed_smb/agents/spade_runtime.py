@@ -9,8 +9,6 @@ from queue import Queue
 from typing import TYPE_CHECKING, TypeAlias
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
-from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
@@ -36,23 +34,23 @@ class SpadeRuntime:
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
         self.stop_event.set()
-    
+
     async def run(self) -> None:
         """Start configured agents, run until requested to stop, then stop them."""
-        
-        #Goomba configuration
+
+        # Goomba configuration
         asl_path = Path(__file__).with_name("goomba.asl")
-        
+
         goombaAgent = self._create_goomba_agent(asl_path)
         goombaAgent.spade_runtime = self
-                        
+
         try:
             print("[SPADE] Starting agent...")
             await goombaAgent.start()
-            
+
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
-                
+
         finally:
             if goombaAgent.is_alive():
                 await goombaAgent.stop()
