@@ -9,8 +9,6 @@ from queue import Queue
 from typing import TYPE_CHECKING, TypeAlias
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
-from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
