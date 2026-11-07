@@ -229,7 +229,10 @@ def test_game_and_spade_runtime_share_the_same_queues():
     from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
     perceptions, actions = make_agent_queues(), make_agent_queues()
-    runtime = SpadeRuntime(perceptions, actions)
+    runtime = SpadeRuntime(
+        perception_queue=perceptions,
+        action_queue=actions,
+    )
     bridge = SpadeAgentBridge(perceptions=perceptions, actions=actions)
 
     bridge.publish(AgentType.GOOMBA, "perception")

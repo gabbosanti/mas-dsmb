@@ -50,7 +50,13 @@ class Vision:
     ) -> bool :
         obstacles = tuple(obstacles)
         for index, obstacle in enumerate(obstacles) :
-            if self.can_see(position, direction, obstacle.center, obstacles, ignored_index=index)      
+            # Ground below the observer supports movement but is not a
+            # forward obstacle for the patrol plan to turn around from.
+            if not obstacle.y <= position.y <= obstacle.y + obstacle.height:
+                continue
+            if self.can_see(
+                position, direction, obstacle.center, obstacles, ignored_index=index
+            ):
                 return True
         return False
 

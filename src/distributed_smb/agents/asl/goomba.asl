@@ -22,6 +22,3 @@ direction(right).
 +!patrol : direction(left)
     <- .move_left;
        !patrol.
-
--alive :
-    <- .kill_agent.

@@ -41,31 +41,9 @@ class GoombaAgent(BDIAgent):
 
             print(f"[Agent] Perception received: {goombaPerceptionMessage.perception}")
             goombaPerception = goombaPerceptionMessage.perception
+            agent.goomba_id = goombaPerception.goomba_id
 
-            # Interpreting the raw snapshot is the agent's job
-            obstacle_ahead = agent.vision.obstacle_ahead(
-                position = goombaPerception.center,
-                direction = goombaPerception.direction,
-                obstacles =goombaPerception.obstacles,
-            )
-            
-            void_ahead = agent.ground_sensor.is_void_ahead(
-                position = goombaPerception.position,
-                width = goombaPerception.width,
-                height = goombaPerception.height,
-                direction = goombaPerception.direction,
-                obstacles = goombaPerception.obstacles,
-            )
-
-            if void_ahead:
-                agent.bdi.set_belief("void_ahead")
-            else:
-                agent.bdi.remove_belief("void_ahead")
-
-            if obstacle_ahead:
-                agent.bdi.set_belief("obstacle_ahead")
-            else:
-                agent.bdi.remove_belief("obstacle_ahead")
+            agent._update_beliefs(goombaPerception)
 
             print("[Agent] Beliefs updated; ASL plans choose the next action")
 
@@ -79,6 +57,30 @@ class GoombaAgent(BDIAgent):
         self.patrol_behaviour = self.PatrolBehaviour()
         self.add_behaviour(self.patrol_behaviour)
         await asyncio.sleep(1)
+
+    def _update_beliefs(self, perception) -> None:
+        """Translate a game snapshot into facts consumed by the ASL plans."""
+        obstacle_ahead = self.vision.obstacle_ahead(
+            position=perception.center,
+            direction=perception.direction,
+            obstacles=perception.obstacles,
+        )
+        void_ahead = self.ground_sensor.is_void_ahead(
+            position=perception.position,
+            width=perception.width,
+            height=perception.height,
+            direction=perception.direction,
+            obstacles=perception.obstacles,
+        )
+
+        for belief, present in (
+            ("obstacle_ahead", obstacle_ahead),
+            ("void_ahead", void_ahead),
+        ):
+            if present:
+                self.bdi.set_belief(belief)
+            else:
+                self.bdi.remove_belief(belief)
         
     def add_custom_actions(self, actions):
 
@@ -100,10 +102,11 @@ class GoombaAgent(BDIAgent):
             self.bdi.remove_belief("obstacle_ahead")
             self.bdi.remove_belief("void_ahead")
             
-            if(self.bdi.get_belief("direction") == "right"):
+            direction = self.bdi.get_belief_value("direction")
+            if direction == ("right",):
                 self.bdi.set_belief("direction", "left")
 
-            elif(self.bdi.get_belief("direction") == "left"):
+            elif direction == ("left",):
                 self.bdi.set_belief("direction", "right")
 
             yield

@@ -2,14 +2,14 @@
 
 import asyncio
 import threading
-import time
-from queue import Queue
+from pathlib import Path
 
 import pytest
 
-from distributed_smb.agents.agent_type import AgentType
+from distributed_smb.agents.bdi.goomba import GoombaAgent
 from distributed_smb.agents.spade_runtime import SpadeRuntime
 from distributed_smb.agents.spade_thread import SpadeThread
+from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
 
 @pytest.fixture
@@ -42,9 +42,12 @@ def spade_runtime_thread(monkeypatch):
             self._alive = False
             self.stopped = True
 
-    perceptions = {agent_type: Queue() for agent_type in AgentType}
-    actions = {agent_type: Queue() for agent_type in AgentType}
-    runtime = SpadeRuntime(perceptions, actions)
+    perceptions = make_agent_queues()
+    actions = make_agent_queues()
+    runtime = SpadeRuntime(
+        perception_queue=perceptions,
+        action_queue=actions,
+    )
     thread = SpadeThread(runtime.run)
     fake_agent = None
     agent_created = threading.Event()
@@ -68,3 +71,33 @@ def spade_runtime_thread(monkeypatch):
     finally:
         runtime.request_stop()
         thread.stop(timeout=2.0)
+
+
+@pytest.fixture
+def goomba_agent():
+    """Build the real Goomba BDI agent without starting its XMPP connection."""
+    perceptions = make_agent_queues()
+    actions = make_agent_queues()
+    runtime = SpadeRuntime(
+        perception_queue=perceptions,
+        action_queue=actions,
+    )
+    asl_path = Path(__file__).parents[2] / "src/distributed_smb/agents/asl/goomba.asl"
+    agent = GoombaAgent("goomba@test", "unused", str(asl_path))
+    agent.spade_runtime = runtime
+    agent.goomba_id = "enemy-1"
+    return agent, runtime
+
+
+@pytest.fixture
+def run_bdi_steps():
+    """Advance the real SPADE-BDI interpreter without starting an XMPP agent."""
+
+    def run(agent, count=1):
+        async def advance():
+            for _ in range(count):
+                await agent.bdi.run()
+
+        asyncio.run(advance())
+
+    return run

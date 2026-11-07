@@ -1,8 +1,14 @@
 """Unit tests for the SPADE runtime/thread integration."""
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.dto.goomba.goombaAction import GoombaActionDTO
-from distributed_smb.agents.dto.goomba.goombaPerception import GoombaPerceptionDTO
+from distributed_smb.agents.models import (
+    ActionResult,
+    EnemyAction,
+    GoombaPerception,
+    GoombaPerceptionMessage,
+    Position,
+    SightDirection,
+)
 
 
 def test_spade_runtime_runs_on_dedicated_thread(spade_runtime_thread):
@@ -23,11 +29,20 @@ def test_runtime_routes_perceptions_and_actions_through_agent_queues(
 ):
     runtime, _thread, _fake_agent = spade_runtime_thread
     
-    perception = GoombaPerceptionDTO(obstacle_ahead=True, direction="left")
+    perception = GoombaPerceptionMessage(
+        simulation_sequence=7,
+        perception=GoombaPerception(
+            goomba_id="enemy-1",
+            position=Position(10, 20),
+            width=40,
+            height=50,
+            direction=SightDirection.LEFT,
+        ),
+    )
     runtime.perception_queue[AgentType.GOOMBA].put(perception)
     assert runtime.get_perception(AgentType.GOOMBA) is perception
 
-    action = GoombaActionDTO(action="move_left")
+    action = ActionResult("enemy-1", EnemyAction.MOVE_LEFT)
     runtime.put_action(AgentType.GOOMBA, action)
     assert runtime.action_queue[AgentType.GOOMBA].get_nowait() is action
 
