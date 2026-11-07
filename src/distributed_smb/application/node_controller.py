@@ -208,6 +208,7 @@ class NodeController(
         self.spade_runtime = SpadeRuntime(
             perception_queue=self.perception_queue,
             action_queue=self.action_queue,
+            enemies = self.engine.world_state.environment.enemies
         )
         self.spade_thread = SpadeThread(self.spade_runtime.run)
         self.agent_integration = AgentGameIntegration(
