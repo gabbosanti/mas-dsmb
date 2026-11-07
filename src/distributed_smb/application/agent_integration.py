@@ -49,7 +49,7 @@ class AgentGameIntegration:
     enabled: bool = False
     perception_interval_ticks: int = 5
     bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
-    spade_controlled_enemy_ids: set[str] = field(default_factory=set)
+    spade_controlled_enemy_ids: set[str] = field(default_factory=set) #tracks spade agents
     perceptor: EnemyPerceptor = field(init=False)
     # The engine honours STOP for a single tick only, so a STOP chosen by an
     # agent is re-sent every tick until that agent picks another action.
@@ -65,6 +65,7 @@ class AgentGameIntegration:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
         self.spade_controlled_enemy_ids.add(enemy_id)
 
+    #Test only
     def release_enemy(self, enemy_id: str) -> None:
         self.spade_controlled_enemy_ids.discard(enemy_id)
         self._stopped_enemy_ids.discard(enemy_id)
@@ -74,27 +75,28 @@ class AgentGameIntegration:
 
     def tick(self, dt: float, player_inputs: dict[str, InputState]) -> None:
         """Run one simulation tick without waiting for SPADE."""
-        if not self.enabled:
+        if self.enabled == False:
             self._stopped_enemy_ids.clear()
             self.bridge.discard_actions()
             self.bridge.discard_perceptions()
             self.engine.tick(dt, player_inputs)
             return
 
-        # 1. Act: drain the agents' decisions and turn them into engine commands.
-        enemy_commands = self._drain_agent_actions()
+        #Retreive agents' action and turn them into engine commands.
+        enemy_commands = self._retreive_agent_actions()
 
-        # 2. Advance the authoritative simulation.
+        #Advance the authoritative simulation.
         self.engine.tick(dt, player_inputs, enemy_commands=enemy_commands)
 
-        # 3. Sense: observe the new world state and hand it to the agents.
+        #Sense: observe the new world state and hand it to the agents.
         sequence = self.engine.world_state.sequence_number
-        if sequence % self.perception_interval_ticks != 0:
+        if sequence % self.perception_interval_ticks != 0: #every 5 ticks
             return
+        
         for enemy_id in self._live_spade_enemy_ids():
             perception = self.observe(enemy_id)
-            self.bridge.publish(
-                AgentType.GOOMBA,
+            self.bridge.publish( #in futuro dobbiamo estrarre il tipo di agente
+                AgentType.GOOMBA, 
                 GoombaPerceptionMessage(
                     simulation_sequence=sequence,
                     perception=perception,
@@ -108,11 +110,11 @@ class AgentGameIntegration:
             enemy_id for enemy_id in self.spade_controlled_enemy_ids if enemy_id in enemies
         )
 
-    def _drain_agent_actions(self) -> dict[str, EnemyMovementCommand]:
-        """Pop every queued ActionResult and translate it into an engine command."""
+    def _retreive_agent_actions(self) -> dict[str, EnemyMovementCommand]:
+        #Pop every queued ActionResult and translate it into an engine command.
         enemies = self.engine.world_state.environment.enemies
-        self._stopped_enemy_ids &= enemies.keys()
-        commands = {
+        self._stopped_enemy_ids &= enemies.keys() #maintains only alive enemies
+        commands = { #all stopped by default
             enemy_id: EnemyMovementCommand.STOP for enemy_id in self._stopped_enemy_ids
         }
 

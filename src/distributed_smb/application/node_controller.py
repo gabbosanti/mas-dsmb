@@ -253,6 +253,12 @@ class NodeController(
             artificial_latency_ms=artificial_latency_ms,
         )
         self._bootstrap_world()
+        
+        #Add all enemies to spade control
+        for enemy_id in self.engine.world_state.environment.enemies:
+            self.agent_integration.control_enemy_with_spade(enemy_id)
+            self.agent_integration.enabled = True
+        
         if role is PlayerRole.CLIENT:
             if isinstance(self.prediction_engine, NoopPredictionEngine):
                 self.prediction_engine = PredictionEngine(
