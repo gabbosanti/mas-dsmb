@@ -31,9 +31,13 @@ def drain_actions(runtime):
 
 def test_asl_initial_patrol_plan_publishes_move_right(goomba_agent, run_bdi_steps):
     agent, runtime = goomba_agent
+    agent._update_beliefs(
+        perception(obstacles=(ObstacleObservation(0, 100, 400, 32),)),
+        sequence=1,
+    )
     run_bdi_steps(agent, count=4)
     results = drain_actions(runtime)
-    assert results
+    assert len(results) == 1
     assert results[0].enemy_id == "enemy-1"
     assert results[0].action is EnemyAction.MOVE_RIGHT
 
@@ -46,22 +50,26 @@ def test_obstacle_belief_selects_turn_around_plan(goomba_agent, run_bdi_steps):
                 ObstacleObservation(0, 100, 400, 32),
                 ObstacleObservation(150, 0, 20, 100),
             )
-        )
+        ),
+        sequence=1,
     )
     run_bdi_steps(agent, count=12)
     results = drain_actions(runtime)
-    assert any(result.action is EnemyAction.TURN_AROUND for result in results)
+    assert len(results) == 1
+    assert results[0].action is EnemyAction.TURN_AROUND
     assert "direction(left)" in agent.bdi.get_beliefs()
 
 
 def test_void_belief_selects_turn_around_plan(goomba_agent, run_bdi_steps):
     agent, runtime = goomba_agent
     agent._update_beliefs(
-        perception(obstacles=(ObstacleObservation(0, 100, 140, 32),))
+        perception(obstacles=(ObstacleObservation(0, 100, 140, 32),)),
+        sequence=1,
     )
     run_bdi_steps(agent, count=12)
     results = drain_actions(runtime)
-    assert any(result.action is EnemyAction.TURN_AROUND for result in results)
+    assert len(results) == 1
+    assert results[0].action is EnemyAction.TURN_AROUND
     assert "direction(left)" in agent.bdi.get_beliefs()
 
 
@@ -75,12 +83,14 @@ def test_clear_perception_removes_stale_hazard_beliefs(
                 ObstacleObservation(0, 100, 400, 32),
                 ObstacleObservation(150, 0, 20, 100),
             )
-        )
+        ),
+        sequence=1,
     )
     run_bdi_steps(agent, count=1)
     assert "obstacle_ahead" in agent.bdi.get_beliefs()
     agent._update_beliefs(
-        perception(obstacles=(ObstacleObservation(0, 100, 400, 32),))
+        perception(obstacles=(ObstacleObservation(0, 100, 400, 32),)),
+        sequence=2,
     )
     run_bdi_steps(agent, count=1)
     assert "obstacle_ahead" not in agent.bdi.get_beliefs()

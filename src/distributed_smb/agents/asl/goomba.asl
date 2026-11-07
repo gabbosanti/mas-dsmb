@@ -2,23 +2,15 @@
 alive.
 direction(right).
 
-//Initial goal
-!patrol.
+// Each new game perception produces exactly one patrol decision.
++perception(Sequence) : void_ahead
+    <- .turn_around.
 
-//Plans
++perception(Sequence) : obstacle_ahead
+    <- .turn_around.
 
-+!patrol : void_ahead
-    <- .turn_around;
-       !patrol.
++perception(Sequence) : clear_ahead & direction(right)
+    <- .move_right.
 
-+!patrol : obstacle_ahead
-    <- .turn_around;
-       !patrol.
-
-+!patrol : direction(right)
-    <- .move_right;
-       !patrol.
-
-+!patrol : direction(left)
-    <- .move_left;
-       !patrol.
++perception(Sequence) : clear_ahead & direction(left)
+    <- .move_left.

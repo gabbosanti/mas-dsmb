@@ -24,7 +24,7 @@ def test_bdi_action_moves_the_controlled_goomba(goomba_agent, run_bdi_steps):
     integration.tick(0, {})
     message = runtime.get_perception(AgentType.GOOMBA)
     agent.goomba_id = message.perception.goomba_id
-    agent._update_beliefs(message.perception)
+    agent._update_beliefs(message.perception, message.simulation_sequence)
     run_bdi_steps(agent, count=4)
 
     result = runtime.action_queue[AgentType.GOOMBA].get_nowait()

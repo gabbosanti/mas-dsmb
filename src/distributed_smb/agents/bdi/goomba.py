@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from queue import Empty
 from typing import TYPE_CHECKING
 
 from spade_bdi.bdi import BDIAgent
@@ -16,6 +18,8 @@ from distributed_smb.agents.perception import GroundSensor, Vision
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
+LOGGER = logging.getLogger(__name__)
+
 class GoombaAgent(BDIAgent):
     spade_runtime: "SpadeRuntime"
     vision = Vision()
@@ -23,30 +27,43 @@ class GoombaAgent(BDIAgent):
 
     class PatrolBehaviour(CyclicBehaviour):
         async def on_start(self):
-            print("Starting behaviour . . .")
+            LOGGER.info("Goomba perception behaviour started")
             agent = self.agent
             if not isinstance(agent, GoombaAgent):
                 raise RuntimeError("PatrolBehaviour is not attached to a GoombaAgent")
             self.goomba_agent = agent
             
         async def run(self):
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.01)
 
             agent = self.goomba_agent
-            
-            goombaPerceptionMessage = agent.spade_runtime.get_perception(AgentType.GOOMBA)
+
+            try:
+                goombaPerceptionMessage = agent.spade_runtime.get_perception(
+                    AgentType.GOOMBA
+                )
+            except Empty:
+                return
+
             if not isinstance(goombaPerceptionMessage, GoombaPerceptionMessage):
                 raise TypeError(
                     "The GOOMBA perception queue must contain "
                     "GoombaPerceptionMessage instances"
                 )
 
-            print(f"[Agent] Perception received: {goombaPerceptionMessage.simulation_sequence}")
+            LOGGER.debug(
+                "Goomba %s received perception %s",
+                goombaPerceptionMessage.perception.goomba_id,
+                goombaPerceptionMessage.simulation_sequence,
+            )
             goombaPerception = goombaPerceptionMessage.perception
-            
-            agent._update_beliefs(goombaPerception)
+            agent.goomba_id = goombaPerception.goomba_id
+            agent._update_beliefs(
+                goombaPerception,
+                goombaPerceptionMessage.simulation_sequence,
+            )
 
-            print("[Agent] Beliefs updated; ASL plans choose the next action")
+            LOGGER.debug("Updated Goomba beliefs for perception %s", goombaPerceptionMessage.simulation_sequence)
 
 
         async def on_end(self):
@@ -59,7 +76,9 @@ class GoombaAgent(BDIAgent):
         self.add_behaviour(self.patrol_behaviour)
         await asyncio.sleep(1)
 
-    def _update_beliefs(self, perception: GoombaPerception) -> None:
+    def _update_beliefs(
+        self, perception: GoombaPerception, sequence: int
+    ) -> None:
         """Translate a game snapshot into facts consumed by the ASL plans."""
         obstacle_ahead = self.vision.obstacle_ahead(
             position=perception.center,
@@ -77,23 +96,26 @@ class GoombaAgent(BDIAgent):
         for belief, present in (
             ("obstacle_ahead", obstacle_ahead),
             ("void_ahead", void_ahead),
+            ("clear_ahead", not obstacle_ahead and not void_ahead),
         ):
             if present:
                 self.bdi.set_belief(belief)
             else:
                 self.bdi.remove_belief(belief)
+
+        self.bdi.set_belief("direction", perception.direction.value)
+        # This fresh event triggers exactly one ASL decision for this snapshot.
+        self.bdi.set_belief("perception", sequence)
         
     def add_custom_actions(self, actions):
 
         @actions.add(".move_right", 0)
         def move_right(agent, term, intention):
-            print("Goomba moves right!")
             self._publish_action(EnemyAction.MOVE_RIGHT)
             yield
 
         @actions.add(".move_left", 0)
         def move_left(agent, term, intention):
-            print("Goomba moves left!")
             self._publish_action(EnemyAction.MOVE_LEFT)
             yield
 
