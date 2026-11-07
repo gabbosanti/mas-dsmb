@@ -179,3 +179,8 @@ session_metadata.json
 
 .codex
 .claude
+
+#SPADE 
+server.db
+server.db-shm
+server.db-wal

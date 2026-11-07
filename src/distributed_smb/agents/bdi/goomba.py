@@ -8,9 +8,11 @@ from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
+    GoombaPerception,
     GoombaPerceptionMessage,
 )
 from distributed_smb.agents.perception import GroundSensor, Vision
+
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
 
@@ -39,10 +41,9 @@ class GoombaAgent(BDIAgent):
                     "GoombaPerceptionMessage instances"
                 )
 
-            print(f"[Agent] Perception received: {goombaPerceptionMessage.perception}")
+            print(f"[Agent] Perception received: {goombaPerceptionMessage.simulation_sequence}")
             goombaPerception = goombaPerceptionMessage.perception
-            agent.goomba_id = goombaPerception.goomba_id
-
+            
             agent._update_beliefs(goombaPerception)
 
             print("[Agent] Beliefs updated; ASL plans choose the next action")
@@ -58,7 +59,7 @@ class GoombaAgent(BDIAgent):
         self.add_behaviour(self.patrol_behaviour)
         await asyncio.sleep(1)
 
-    def _update_beliefs(self, perception) -> None:
+    def _update_beliefs(self, perception: GoombaPerception) -> None:
         """Translate a game snapshot into facts consumed by the ASL plans."""
         obstacle_ahead = self.vision.obstacle_ahead(
             position=perception.center,

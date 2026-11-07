@@ -26,10 +26,20 @@ class SpadeRuntime:
         action_queue: ActionQueue,
         *,
         stop_event: threading.Event | None = None,
+        goomba_agent: GoombaAgent | None = None,
     ) -> None:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
         self.stop_event = stop_event or threading.Event()
+
+        # Configure the BDI agent before starting the runtime thread so its
+        # ASL file is loaded before any perception can reach it.
+        self.goomba_agent = (
+            self._create_goomba_agent() if goomba_agent is None else goomba_agent
+        )
+        if self.goomba_agent.bdi_agent is None:
+            raise RuntimeError("The Goomba ASL file could not be loaded; BDI is disabled")
+        self.goomba_agent.spade_runtime = self
 
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
@@ -38,28 +48,26 @@ class SpadeRuntime:
     async def run(self) -> None:
         """Start configured agents, run until requested to stop, then stop them."""
         
-        #Goomba configuration
-        asl_path = Path(__file__).with_name("goomba.asl")
-        
-        goombaAgent = self._create_goomba_agent(asl_path)
-        goombaAgent.spade_runtime = self
-                        
+        goomba_agent = self.goomba_agent
         try:
             print("[SPADE] Starting agent...")
-            await goombaAgent.start()
+            await goomba_agent.start()
             
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
                 
         finally:
-            if goombaAgent.is_alive():
-                await goombaAgent.stop()
+            if goomba_agent.is_alive():
+                await goomba_agent.stop()
 
     @staticmethod
-    def _create_goomba_agent(asl_path: Path) -> GoombaAgent:
-        """Import SPADE only when the real agent runtime is actually started."""
+    def _create_goomba_agent() -> GoombaAgent:
+        """Construct the Goomba and load its ASL configuration."""
         from distributed_smb.agents.bdi.goomba import GoombaAgent
 
+        asl_path = Path(__file__).parent / "asl" / "goomba.asl"
+        if not asl_path.is_file():
+            raise FileNotFoundError(f"Goomba ASL file not found: {asl_path}")
         return GoombaAgent(
             "goomba@localhost",
             "goomba_password",
