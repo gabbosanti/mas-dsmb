@@ -36,7 +36,10 @@ class SpadeRuntime:
                 
         # Configure the BDI agent before starting the runtime thread so its asl file is loaded before any perception can reach it.
         self.goomba_agents: list[GoombaAgent] = self._create_goomba_agents(self.enemies)
-        
+        # Each behaviour accesses the queues through its owning agent. Inject
+        # the runtime before start(), so on_start()/run() always see it.
+        for goomba_agent in self.goomba_agents:
+            goomba_agent.spade_runtime = self
         
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
@@ -45,17 +48,18 @@ class SpadeRuntime:
     async def run(self) -> None:
         """Start configured agents, run until requested to stop, then stop them."""
         
-        goomba_agent = self.goomba_agent
         try:
-            print("[SPADE] Starting agent...")
-            await goomba_agent.start()
-            
+            for goomba_agent in self.goomba_agents:
+                print("[SPADE] Starting agent...")
+                await goomba_agent.start()
+
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
-                
+
         finally:
-            if goomba_agent.is_alive():
-                await goomba_agent.stop()
+            for goomba_agent in self.goomba_agents:
+                if goomba_agent.is_alive():
+                    await goomba_agent.stop()
 
     @staticmethod
     def _create_goomba_agents(agents: dict[str, Enemy]) -> list[GoombaAgent]:
@@ -66,7 +70,7 @@ class SpadeRuntime:
         if not asl_path.is_file():
             raise FileNotFoundError(f"Goomba ASL file not found: {asl_path}")
         
-        goomba_agents: list[GoombaAgent] 
+        goomba_agents: list[GoombaAgent] = []
                 
         for goomba_id in agents.keys():
             
