@@ -15,14 +15,18 @@ def test_detects_an_obstacle_ahead_but_not_one_behind():
     obstacles = (wall(150), wall(20))
 
     assert vision.obstacle_ahead(Position(100, 100), SightDirection.RIGHT, obstacles)
-    assert not vision.obstacle_ahead(Position(100, 100), SightDirection.LEFT, (wall(180),))
+    assert not vision.obstacle_ahead(
+        Position(100, 100), SightDirection.LEFT, (wall(180),)
+    )
 
 
 def test_obstacle_hidden_behind_a_nearer_obstacle_is_not_seen():
     vision = Vision()
     obstacles = (wall(150), wall(220))
 
-    visible = vision.visible_obstacles(Position(100, 100), SightDirection.RIGHT, obstacles)
+    visible = vision.visible_obstacles(
+        Position(100, 100), SightDirection.RIGHT, obstacles
+    )
 
     assert [obstacle.x for obstacle in visible] == [150]
 
@@ -30,7 +34,9 @@ def test_obstacle_hidden_behind_a_nearer_obstacle_is_not_seen():
 def test_obstacle_detection_respects_sight_distance():
     vision = Vision(sight_distance=100)
 
-    assert not vision.obstacle_ahead(Position(100, 100), SightDirection.RIGHT, (wall(250),))
+    assert not vision.obstacle_ahead(
+        Position(100, 100), SightDirection.RIGHT, (wall(250),)
+    )
 
 
 def test_nearest_player_returns_none_when_there_are_no_players():

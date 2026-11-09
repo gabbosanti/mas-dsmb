@@ -17,11 +17,12 @@ DEFAULT_GROUND_TOLERANCE = 4.0
 @dataclass(frozen=True, slots=True)
 class GroundSensor:
     ##Probe the floor a few pixels beyond the walker's leading edge.
-    
+
     """
     lookahead is how far ahead of the feet the probe is placed: it should
     cover the distance travelled while the agent decides, otherwise the
     turn arrives late."""
+
     lookahead: float = DEFAULT_LOOKAHEAD
 
     """
@@ -38,14 +39,16 @@ class GroundSensor:
 
     def is_void_ahead(
         self,
-        position: Position, #position is the walker's top-left corner, as in the perceptions.
+        position: Position,  # position is the walker's top-left corner, as in the perceptions.
         width: float,
         height: float,
         direction: SightDirection,
         obstacles: Iterable[ObstacleObservation],
     ) -> bool:
-        #True if no walkable surface lies just ahead of the walker's feet.
-        probe = self.probe_point(position, width, height, direction) #Return the Position poiint under probe
+        # True if no walkable surface lies just ahead of the walker's feet.
+        probe = self.probe_point(
+            position, width, height, direction
+        )  # Return the Position poiint under probe
         return not any(self._supports(obstacle, probe) for obstacle in obstacles)
 
     def probe_point(
@@ -55,14 +58,14 @@ class GroundSensor:
         height: float,
         direction: SightDirection,
     ) -> Position:
-        #Point at feet level, "lookahead" pixels past the leading edge.
+        # Point at feet level, "lookahead" pixels past the leading edge.
         feet_y = position.y + height
         if direction is SightDirection.LEFT:
             return Position(position.x - self.lookahead, feet_y)
         return Position(position.x + width + self.lookahead, feet_y)
 
     def _supports(self, obstacle: ObstacleObservation, probe: Position) -> bool:
-        #"True if the obstacle's top surface is under probe 
+        # "True if the obstacle's top surface is under probe
         return (
             obstacle.x <= probe.x <= obstacle.x + obstacle.width
             and abs(obstacle.y - probe.y) <= self.tolerance

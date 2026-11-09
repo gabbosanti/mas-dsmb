@@ -31,19 +31,29 @@ def test_detects_the_edge_of_a_platform_in_the_walking_direction():
     ground = [floor(0, 160)]  # right edge at x=160
 
     # Leading edge at 150 → probe at 160: still on the edge.
-    assert not sensor.is_void_ahead(walker_at(100), WIDTH, HEIGHT, SightDirection.RIGHT, ground)
+    assert not sensor.is_void_ahead(
+        walker_at(100), WIDTH, HEIGHT, SightDirection.RIGHT, ground
+    )
     # Leading edge at 155 → probe at 165: over the gap.
-    assert sensor.is_void_ahead(walker_at(105), WIDTH, HEIGHT, SightDirection.RIGHT, ground)
+    assert sensor.is_void_ahead(
+        walker_at(105), WIDTH, HEIGHT, SightDirection.RIGHT, ground
+    )
     # Walking back to the left there is floor again.
-    assert not sensor.is_void_ahead(walker_at(105), WIDTH, HEIGHT, SightDirection.LEFT, ground)
+    assert not sensor.is_void_ahead(
+        walker_at(105), WIDTH, HEIGHT, SightDirection.LEFT, ground
+    )
 
 
 def test_looking_left_probes_beyond_the_left_edge():
     sensor = GroundSensor(lookahead=10)
     ground = [floor(100, 300)]  # left edge at x=100
 
-    assert sensor.is_void_ahead(walker_at(105), WIDTH, HEIGHT, SightDirection.LEFT, ground)
-    assert not sensor.is_void_ahead(walker_at(110), WIDTH, HEIGHT, SightDirection.LEFT, ground)
+    assert sensor.is_void_ahead(
+        walker_at(105), WIDTH, HEIGHT, SightDirection.LEFT, ground
+    )
+    assert not sensor.is_void_ahead(
+        walker_at(110), WIDTH, HEIGHT, SightDirection.LEFT, ground
+    )
 
 
 def test_a_surface_at_another_height_does_not_count_as_ground():

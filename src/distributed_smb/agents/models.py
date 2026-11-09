@@ -3,10 +3,10 @@
 from dataclasses import dataclass
 from enum import Enum
 
+
 # Top-left world coordinates in pixels.
 @dataclass(frozen=True, slots=True)
 class Position:
-
     x: float
     y: float
 

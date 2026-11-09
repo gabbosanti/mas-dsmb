@@ -49,7 +49,9 @@ class AgentGameIntegration:
     enabled: bool = False
     perception_interval_ticks: int = 5
     bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
-    spade_controlled_enemy_ids: set[str] = field(default_factory=set) #tracks spade agents
+    spade_controlled_enemy_ids: set[str] = field(
+        default_factory=set
+    )  # tracks spade agents
     perceptor: EnemyPerceptor = field(init=False)
     # The engine honours STOP for a single tick only, so a STOP chosen by an
     # agent is re-sent every tick until that agent picks another action.
@@ -65,7 +67,7 @@ class AgentGameIntegration:
             raise EnemyNotFoundError(f"Enemy {enemy_id!r} does not exist")
         self.spade_controlled_enemy_ids.add(enemy_id)
 
-    #Test only
+    # Test only
     def release_enemy(self, enemy_id: str) -> None:
         self.spade_controlled_enemy_ids.discard(enemy_id)
         self._stopped_enemy_ids.discard(enemy_id)
@@ -82,21 +84,21 @@ class AgentGameIntegration:
             self.engine.tick(dt, player_inputs)
             return
 
-        #Retreive agents' action and turn them into engine commands.
+        # Retreive agents' action and turn them into engine commands.
         enemy_commands = self._retreive_agent_actions()
 
-        #Advance the authoritative simulation.
+        # Advance the authoritative simulation.
         self.engine.tick(dt, player_inputs, enemy_commands=enemy_commands)
 
-        #Sense: observe the new world state and hand it to the agents.
+        # Sense: observe the new world state and hand it to the agents.
         sequence = self.engine.world_state.sequence_number
-        if sequence % self.perception_interval_ticks != 0: #every 5 ticks
+        if sequence % self.perception_interval_ticks != 0:  # every 5 ticks
             return
-        
+
         for enemy_id in self._live_spade_enemy_ids():
             perception = self.observe(enemy_id)
-            self.bridge.publish( #in futuro dobbiamo estrarre il tipo di agente
-                AgentType.GOOMBA, 
+            self.bridge.publish(  # in futuro dobbiamo estrarre il tipo di agente
+                AgentType.GOOMBA,
                 GoombaPerceptionMessage(
                     simulation_sequence=sequence,
                     perception=perception,
@@ -107,14 +109,16 @@ class AgentGameIntegration:
         """SPADE-controlled enemies still present in the world, in stable order."""
         enemies = self.engine.world_state.environment.enemies
         return sorted(
-            enemy_id for enemy_id in self.spade_controlled_enemy_ids if enemy_id in enemies
+            enemy_id
+            for enemy_id in self.spade_controlled_enemy_ids
+            if enemy_id in enemies
         )
 
     def _retreive_agent_actions(self) -> dict[str, EnemyMovementCommand]:
-        #Pop every queued ActionResult and translate it into an engine command.
+        # Pop every queued ActionResult and translate it into an engine command.
         enemies = self.engine.world_state.environment.enemies
-        self._stopped_enemy_ids &= enemies.keys() #maintains only alive enemies
-        commands = { #all stopped by default
+        self._stopped_enemy_ids &= enemies.keys()  # maintains only alive enemies
+        commands = {  # all stopped by default
             enemy_id: EnemyMovementCommand.STOP for enemy_id in self._stopped_enemy_ids
         }
 
@@ -129,10 +133,14 @@ class AgentGameIntegration:
 
             enemy = enemies.get(result.enemy_id)
             if enemy is None or result.enemy_id not in self.spade_controlled_enemy_ids:
-                LOGGER.debug("Discarding action for uncontrolled enemy %r", result.enemy_id)
+                LOGGER.debug(
+                    "Discarding action for uncontrolled enemy %r", result.enemy_id
+                )
                 continue
 
-            command = self._to_engine_command(enemy, result.action, commands.get(enemy.enemy_id))
+            command = self._to_engine_command(
+                enemy, result.action, commands.get(enemy.enemy_id)
+            )
             if command is None:
                 LOGGER.warning(
                     "Enemy %r cannot perform %s", result.enemy_id, result.action
@@ -163,7 +171,10 @@ class AgentGameIntegration:
         if action is EnemyAction.TURN_AROUND:
             # Turn relative to a move already chosen this tick, else to the
             # current velocity (STOP keeps vx, so a stopped enemy still has one).
-            if pending in (EnemyMovementCommand.MOVE_LEFT, EnemyMovementCommand.MOVE_RIGHT):
+            if pending in (
+                EnemyMovementCommand.MOVE_LEFT,
+                EnemyMovementCommand.MOVE_RIGHT,
+            ):
                 heading_left = pending is EnemyMovementCommand.MOVE_LEFT
             else:
                 heading_left = enemy.vx < 0

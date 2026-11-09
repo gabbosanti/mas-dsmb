@@ -24,7 +24,7 @@ _EPSILON = 1e-9
 class VisualField:
     """What an observer sees at a given instant."""
 
-    #players: tuple[PlayerPerception, ...] = ()
+    # players: tuple[PlayerPerception, ...] = ()
     obstacles: tuple[ObstacleObservation, ...] = ()
 
 
@@ -47,9 +47,9 @@ class Vision:
         position: Position,
         direction: SightDirection | None,
         obstacles: Iterable[ObstacleObservation],
-    ) -> bool :
+    ) -> bool:
         obstacles = tuple(obstacles)
-        for index, obstacle in enumerate(obstacles) :
+        for index, obstacle in enumerate(obstacles):
             # Ground below the observer supports movement but is not a
             # forward obstacle for the patrol plan to turn around from.
             if not obstacle.y <= position.y <= obstacle.y + obstacle.height:
@@ -69,7 +69,7 @@ class Vision:
     ) -> VisualField:
         obstacles = tuple(obstacles)
         return VisualField(
-            #players=self.visible_players(position, direction, players, obstacles),
+            # players=self.visible_players(position, direction, players, obstacles),
             obstacles=self.visible_obstacles(position, direction, obstacles),
         )
 
@@ -84,7 +84,7 @@ class Vision:
         return tuple(
             player
             for player in players
-                if self.can_see(position, direction, player.center, obstacles)
+            if self.can_see(position, direction, player.center, obstacles)
         )
 
     def visible_obstacles(
@@ -97,7 +97,9 @@ class Vision:
         return tuple(
             obstacle
             for index, obstacle in enumerate(obstacles)
-                if self.can_see(position, direction, obstacle.center, obstacles, ignored_index=index)
+            if self.can_see(
+                position, direction, obstacle.center, obstacles, ignored_index=index
+            )
         )
 
     def can_see(
@@ -109,12 +111,11 @@ class Vision:
         *,
         ignored_index: int | None = None,
     ) -> bool:
-        #True if target is ahead within range (is_in_range) and not occluded (has_clear_line)
+        # True if target is ahead within range (is_in_range) and not occluded (has_clear_line)
         return self.is_in_range(position, direction, target) and has_clear_line(
             position, target, obstacles, ignored_index=ignored_index
         )
 
-    
     def is_in_range(
         self, position: Position, direction: SightDirection | None, target: Position
     ) -> bool:
@@ -126,11 +127,11 @@ class Vision:
         return hypot(delta_x, target.y - position.y) <= self.sight_distance
 
 
-#Not used in Milestone 1
+# Not used in Milestone 1
 def nearest_player(
     position: Position, players: Iterable[PlayerPerception]
 ) -> PlayerPerception | None:
-    #Return the closest player to position ; ties are broken by player id.
+    # Return the closest player to position ; ties are broken by player id.
     return min(
         players,
         key=lambda player: (

@@ -73,9 +73,7 @@ def test_void_belief_selects_turn_around_plan(goomba_agent, run_bdi_steps):
     assert "direction(left)" in agent.bdi.get_beliefs()
 
 
-def test_clear_perception_removes_stale_hazard_beliefs(
-    goomba_agent, run_bdi_steps
-):
+def test_clear_perception_removes_stale_hazard_beliefs(goomba_agent, run_bdi_steps):
     agent, _runtime = goomba_agent
     agent._update_beliefs(
         perception(
@@ -130,7 +128,6 @@ def test_turn_around_is_an_absolute_move_so_repeated_turns_do_not_cancel_out(
 
 def test_bdi_behaviour_is_throttled():
     from distributed_smb.agents.bdi.goomba import ThrottledBDIBehaviour
-
     from distributed_smb.agents.spade_runtime import SpadeRuntime
     from distributed_smb.application.spade_agent_bridge import make_agent_queues
 

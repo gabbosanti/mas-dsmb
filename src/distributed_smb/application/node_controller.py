@@ -8,12 +8,6 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from distributed_smb.application.agent_integration import AgentGameIntegration
-from distributed_smb.application.dto import RenderFrame, build_render_frame
-from distributed_smb.application.spade_agent_bridge import (
-    SpadeAgentBridge,
-    make_agent_queues,
-)
 from distributed_smb.agents.spade_runtime import (
     ActionQueue,
     PerceptionQueue,
@@ -58,6 +52,10 @@ from distributed_smb.application.reconciliation import (
     ShadowCopyProtocol,
 )
 from distributed_smb.application.recovery.mixin import RecoveryMixin
+from distributed_smb.application.spade_agent_bridge import (
+    SpadeAgentBridge,
+    make_agent_queues,
+)
 from distributed_smb.domain.entity import Player
 from distributed_smb.domain.game_engine import GameEngine
 from distributed_smb.domain.lifecycle import NodeLifecycle
@@ -262,7 +260,7 @@ class NodeController(
             artificial_latency_ms=artificial_latency_ms,
         )
         self._bootstrap_world()
-        
+
         # Hand the configured enemies to their SPADE agents.
         for enemy_id in self._spade_enemy_ids():
             self.agent_integration.control_enemy_with_spade(enemy_id)

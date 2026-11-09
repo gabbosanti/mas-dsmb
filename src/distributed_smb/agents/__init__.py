@@ -22,7 +22,6 @@ __all__ = [
     "ObstacleObservation",
     "PlayerPerception",
     "Position",
-    "SpadeThread",
     "SightDirection",
     "SpadeThread",
 ]

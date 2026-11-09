@@ -32,7 +32,10 @@ class SpadeAgentBridge:
     dropped_actions: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
-        for name, queues in (("perceptions", self.perceptions), ("actions", self.actions)):
+        for name, queues in (
+            ("perceptions", self.perceptions),
+            ("actions", self.actions),
+        ):
             missing = set(AgentType) - queues.keys()
             if missing:
                 raise ValueError(

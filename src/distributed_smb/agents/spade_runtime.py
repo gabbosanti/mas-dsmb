@@ -8,7 +8,7 @@ import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from queue import Empty, Queue
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import GoombaPerceptionMessage
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
-PerceptionQueue: TypeAlias = dict[AgentType, Queue]
-ActionQueue: TypeAlias = dict[AgentType, Queue]
-GoombaFactory: TypeAlias = Callable[[str], "GoombaAgent"]
+type PerceptionQueue = dict[AgentType, Queue]
+type ActionQueue = dict[AgentType, Queue]
+type GoombaFactory = Callable[[str], "GoombaAgent"]
 
 # How often the runtime moves perceptions from the game queue to the agents.
 DISPATCH_INTERVAL = 0.01
