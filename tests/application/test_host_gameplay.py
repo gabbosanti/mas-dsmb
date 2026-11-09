@@ -1,7 +1,5 @@
-from distributed_smb.agents.models import (
-    ActionStatus,
-    EnemyAction,
-)
+from distributed_smb.agents.agent_type import AgentType
+from distributed_smb.agents.models import ActionResult, EnemyAction
 from distributed_smb.application.node_controller import NodeController
 from distributed_smb.domain.entity import Player
 from distributed_smb.domain.game_engine import GameEngine
@@ -204,12 +202,12 @@ def test_authoritative_host_frame_applies_the_selected_agent_action():
     enemy = controller.engine.world_state.environment.enemies["enemy-1"]
     enemy.x = 520
     controller.agent_integration.enabled = True
-    controller.agent_integration.control_enemy("enemy-1", EnemyAction.MOVE_LEFT)
+    controller.agent_integration.control_enemy_with_spade("enemy-1")
+    # What SPADE's put_action does: the queue shared with the game thread.
+    controller.action_queue[AgentType.GOOMBA].put(
+        ActionResult("enemy-1", EnemyAction.MOVE_LEFT)
+    )
 
     controller._process_host_frame(InputState())
 
     assert enemy.x < 520
-    assert (
-        controller.agent_integration.last_results["enemy-1"].status
-        is ActionStatus.APPLIED
-    )

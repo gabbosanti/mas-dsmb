@@ -1,23 +1,16 @@
 //Belief base
 alive.
-direction(right)
+direction(right).
 
-//Initial goal
-!patrol.
+// Each new game perception produces exactly one patrol decision.
++perception(Sequence) : void_ahead
+    <- .turn_around.
 
-//Plans
++perception(Sequence) : obstacle_ahead
+    <- .turn_around.
 
-+!patrol : obstacle_ahead
-    <- .turn_around;
-       !patrol.
++perception(Sequence) : clear_ahead & direction(right)
+    <- .move_right.
 
-+!patrol : direction(right)
-    <- .move_right;
-       !patrol.
-
-+!patrol : direction(left)
-    <- .move_left;
-       !patrol.
-
--alive : 
-    <- .kill_agent.
++perception(Sequence) : clear_ahead & direction(left)
+    <- .move_left.

@@ -30,3 +30,7 @@ packages = [
     { include = "distributed_smb", from = "src" }
 ]
 include = ["src/distributed_smb/assets/*/*.png"]
+[dependency-groups]
+dev = [
+    "pytestarch (>=5.1.0,<6.0.0)"
+]

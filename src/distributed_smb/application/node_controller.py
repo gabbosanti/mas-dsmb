@@ -6,10 +6,14 @@ import time
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
-from queue import Queue
 from typing import Any
 
-from distributed_smb.agents.agent_type import AgentType
+from distributed_smb.application.agent_integration import AgentGameIntegration
+from distributed_smb.application.dto import RenderFrame, build_render_frame
+from distributed_smb.application.spade_agent_bridge import (
+    SpadeAgentBridge,
+    make_agent_queues,
+)
 from distributed_smb.agents.spade_runtime import (
     ActionQueue,
     PerceptionQueue,
@@ -72,6 +76,7 @@ from distributed_smb.shared.config import (
     INPUT_HISTORY_SIZE,
     LOBBY_WS_PORT,
     PREDICTION_LEAD_CALIBRATION_FRAMES,
+    SPADE_ENEMY_IDS,
     TICK_INTERVAL,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
@@ -199,16 +204,30 @@ class NodeController(
     _relaunch_thread: Any | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.perception_queue = {agent_type: Queue() for agent_type in AgentType}
-        self.action_queue = {agent_type: Queue() for agent_type in AgentType}
+        # One set of per-agent-type queues, shared by both threads: the game
+        # thread uses them through the bridge, SPADE through SpadeRuntime.
+        self.perception_queue = make_agent_queues()
+        self.action_queue = make_agent_queues()
         self.spade_runtime = SpadeRuntime(
             perception_queue=self.perception_queue,
             action_queue=self.action_queue,
+            enemy_ids=self._spade_enemy_ids(),
         )
         self.spade_thread = SpadeThread(self.spade_runtime.run)
-        self.agent_integration = AgentGameIntegration(self.engine)
+        self.agent_integration = AgentGameIntegration(
+            self.engine,
+            bridge=SpadeAgentBridge(
+                perceptions=self.perception_queue,
+                actions=self.action_queue,
+            ),
+        )
         if isinstance(self.prediction_engine, NoopPredictionEngine):
             self.prediction_engine._engine = self.engine
+
+    def _spade_enemy_ids(self) -> list[str]:
+        """Configured SPADE-controlled enemies that exist in the loaded level."""
+        enemies = self.engine.world_state.environment.enemies
+        return [enemy_id for enemy_id in SPADE_ENEMY_IDS if enemy_id in enemies]
 
     def _make_ws_client(self, host: str, port: int, path: str) -> None:
         """Create a WebSocket client handler and assign it as the game event receiver."""
@@ -243,6 +262,12 @@ class NodeController(
             artificial_latency_ms=artificial_latency_ms,
         )
         self._bootstrap_world()
+        
+        # Hand the configured enemies to their SPADE agents.
+        for enemy_id in self._spade_enemy_ids():
+            self.agent_integration.control_enemy_with_spade(enemy_id)
+        self.agent_integration.enabled = True
+
         if role is PlayerRole.CLIENT:
             if isinstance(self.prediction_engine, NoopPredictionEngine):
                 self.prediction_engine = PredictionEngine(

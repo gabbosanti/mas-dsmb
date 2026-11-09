@@ -2,17 +2,16 @@
 
 import asyncio
 import threading
-from queue import Queue
 
 import pytest
 
-from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.spade_runtime import SpadeRuntime
 from distributed_smb.agents.spade_thread import SpadeThread
+from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
 
 @pytest.fixture
-def spade_runtime_thread(monkeypatch):
+def spade_runtime_thread():
     """Create and start a runtime/thread pair without connecting to XMPP.
 
     The SPADE Agent is replaced with a small lifecycle double. Tests using this
@@ -27,6 +26,13 @@ def spade_runtime_thread(monkeypatch):
             self.thread_name = None
             self.event_loop_running = False
             self._alive = False
+            self.bdi_agent = object()
+            self.spade_runtime = None
+            self.goomba_id = None
+            self.perceived = []
+
+        def perceive(self, message):
+            self.perceived.append(message)
 
         async def start(self):
             self._alive = True
@@ -41,29 +47,48 @@ def spade_runtime_thread(monkeypatch):
             self._alive = False
             self.stopped = True
 
-    perceptions = {agent_type: Queue() for agent_type in AgentType}
-    actions = {agent_type: Queue() for agent_type in AgentType}
-    runtime = SpadeRuntime(perceptions, actions)
+    perceptions = make_agent_queues()
+    actions = make_agent_queues()
+    fake_agent = FakeGoombaAgent()
+    runtime = SpadeRuntime(
+        perception_queue=perceptions,
+        action_queue=actions,
+        enemy_ids=["enemy-1"],
+        goomba_factory=lambda _enemy_id: fake_agent,
+    )
     thread = SpadeThread(runtime.run)
-    fake_agent = None
-    agent_created = threading.Event()
-
-    def make_fake_agent(_asl_path):
-        nonlocal fake_agent
-        fake_agent = FakeGoombaAgent()
-        agent_created.set()
-        return fake_agent
-
-    monkeypatch.setattr(runtime, "_create_goomba_agent", make_fake_agent)
     thread.start()
-    # Agent construction and its async start happen in the worker thread.
-    if not agent_created.wait(timeout=2.0):
-        runtime.request_stop()
-        thread.stop(timeout=2.0)
-        pytest.fail("SPADE runtime did not construct its agent")
 
     try:
         yield runtime, thread, fake_agent
     finally:
         runtime.request_stop()
         thread.stop(timeout=2.0)
+
+
+@pytest.fixture
+def goomba_agent():
+    """Build the real Goomba BDI agent without starting its XMPP connection."""
+    perceptions = make_agent_queues()
+    actions = make_agent_queues()
+    runtime = SpadeRuntime(
+        perception_queue=perceptions,
+        action_queue=actions,
+        enemy_ids=["enemy-1"],
+    )
+    agent = runtime.goomba_agents["enemy-1"]
+    return agent, runtime
+
+
+@pytest.fixture
+def run_bdi_steps():
+    """Advance the real SPADE-BDI interpreter without starting an XMPP agent."""
+
+    def run(agent, count=1):
+        async def advance():
+            for _ in range(count):
+                await agent.bdi.run()
+
+        asyncio.run(advance())
+
+    return run
