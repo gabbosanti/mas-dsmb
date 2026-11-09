@@ -98,6 +98,9 @@ PLAYER_HEIGHT = int(50 * WORLD_SCALE)
 ENEMY_HEIGHT = int(34 * WORLD_SCALE)
 ENEMY_WIDTH = int(34 * WORLD_SCALE)
 
+# Enemies driven by a SPADE-BDI agent; the others keep the engine's patrol.
+SPADE_ENEMY_IDS: tuple[str, ...] = ("enemy-1", "enemy-2")
+
 MAX_PLAYERS = 4
 
 RESPAWN_DELAY_S = 3.0

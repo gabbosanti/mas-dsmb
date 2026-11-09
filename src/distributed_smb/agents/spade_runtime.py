@@ -3,88 +3,127 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Queue
 from typing import TYPE_CHECKING, TypeAlias
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.domain.entity import Enemy
+from distributed_smb.agents.models import GoombaPerceptionMessage
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
 
+LOGGER = logging.getLogger(__name__)
+
 PerceptionQueue: TypeAlias = dict[AgentType, Queue]
 ActionQueue: TypeAlias = dict[AgentType, Queue]
+GoombaFactory: TypeAlias = Callable[[str], "GoombaAgent"]
+
+# How often the runtime moves perceptions from the game queue to the agents.
+DISPATCH_INTERVAL = 0.01
+GOOMBA_ASL_PATH = Path(__file__).parent / "asl" / "goomba.asl"
 
 
 class SpadeRuntime:
-    """Own SPADE setup, agent lifecycle, and shutdown on an asyncio loop."""
+    """Own SPADE setup, agent lifecycle, and shutdown on an asyncio loop.
+
+    The game thread puts every Goomba's perception on the single GOOMBA queue.
+    The runtime is its only reader: it routes each perception to the agent
+    that owns that enemy, so agents never steal each other's perceptions.
+    """
 
     def __init__(
         self,
         perception_queue: PerceptionQueue,
         action_queue: ActionQueue,
         *,
+        enemy_ids: Iterable[str] = (),
         stop_event: threading.Event | None = None,
-        enemies: dict[str, Enemy]
+        goomba_factory: GoombaFactory | None = None,
     ) -> None:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
         self.stop_event = stop_event or threading.Event()
-        self.enemies = enemies
-                
-        # Configure the BDI agent before starting the runtime thread so its asl file is loaded before any perception can reach it.
-        self.goomba_agents: list[GoombaAgent] = self._create_goomba_agents(self.enemies)
-        # Each behaviour accesses the queues through its owning agent. Inject
-        # the runtime before start(), so on_start()/run() always see it.
-        for goomba_agent in self.goomba_agents:
-            goomba_agent.spade_runtime = self
-        
+        factory = goomba_factory or self._create_goomba_agent
+
+        # Build every agent (and load its ASL) before the thread starts, and
+        # inject the runtime so the agents can publish their actions.
+        self.goomba_agents: dict[str, GoombaAgent] = {}
+        for enemy_id in enemy_ids:
+            agent = factory(enemy_id)
+            agent.goomba_id = enemy_id
+            agent.spade_runtime = self
+            self.goomba_agents[enemy_id] = agent
+
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
         self.stop_event.set()
-    
+
     async def run(self) -> None:
-        """Start configured agents, run until requested to stop, then stop them."""
-        
+        """Start the agents, dispatch perceptions until stopped, then stop them."""
         try:
-            for goomba_agent in self.goomba_agents:
-                print("[SPADE] Starting agent...")
-                await goomba_agent.start()
+            for enemy_id, agent in self.goomba_agents.items():
+                LOGGER.info("Starting SPADE agent for %s", enemy_id)
+                await agent.start()
 
             while not self.stop_event.is_set():
-                await asyncio.sleep(0.1)
+                self.dispatch_perceptions()
+                await asyncio.sleep(DISPATCH_INTERVAL)
 
         finally:
-            for goomba_agent in self.goomba_agents:
-                if goomba_agent.is_alive():
-                    await goomba_agent.stop()
+            for agent in self.goomba_agents.values():
+                if agent.is_alive():
+                    await agent.stop()
+
+    def dispatch_perceptions(self) -> int:
+        """Hand the latest queued perception of each enemy to its own agent.
+
+        Older perceptions of the same enemy are superseded and dropped, so a
+        slow agent always reasons on the freshest snapshot.
+        """
+        latest: dict[str, GoombaPerceptionMessage] = {}
+        while True:
+            try:
+                message = self.get_perception(AgentType.GOOMBA)
+            except Empty:
+                break
+            if not isinstance(message, GoombaPerceptionMessage):
+                LOGGER.warning(
+                    "Discarding GOOMBA perception of type %s", type(message).__name__
+                )
+                continue
+            latest[message.perception.goomba_id] = message
+
+        for goomba_id, message in latest.items():
+            agent = self.goomba_agents.get(goomba_id)
+            if agent is None:
+                LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
+                continue
+            agent.perceive(message)
+        return len(latest)
 
     @staticmethod
-    def _create_goomba_agents(agents: dict[str, Enemy]) -> list[GoombaAgent]:
-        """Construct the Goomba and load its ASL configuration."""
+    def _create_goomba_agent(enemy_id: str) -> GoombaAgent:
+        """Construct a Goomba BDI agent; SPADE is imported only when needed."""
         from distributed_smb.agents.bdi.goomba import GoombaAgent
 
-        asl_path = Path(__file__).parent / "asl" / "goomba.asl"
-        if not asl_path.is_file():
-            raise FileNotFoundError(f"Goomba ASL file not found: {asl_path}")
-        
-        goomba_agents: list[GoombaAgent] = []
-                
-        for goomba_id in agents.keys():
-            
-            jid = f"goomba{goomba_id}@localhost"
-            password =f"goomba{goomba_id}_password"
-            goomba_agent = GoombaAgent(jid, password,str(asl_path))
-            goomba_agents.append(goomba_agent)
-        
-        return goomba_agents
+        if not GOOMBA_ASL_PATH.is_file():
+            raise FileNotFoundError(f"Goomba ASL file not found: {GOOMBA_ASL_PATH}")
+        return GoombaAgent(
+            f"goomba-{enemy_id}@localhost",
+            f"goomba-{enemy_id}_password",
+            str(GOOMBA_ASL_PATH),
+        )
 
     def get_perception(
         self, agent_type: AgentType, timeout: float | None = 0
     ) -> object:
         """Read a perception from the queue belonging to an agent type."""
+        if timeout == 0:
+            return self.perception_queue[AgentType(agent_type)].get_nowait()
         return self.perception_queue[AgentType(agent_type)].get(timeout=timeout)
 
     def put_action(self, agent_type: AgentType, action: object) -> None:

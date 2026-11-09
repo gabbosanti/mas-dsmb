@@ -22,9 +22,7 @@ def test_bdi_action_moves_the_controlled_goomba(goomba_agent, run_bdi_steps):
 
     # Game thread publishes the first snapshot into the shared perception map.
     integration.tick(0, {})
-    message = runtime.get_perception(AgentType.GOOMBA)
-    agent.goomba_id = message.perception.goomba_id
-    agent._update_beliefs(message.perception, message.simulation_sequence)
+    assert runtime.dispatch_perceptions() == 1
     run_bdi_steps(agent, count=4)
 
     result = runtime.action_queue[AgentType.GOOMBA].get_nowait()

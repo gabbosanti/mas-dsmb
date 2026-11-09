@@ -1,10 +1,9 @@
 import asyncio
 import logging
-from queue import Empty
 from typing import TYPE_CHECKING
 
 from spade_bdi.bdi import BDIAgent
-from spade.behaviour import CyclicBehaviour
+from spade_bdi.bdi_behaviour import BDIBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
@@ -20,67 +19,55 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
+# spade_bdi's reasoning cycle never yields to the event loop on its own: it
+# would spin at 100% CPU and, through the GIL, slow down the game thread.
+BDI_CYCLE_PERIOD = 0.02
+# Centre-to-centre distance at which a wall ahead makes the Goomba turn.
+# Kept short on purpose: with the 200px sight range a Goomba between two
+# pipes would always see a wall ahead and turn on every perception.
+OBSTACLE_REACTION_DISTANCE = 80.0
+
+
+class ThrottledBDIBehaviour(BDIBehaviour):
+    """spade_bdi reasoning cycle that runs at most once every ``BDI_CYCLE_PERIOD``."""
+
+    async def run(self):
+        await super().run()
+        await asyncio.sleep(BDI_CYCLE_PERIOD)
+
+
 class GoombaAgent(BDIAgent):
+    # Both injected by SpadeRuntime right after construction.
     spade_runtime: "SpadeRuntime"
-    vision = Vision()
+    goomba_id: str | None = None
+
+    bump_sensor = Vision(sight_distance=OBSTACLE_REACTION_DISTANCE)
     ground_sensor = GroundSensor()
 
-    class PatrolBehaviour(CyclicBehaviour):
-        async def on_start(self):
-            LOGGER.info("Goomba perception behaviour started")
-            agent = self.agent
-            if not isinstance(agent, GoombaAgent):
-                raise RuntimeError("PatrolBehaviour is not attached to a GoombaAgent")
-            self.goomba_agent = agent
-            
-        async def run(self):
-            await asyncio.sleep(0.01)
-
-            agent = self.goomba_agent
-
-            try:
-                goombaPerceptionMessage = agent.spade_runtime.get_perception(
-                    AgentType.GOOMBA
-                )
-            except Empty:
-                return
-
-            if not isinstance(goombaPerceptionMessage, GoombaPerceptionMessage):
-                raise TypeError(
-                    "The GOOMBA perception queue must contain "
-                    "GoombaPerceptionMessage instances"
-                )
-
-            LOGGER.debug(
-                "Goomba %s received perception %s",
-                goombaPerceptionMessage.perception.goomba_id,
-                goombaPerceptionMessage.simulation_sequence,
-            )
-            goombaPerception = goombaPerceptionMessage.perception
-            agent.goomba_id = goombaPerception.goomba_id
-            agent._update_beliefs(
-                goombaPerception,
-                goombaPerceptionMessage.simulation_sequence,
-            )
-
-            LOGGER.debug("Updated Goomba beliefs for perception %s", goombaPerceptionMessage.simulation_sequence)
-
-
-        async def on_end(self):
-            print("Behaviour finished with exit code {}.".format(self.exit_code))
+    def add_behaviour(self, behaviour, template=None):
+        # BDIAgent.__init__ installs a plain BDIBehaviour: swap in the
+        # throttled one, keeping the same message template.
+        if isinstance(behaviour, BDIBehaviour) and not isinstance(
+            behaviour, ThrottledBDIBehaviour
+        ):
+            behaviour = ThrottledBDIBehaviour()
+        super().add_behaviour(behaviour, template)
 
     async def setup(self):
-        print("Agent starting . . .")
-        self.goomba_id = None
-        self.patrol_behaviour = self.PatrolBehaviour()
-        self.add_behaviour(self.patrol_behaviour)
-        await asyncio.sleep(1)
+        LOGGER.info("Goomba agent %s started", self.goomba_id)
 
-    def _update_beliefs(
-        self, perception: GoombaPerception, sequence: int
-    ) -> None:
+    def perceive(self, message: GoombaPerceptionMessage) -> None:
+        """Entry point used by SpadeRuntime to deliver this Goomba's perception."""
+        LOGGER.debug(
+            "Goomba %s received perception %s",
+            self.goomba_id,
+            message.simulation_sequence,
+        )
+        self._update_beliefs(message.perception, message.simulation_sequence)
+
+    def _update_beliefs(self, perception: GoombaPerception, sequence: int) -> None:
         """Translate a game snapshot into facts consumed by the ASL plans."""
-        obstacle_ahead = self.vision.obstacle_ahead(
+        obstacle_ahead = self.bump_sensor.obstacle_ahead(
             position=perception.center,
             direction=perception.direction,
             obstacles=perception.obstacles,
@@ -106,7 +93,7 @@ class GoombaAgent(BDIAgent):
         self.bdi.set_belief("direction", perception.direction.value)
         # This fresh event triggers exactly one ASL decision for this snapshot.
         self.bdi.set_belief("perception", sequence)
-        
+
     def add_custom_actions(self, actions):
 
         @actions.add(".move_right", 0)
@@ -121,27 +108,26 @@ class GoombaAgent(BDIAgent):
 
         @actions.add(".turn_around", 0)
         def turn_around(agent, term, intention):
-            self._publish_action(EnemyAction.TURN_AROUND)
-            self.bdi.remove_belief("obstacle_ahead")
-            self.bdi.remove_belief("void_ahead")
-            
+            # Turn relative to the perceived direction, but send an absolute
+            # move: if two stale perceptions both ask to turn, the second
+            # request is a no-op instead of turning the Goomba back again.
             direction = self.bdi.get_belief_value("direction")
             if direction == ("right",):
+                self._publish_action(EnemyAction.MOVE_LEFT)
                 self.bdi.set_belief("direction", "left")
-
             elif direction == ("left",):
+                self._publish_action(EnemyAction.MOVE_RIGHT)
                 self.bdi.set_belief("direction", "right")
-
+            self.bdi.remove_belief("obstacle_ahead")
+            self.bdi.remove_belief("void_ahead")
             yield
 
     def _publish_action(self, action: EnemyAction) -> None:
         """Publish the action selected by the ASL plan to the game thread."""
-        goomba_id = getattr(self, "goomba_id", None)
-        if goomba_id is None:
-            # The initial ASL goal can run before the first game perception.
+        if self.goomba_id is None:
+            LOGGER.warning("Goomba agent without an enemy id, %s dropped", action)
             return
         self.spade_runtime.put_action(
             AgentType.GOOMBA,
-            ActionResult(enemy_id=goomba_id, action=action),
+            ActionResult(enemy_id=self.goomba_id, action=action),
         )
-            

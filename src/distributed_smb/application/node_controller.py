@@ -74,6 +74,7 @@ from distributed_smb.shared.config import (
     INPUT_HISTORY_SIZE,
     LOBBY_WS_PORT,
     PREDICTION_LEAD_CALIBRATION_FRAMES,
+    SPADE_ENEMY_IDS,
     TICK_INTERVAL,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
@@ -208,7 +209,7 @@ class NodeController(
         self.spade_runtime = SpadeRuntime(
             perception_queue=self.perception_queue,
             action_queue=self.action_queue,
-            enemies = self.engine.world_state.environment.enemies
+            enemy_ids=self._spade_enemy_ids(),
         )
         self.spade_thread = SpadeThread(self.spade_runtime.run)
         self.agent_integration = AgentGameIntegration(
@@ -220,6 +221,11 @@ class NodeController(
         )
         if isinstance(self.prediction_engine, NoopPredictionEngine):
             self.prediction_engine._engine = self.engine
+
+    def _spade_enemy_ids(self) -> list[str]:
+        """Configured SPADE-controlled enemies that exist in the loaded level."""
+        enemies = self.engine.world_state.environment.enemies
+        return [enemy_id for enemy_id in SPADE_ENEMY_IDS if enemy_id in enemies]
 
     def _make_ws_client(self, host: str, port: int, path: str) -> None:
         """Create a WebSocket client handler and assign it as the game event receiver."""
@@ -255,11 +261,11 @@ class NodeController(
         )
         self._bootstrap_world()
         
-        #Add all enemies to spade control
-        for enemy_id in self.engine.world_state.environment.enemies:
+        # Hand the configured enemies to their SPADE agents.
+        for enemy_id in self._spade_enemy_ids():
             self.agent_integration.control_enemy_with_spade(enemy_id)
-            self.agent_integration.enabled = True
-        
+        self.agent_integration.enabled = True
+
         if role is PlayerRole.CLIENT:
             if isinstance(self.prediction_engine, NoopPredictionEngine):
                 self.prediction_engine = PredictionEngine(

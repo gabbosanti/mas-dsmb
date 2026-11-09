@@ -28,6 +28,11 @@ def spade_runtime_thread():
             self._alive = False
             self.bdi_agent = object()
             self.spade_runtime = None
+            self.goomba_id = None
+            self.perceived = []
+
+        def perceive(self, message):
+            self.perceived.append(message)
 
         async def start(self):
             self._alive = True
@@ -48,7 +53,8 @@ def spade_runtime_thread():
     runtime = SpadeRuntime(
         perception_queue=perceptions,
         action_queue=actions,
-        goomba_agent=fake_agent,
+        enemy_ids=["enemy-1"],
+        goomba_factory=lambda _enemy_id: fake_agent,
     )
     thread = SpadeThread(runtime.run)
     thread.start()
@@ -68,9 +74,9 @@ def goomba_agent():
     runtime = SpadeRuntime(
         perception_queue=perceptions,
         action_queue=actions,
+        enemy_ids=["enemy-1"],
     )
-    agent = runtime.goomba_agent
-    agent.goomba_id = "enemy-1"
+    agent = runtime.goomba_agents["enemy-1"]
     return agent, runtime
 
 
