@@ -295,55 +295,7 @@ class GameEngine:
                     else abs(enemy.vx)
                 )
                 enemy.vx = command.value * speed
-            previous_x = enemy.x
             enemy.x += enemy.vx * dt
-
-            if command is not None:
-                self._resolve_agent_enemy_obstacle_collision(enemy, previous_x)
-
-    def _resolve_agent_enemy_obstacle_collision(
-        self, enemy: Enemy, previous_x: float
-    ) -> None:
-        """Keep an agent-controlled enemy from crossing solid side obstacles.
-
-        Direction changes remain the BDI's responsibility. This is only a
-        physical safety check for platforms (including pipes) and intact
-        blocks, so a late perception cannot make the enemy clip through them.
-        """
-        delta_x = enemy.x - previous_x
-        if delta_x == 0:
-            return
-
-        center_y = enemy.y + enemy.height / 2
-        solids = [
-            *self.platforms,
-            *(
-                block
-                for block in self.world_state.environment.destructible_blocks
-                if not block.destroyed
-            ),
-        ]
-        solids.sort(key=lambda solid: solid.x, reverse=delta_x < 0)
-
-        for solid in solids:
-            # Test the enemy's midline so the floor under its feet does not
-            # count as a wall and stop it at every platform seam.
-            if not solid.y <= center_y <= solid.y + solid.height:
-                continue
-            overlaps_horizontally = (
-                enemy.x < solid.x + solid.width
-                and enemy.x + enemy.width > solid.x
-            )
-            if not overlaps_horizontally:
-                continue
-
-            if delta_x > 0:
-                enemy.x = solid.x - enemy.width
-            else:
-                enemy.x = solid.x + solid.width
-            enemy.vx = 0.0
-            return
-
 
     def _is_stomp(self, player: Player, enemy: Enemy) -> bool:
         """A stomp is a landing from above: feet over the enemy's head, falling."""
