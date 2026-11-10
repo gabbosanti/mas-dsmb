@@ -57,7 +57,6 @@ def test_obstacle_belief_selects_turn_around_plan(goomba_agent, run_bdi_steps):
     results = drain_actions(runtime)
     assert len(results) == 1
     assert results[0].action is EnemyAction.MOVE_LEFT
-    assert "direction(left)" in agent.bdi.get_beliefs()
 
 
 def test_void_belief_selects_turn_around_plan(goomba_agent, run_bdi_steps):
@@ -70,7 +69,6 @@ def test_void_belief_selects_turn_around_plan(goomba_agent, run_bdi_steps):
     results = drain_actions(runtime)
     assert len(results) == 1
     assert results[0].action is EnemyAction.MOVE_LEFT
-    assert "direction(left)" in agent.bdi.get_beliefs()
 
 
 def test_clear_perception_removes_stale_hazard_beliefs(goomba_agent, run_bdi_steps):
@@ -135,3 +133,40 @@ def test_bdi_behaviour_is_throttled():
         make_agent_queues(), make_agent_queues(), enemy_ids=["enemy-1"]
     )
     assert isinstance(runtime.goomba_agents["enemy-1"].bdi, ThrottledBDIBehaviour)
+
+
+def test_turn_uses_the_heading_of_the_triggering_snapshot_not_a_newer_one(
+    goomba_agent, run_bdi_steps
+):
+    """Regression: the BDI used to read ``direction`` when the action ran.
+
+    A newer perception (already facing left) overwrote the belief first, so
+    the stale turn sent MOVE_RIGHT, back towards the wall: the Goomba
+    oscillated at every perception.
+    """
+    agent, runtime = goomba_agent
+    floor = ObstacleObservation(0, 100, 400, 32)
+    agent._update_beliefs(
+        perception(obstacles=(floor, ObstacleObservation(150, 0, 20, 100))),
+        sequence=1,
+    )
+    # The next snapshot arrives before the agent has acted on the first one.
+    agent._update_beliefs(
+        perception(direction=SightDirection.LEFT, obstacles=(floor,)), sequence=2
+    )
+    run_bdi_steps(agent, count=2)
+
+    assert [r.action for r in drain_actions(runtime)] == [
+        EnemyAction.MOVE_LEFT,
+        EnemyAction.MOVE_LEFT,
+    ]
+
+
+def test_a_decision_is_taken_within_a_single_bdi_cycle(goomba_agent, run_bdi_steps):
+    agent, runtime = goomba_agent
+    agent._update_beliefs(
+        perception(obstacles=(ObstacleObservation(0, 100, 400, 32),)), sequence=1
+    )
+    run_bdi_steps(agent, count=1)
+
+    assert [r.action for r in drain_actions(runtime)] == [EnemyAction.MOVE_RIGHT]

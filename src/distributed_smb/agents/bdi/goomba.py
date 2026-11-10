@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+import agentspeak as asp
 from spade_bdi.bdi import BDIAgent
 from spade_bdi.bdi_behaviour import BDIBehaviour
 
@@ -11,6 +12,7 @@ from distributed_smb.agents.models import (
     EnemyAction,
     GoombaPerception,
     GoombaPerceptionMessage,
+    SightDirection,
 )
 from distributed_smb.agents.perception import GroundSensor, Vision
 
@@ -31,11 +33,26 @@ BDI_CYCLE_PERIOD = 0.02
 OBSTACLE_REACTION_DISTANCE = 48.0
 
 
+# Upper bound of interpreter steps per cycle, so a runaway plan cannot
+# monopolise the SPADE event loop.
+MAX_STEPS_PER_CYCLE = 64
+
+
 class ThrottledBDIBehaviour(BDIBehaviour):
-    """spade_bdi reasoning cycle that runs at most once every ``BDI_CYCLE_PERIOD``."""
+    """spade_bdi reasoning cycle that runs at most once every ``BDI_CYCLE_PERIOD``.
+
+    The stock cycle executes a single interpreter step per run, so a plan of
+    a few steps took several cycles (60-80ms) to produce its action. Here
+    each cycle runs the intentions until they are idle, so a perception is
+    turned into an action within the same cycle.
+    """
 
     async def run(self):
-        await super().run()
+        await super().run()  # applies queued belief changes + one step
+        if self.agent.bdi_enabled:
+            for _ in range(MAX_STEPS_PER_CYCLE):
+                if not self.agent.bdi_agent.step():
+                    break
         await asyncio.sleep(BDI_CYCLE_PERIOD)
 
 
@@ -116,20 +133,22 @@ class GoombaAgent(BDIAgent):
             self._publish_action(EnemyAction.MOVE_LEFT)
             yield
 
-        @actions.add(".turn_around", 0)
+        @actions.add(".turn_around", 1)
         def turn_around(agent, term, intention):
-            # Turn relative to the perceived direction, but send an absolute
-            # move: if two stale perceptions both ask to turn, the second
-            # request is a no-op instead of turning the Goomba back again.
-            direction = self.bdi.get_belief_value("direction")
-            if direction == ("right",):
+            # Turn away from the heading of the snapshot that triggered the
+            # plan (passed by the ASL), never from the current belief: by now
+            # a newer perception may have updated it, and turning from that
+            # would send the Goomba straight back towards the hazard.
+            # The move is absolute, so repeated turns for stale snapshots of
+            # the same situation are no-ops instead of cancelling out.
+            # Beliefs are not touched here: perceptions are their only source.
+            heading = str(asp.grounded(term.args[0], intention.scope))
+            if heading == SightDirection.RIGHT.value:
                 self._publish_action(EnemyAction.MOVE_LEFT)
-                self.bdi.set_belief("direction", "left")
-            elif direction == ("left",):
+            elif heading == SightDirection.LEFT.value:
                 self._publish_action(EnemyAction.MOVE_RIGHT)
-                self.bdi.set_belief("direction", "right")
-            self.bdi.remove_belief("obstacle_ahead")
-            self.bdi.remove_belief("void_ahead")
+            else:
+                LOGGER.warning("Goomba %s: unknown heading %r", self.goomba_id, heading)
             yield
 
     def _publish_action(self, action: EnemyAction) -> None:
