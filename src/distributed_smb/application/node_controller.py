@@ -74,7 +74,6 @@ from distributed_smb.shared.config import (
     INPUT_HISTORY_SIZE,
     LOBBY_WS_PORT,
     PREDICTION_LEAD_CALIBRATION_FRAMES,
-    SPADE_ENEMY_IDS,
     TICK_INTERVAL,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
@@ -225,7 +224,7 @@ class NodeController(
     def _spade_enemy_ids(self) -> list[str]:
         """Configured SPADE-controlled enemies that exist in the loaded level."""
         enemies = self.engine.world_state.environment.enemies
-        return [enemy_id for enemy_id in SPADE_ENEMY_IDS if enemy_id in enemies]
+        return [enemy_id for enemy_id in enemies]
 
     def _make_ws_client(self, host: str, port: int, path: str) -> None:
         """Create a WebSocket client handler and assign it as the game event receiver."""

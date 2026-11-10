@@ -56,6 +56,10 @@ class AgentGameIntegration:
     # The engine honours STOP for a single tick only, so a STOP chosen by an
     # agent is re-sent every tick until that agent picks another action.
     _stopped_enemy_ids: set[str] = field(default_factory=set, init=False, repr=False)
+    # Enemies whose agent has sent at least one valid action.
+    _enemies_with_decision: set[str] = field(
+        default_factory=set, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         if self.perception_interval_ticks < 1:
@@ -71,6 +75,7 @@ class AgentGameIntegration:
     def release_enemy(self, enemy_id: str) -> None:
         self.spade_controlled_enemy_ids.discard(enemy_id)
         self._stopped_enemy_ids.discard(enemy_id)
+        self._enemies_with_decision.discard(enemy_id)
 
     def observe(self, enemy_id: str) -> GoombaPerception:
         return self.perceptor.observe(enemy_id)
@@ -79,6 +84,7 @@ class AgentGameIntegration:
         """Run one simulation tick without waiting for SPADE."""
         if self.enabled == False:
             self._stopped_enemy_ids.clear()
+            self._enemies_with_decision.clear()
             self.bridge.discard_actions()
             self.bridge.discard_perceptions()
             self.engine.tick(dt, player_inputs)
@@ -118,9 +124,24 @@ class AgentGameIntegration:
         # Pop every queued ActionResult and translate it into an engine command.
         enemies = self.engine.world_state.environment.enemies
         self._stopped_enemy_ids &= enemies.keys()  # maintains only alive enemies
-        commands = {  # all stopped by default
-            enemy_id: EnemyMovementCommand.STOP for enemy_id in self._stopped_enemy_ids
-        }
+        self._enemies_with_decision &= enemies.keys()
+        # Include all SPADE-controlled enemies every tick, preserving their
+        # last heading between asynchronous BDI decisions.
+        commands: dict[str, EnemyMovementCommand] = {}
+        for enemy_id in self._live_spade_enemy_ids():
+            enemy = enemies[enemy_id]
+            if (
+                enemy_id not in self._enemies_with_decision
+                or enemy_id in self._stopped_enemy_ids
+                or enemy.vx == 0
+            ):
+                # Until its agent has decided at least once (SPADE may take
+                # seconds to start), the enemy waits instead of walking blind.
+                commands[enemy_id] = EnemyMovementCommand.STOP
+            elif enemy.vx > 0:
+                commands[enemy_id] = EnemyMovementCommand.MOVE_RIGHT
+            else:
+                commands[enemy_id] = EnemyMovementCommand.MOVE_LEFT
 
         while (result := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
             if not isinstance(result, ActionResult):
@@ -148,6 +169,7 @@ class AgentGameIntegration:
                 continue
 
             commands[result.enemy_id] = command
+            self._enemies_with_decision.add(result.enemy_id)
             if command is EnemyMovementCommand.STOP:
                 self._stopped_enemy_ids.add(result.enemy_id)
             else:

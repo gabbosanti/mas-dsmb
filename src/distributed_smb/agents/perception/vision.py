@@ -48,6 +48,11 @@ class Vision:
         direction: SightDirection | None,
         obstacles: Iterable[ObstacleObservation],
     ) -> bool:
+        """True if an obstacle at the observer's height is within sight ahead.
+
+        The distance is measured to the obstacle's nearest face, not to its
+        center: a wide pipe and a thin block are noticed at the same gap.
+        """
         obstacles = tuple(obstacles)
         for index, obstacle in enumerate(obstacles):
             # Ground below the observer supports movement but is not a
@@ -55,7 +60,11 @@ class Vision:
             if not obstacle.y <= position.y <= obstacle.y + obstacle.height:
                 continue
             if self.can_see(
-                position, direction, obstacle.center, obstacles, ignored_index=index
+                position,
+                direction,
+                _nearest_face(obstacle, position),
+                obstacles,
+                ignored_index=index,
             ):
                 return True
         return False
@@ -166,6 +175,20 @@ def has_clear_line(
             if entry < 1.0 - _EPSILON and exit > _EPSILON:
                 return False
     return True
+
+
+def _nearest_face(obstacle: ObstacleObservation, position: Position) -> Position:
+    """Point of the obstacle's vertical face closest to ``position``.
+
+    If the observer already overlaps the obstacle horizontally, the obstacle's
+    center is used, so the obstacle is "ahead" only on the side it extends to.
+    """
+    left, right = obstacle.x, obstacle.x + obstacle.width
+    if position.x <= left:
+        return Position(left, position.y)
+    if position.x >= right:
+        return Position(right, position.y)
+    return obstacle.center
 
 
 def _segment_rectangle_intersection(

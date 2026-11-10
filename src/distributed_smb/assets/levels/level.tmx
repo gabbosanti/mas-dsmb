@@ -42,78 +42,56 @@
  <objectgroup id="7" name="Enemies" visible="0">
   <object id="2" name="enemy-1" type="Enemies" x="520" y="877" width="64" height="96" enemy_type="Goomba">
    <properties>
-    <property name="left_bound" type="int" value="460"/>
-    <property name="right_bound" type="int" value="620"/>
     <property name="vx" type="float" value="50"/>
    </properties>
   </object>
   <object id="3" name="enemy-2" type="Enemies" x="1120" y="877" width="64" height="96" enemy_type="Goomba">
    <properties>
-    <property name="left_bound" type="int" value="1060"/>
-    <property name="right_bound" type="int" value="1200"/>
     <property name="vx" type="float" value="55"/>
    </properties>
   </object>
   <object id="4" name="enemy-3" type="Enemies" x="1160" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="1060"/>
-    <property name="right_bound" type="int" value="1200"/>
     <property name="vx" type="float" value="70"/>
    </properties>
   </object>
   <object id="5" name="enemy-4" type="Enemies" x="2820" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="2760"/>
-    <property name="right_bound" type="int" value="2950"/>
     <property name="vx" type="float" value="60"/>
    </properties>
   </object>
   <object id="6" name="enemy-5" type="Enemies" x="2996" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="2950"/>
-    <property name="right_bound" type="int" value="3100"/>
     <property name="vx" type="float" value="70"/>
    </properties>
   </object>
   <object id="7" name="enemy-6" type="Enemies" x="3576" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="3516"/>
-    <property name="right_bound" type="int" value="3736"/>
     <property name="vx" type="float" value="65"/>
    </properties>
   </object>
   <object id="8" name="enemy-7" type="Enemies" x="3876" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="3816"/>
-    <property name="right_bound" type="int" value="3986"/>
     <property name="vx" type="float" value="75"/>
    </properties>
   </object>
   <object id="9" name="enemy-8" type="Enemies" x="4132" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="4092"/>
-    <property name="right_bound" type="int" value="4292"/>
     <property name="vx" type="float" value="55"/>
    </properties>
   </object>
   <object id="10" name="enemy-9" type="Enemies" x="4960" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="4900"/>
-    <property name="right_bound" type="int" value="5120"/>
     <property name="vx" type="float" value="60"/>
    </properties>
   </object>
   <object id="11" name="enemy-10" type="Enemies" x="5160" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="5120"/>
-    <property name="right_bound" type="int" value="5320"/>
     <property name="vx" type="float" value="80"/>
    </properties>
   </object>
   <object id="12" name="enemy-11" type="Enemies" x="5796" y="877" width="64" height="96">
    <properties>
-    <property name="left_bound" type="int" value="5736"/>
-    <property name="right_bound" type="int" value="5956"/>
     <property name="vx" type="float" value="65"/>
    </properties>
   </object>

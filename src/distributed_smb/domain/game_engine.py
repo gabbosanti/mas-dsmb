@@ -282,6 +282,7 @@ class GameEngine:
         enemy_commands: dict[str, EnemyMovementCommand] | None = None,
     ) -> None:
         for enemy_id, enemy in self.world_state.environment.enemies.items():
+            command = None
             if enemy_commands is not None and enemy_id in enemy_commands:
                 command = enemy_commands[enemy_id]
                 if not isinstance(command, EnemyMovementCommand):
@@ -295,12 +296,6 @@ class GameEngine:
                 )
                 enemy.vx = command.value * speed
             enemy.x += enemy.vx * dt
-            if enemy.x < enemy.left_bound:
-                enemy.x = enemy.left_bound
-                enemy.vx = -enemy.vx
-            elif enemy.x + enemy.width > enemy.right_bound:
-                enemy.x = enemy.right_bound - enemy.width
-                enemy.vx = -enemy.vx
 
     def _is_stomp(self, player: Player, enemy: Enemy) -> bool:
         """A stomp is a landing from above: feet over the enemy's head, falling."""
