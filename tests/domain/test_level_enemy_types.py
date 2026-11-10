@@ -9,17 +9,9 @@ from distributed_smb.domain.level import TiledLevel
 @pytest.mark.parametrize(
     ("properties", "enemy_type_attribute", "expected_type"),
     [
-        ({"left_bound": 10, "right_bound": 100}, None, EnemyType.KOOPA),
-        (
-            {"left_bound": 10, "right_bound": 100, "enemy_type": "goomba"},
-            None,
-            EnemyType.GOOMBA,
-        ),
-        (
-            {"left_bound": 10, "right_bound": 100},
-            "Goomba",
-            EnemyType.GOOMBA,
-        ),
+        ({}, None, EnemyType.KOOPA),
+        ({"enemy_type": "goomba"}, None, EnemyType.GOOMBA),
+        ({}, "Goomba", EnemyType.GOOMBA),
     ],
 )
 def test_tiled_level_reads_enemy_type(

@@ -98,10 +98,8 @@ class Enemy:
     width: int = ENEMY_WIDTH
     height: int = ENEMY_HEIGHT
     vx: float = 50.0
-    left_bound: float = 0.0
-    right_bound: float = 0.0
     movement_speed: float | None = None
-    enemy_type: EnemyType = EnemyType.KOOPA
+    enemy_type: EnemyType | None = None
 
     def __post_init__(self) -> None:
         self.enemy_type = EnemyType(self.enemy_type)

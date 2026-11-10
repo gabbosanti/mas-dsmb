@@ -118,9 +118,18 @@ class AgentGameIntegration:
         # Pop every queued ActionResult and translate it into an engine command.
         enemies = self.engine.world_state.environment.enemies
         self._stopped_enemy_ids &= enemies.keys()  # maintains only alive enemies
-        commands = {  # all stopped by default
-            enemy_id: EnemyMovementCommand.STOP for enemy_id in self._stopped_enemy_ids
-        }
+        # Include all SPADE-controlled enemies every tick. This marks them as
+        # agent-controlled in the engine between asynchronous BDI decisions,
+        # preserving their last heading while still applying solid collisions.
+        commands: dict[str, EnemyMovementCommand] = {}
+        for enemy_id in self._live_spade_enemy_ids():
+            enemy = enemies[enemy_id]
+            if enemy_id in self._stopped_enemy_ids or enemy.vx == 0:
+                commands[enemy_id] = EnemyMovementCommand.STOP
+            elif enemy.vx > 0:
+                commands[enemy_id] = EnemyMovementCommand.MOVE_RIGHT
+            else:
+                commands[enemy_id] = EnemyMovementCommand.MOVE_LEFT
 
         while (result := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
             if not isinstance(result, ActionResult):

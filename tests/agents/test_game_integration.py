@@ -102,6 +102,25 @@ def test_a_move_persists_until_the_agent_decides_otherwise():
     assert enemy.x == pytest.approx(510)
 
 
+def test_spade_goomba_stops_at_pipe_until_bdi_turns_around():
+    engine = GameEngine()
+    enemy = engine.world_state.environment.enemies["enemy-1"]
+    enemy.x, enemy.y, enemy.vx = 750, 877, 50
+    integration = spade_integration(engine, "enemy-1")
+
+    send(integration, "enemy-1", EnemyAction.MOVE_RIGHT)
+    integration.tick(1.0, {})
+
+    # The pipe starts at x=820; the Goomba's right edge stops exactly at it.
+    assert enemy.x + enemy.width == pytest.approx(820)
+    assert enemy.vx == 0
+
+    send(integration, "enemy-1", EnemyAction.MOVE_LEFT)
+    integration.tick(0.1, {})
+
+    assert enemy.x < 820 - enemy.width
+
+
 def test_turn_around_reverses_the_current_heading():
     engine = GameEngine()
     enemy = engine.world_state.environment.enemies["enemy-1"]
