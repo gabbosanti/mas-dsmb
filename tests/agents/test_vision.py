@@ -39,6 +39,21 @@ def test_obstacle_detection_respects_sight_distance():
     )
 
 
+def test_goomba_sees_pipe_early_enough_to_turn():
+    pipe = ObstacleObservation(x=820, y=832, width=64, height=96)
+    # Enemy center at x=720, y=925; its right edge is still 68px from the pipe.
+    position = Position(720, 925)
+
+    assert Vision(sight_distance=140).obstacle_ahead(
+        position, SightDirection.RIGHT, (pipe,)
+    )
+    # The former 80px centre-to-centre threshold only detected this pipe
+    # when the enemy was almost touching it.
+    assert not Vision(sight_distance=80).obstacle_ahead(
+        position, SightDirection.RIGHT, (pipe,)
+    )
+
+
 def test_nearest_player_returns_none_when_there_are_no_players():
     assert nearest_player(Position(100, 100), []) is None
 

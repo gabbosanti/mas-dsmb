@@ -23,9 +23,8 @@ LOGGER = logging.getLogger(__name__)
 # would spin at 100% CPU and, through the GIL, slow down the game thread.
 BDI_CYCLE_PERIOD = 0.02
 # Centre-to-centre distance at which a wall ahead makes the Goomba turn.
-# Kept short on purpose: with the 200px sight range a Goomba between two
-# pipes would always see a wall ahead and turn on every perception.
-OBSTACLE_REACTION_DISTANCE = 80.0
+# The extra range gives the BDI time to react before the Goomba reaches a pipe.
+OBSTACLE_REACTION_DISTANCE = 140.0
 
 
 class ThrottledBDIBehaviour(BDIBehaviour):
@@ -58,11 +57,19 @@ class GoombaAgent(BDIAgent):
 
     def perceive(self, message: GoombaPerceptionMessage) -> None:
         """Entry point used by SpadeRuntime to deliver this Goomba's perception."""
-        LOGGER.debug(
-            "Goomba %s received perception %s",
-            self.goomba_id,
-            message.simulation_sequence,
-        )
+        if not getattr(self, "_logged_first_perception", False):
+            LOGGER.info(
+                "Goomba %s received perception %s",
+                self.goomba_id,
+                message.simulation_sequence,
+            )
+            self._logged_first_perception = True
+        else:
+            LOGGER.debug(
+                "Goomba %s received perception %s",
+                self.goomba_id,
+                message.simulation_sequence,
+            )
         self._update_beliefs(message.perception, message.simulation_sequence)
 
     def _update_beliefs(self, perception: GoombaPerception, sequence: int) -> None:
