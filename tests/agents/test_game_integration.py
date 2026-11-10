@@ -102,23 +102,21 @@ def test_a_move_persists_until_the_agent_decides_otherwise():
     assert enemy.x == pytest.approx(510)
 
 
-def test_spade_goomba_stops_at_pipe_until_bdi_turns_around():
+def test_spade_enemy_waits_for_its_first_decision():
+    """SPADE can take seconds to start: an enemy must not walk off blind."""
     engine = GameEngine()
     enemy = engine.world_state.environment.enemies["enemy-1"]
-    enemy.x, enemy.y, enemy.vx = 750, 877, 50
+    enemy.x, enemy.vx = 520, 50
     integration = spade_integration(engine, "enemy-1")
 
-    send(integration, "enemy-1", EnemyAction.MOVE_RIGHT)
     integration.tick(1.0, {})
+    assert enemy.x == 520
+    assert enemy.vx == 50  # heading kept, so perceptions still report it
 
-    # The pipe starts at x=820; the Goomba's right edge stops exactly at it.
-    assert enemy.x + enemy.width == pytest.approx(820)
-    assert enemy.vx == 0
-
-    send(integration, "enemy-1", EnemyAction.MOVE_LEFT)
+    send(integration, "enemy-1", EnemyAction.MOVE_RIGHT)
     integration.tick(0.1, {})
-
-    assert enemy.x < 820 - enemy.width
+    integration.tick(0.1, {})  # later ticks keep moving without new actions
+    assert enemy.x == pytest.approx(530)
 
 
 def test_turn_around_reverses_the_current_heading():
@@ -167,7 +165,8 @@ def test_invalid_agent_messages_never_reach_the_engine():
     send(integration, "missing-enemy", EnemyAction.STOP)
     integration.tick(0.1, {})
 
-    assert controlled.x == pytest.approx(525)
+    # No valid decision yet: the controlled enemy keeps waiting.
+    assert controlled.x == 520
     assert uncontrolled.x == pytest.approx(
         initial_uncontrolled_x + initial_uncontrolled_vx * 0.1
     )

@@ -22,9 +22,13 @@ LOGGER = logging.getLogger(__name__)
 # spade_bdi's reasoning cycle never yields to the event loop on its own: it
 # would spin at 100% CPU and, through the GIL, slow down the game thread.
 BDI_CYCLE_PERIOD = 0.02
-# Centre-to-centre distance at which a wall ahead makes the Goomba turn.
-# The extra range gives the BDI time to react before the Goomba reaches a pipe.
-OBSTACLE_REACTION_DISTANCE = 140.0
+# Distance from the Goomba's center to a wall's nearest face that makes it
+# turn: half its width (~25px) plus a ~22px gap that absorbs the BDI latency
+# (one perception every 5 ticks + dispatch + reasoning ≈ 12px at 80px/s).
+# It must stay below half the narrowest corridor, otherwise a Goomba between
+# two pipes always sees a wall ahead and turns on every perception: in the
+# level the gap between pipe-2 and pipe-3 is only 136px.
+OBSTACLE_REACTION_DISTANCE = 48.0
 
 
 class ThrottledBDIBehaviour(BDIBehaviour):
