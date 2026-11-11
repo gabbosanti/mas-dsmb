@@ -151,7 +151,15 @@ def test_a_star_lets_the_player_kill_enemies_by_touch_for_a_while():
     assert player.powerup_effect_expires_at is not None
     assert player.powerup_effect_expires_at >= time.time() + 9.5
 
-    enemy = Enemy(enemy_id="enemy-1", x=player.x, y=player.y, width=10, height=10, enemy_type=EnemyType.GOOMBA)
+    enemy = Enemy(
+        enemy_id="enemy-1",
+        x=player.x,
+        y=player.y,
+        width=10,
+        height=10,
+        enemy_type=EnemyType.GOOMBA,
+    )
+
     engine.world_state.environment.enemies[enemy.enemy_id] = enemy
 
     engine._handle_enemy_collisions()
