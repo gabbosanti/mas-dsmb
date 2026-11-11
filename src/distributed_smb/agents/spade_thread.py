@@ -75,8 +75,7 @@ class SpadeThread:
             task = self._runtime_task
             if task is not None and not task.done():
                 task_stack = "".join(
-                    "".join(traceback.format_stack(frame))
-                    for frame in task.get_stack()
+                    "".join(traceback.format_stack(frame)) for frame in task.get_stack()
                 )
                 LOGGER.error("Async runtime task stack:\n%s", task_stack)
             raise TimeoutError("Timed out while stopping the SPADE thread")
@@ -86,6 +85,7 @@ class SpadeThread:
     def _run(self, started: threading.Event) -> None:
         started.set()
         try:
+
             async def run_runtime() -> None:
                 self._runtime_task = asyncio.create_task(self._runtime())
                 await self._runtime_task
