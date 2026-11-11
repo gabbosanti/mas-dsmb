@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from queue import Empty, Queue
@@ -67,16 +68,33 @@ class SpadeRuntime:
         try:
             for enemy_id, agent in self.goomba_agents.items():
                 LOGGER.info("Starting SPADE agent for %s", enemy_id)
+                start_started = time.monotonic()
                 await agent.start()
+                LOGGER.info(
+                    "Started SPADE agent for %s in %.2f seconds",
+                    enemy_id,
+                    time.monotonic() - start_started,
+                )
 
             while not self.stop_event.is_set():
                 self.dispatch_perceptions()
                 await asyncio.sleep(DISPATCH_INTERVAL)
 
         finally:
-            for agent in self.goomba_agents.values():
+            for enemy_id, agent in self.goomba_agents.items():
                 if agent.is_alive():
-                    await agent.stop()
+                    LOGGER.info("Stopping SPADE agent for %s", enemy_id)
+                    stop_started = time.monotonic()
+                    try:
+                        await agent.stop()
+                    except Exception:
+                        LOGGER.exception("Failed to stop SPADE agent for %s", enemy_id)
+                        raise
+                    LOGGER.info(
+                        "Stopped SPADE agent for %s in %.2f seconds",
+                        enemy_id,
+                        time.monotonic() - stop_started,
+                    )
 
     def dispatch_perceptions(self) -> int:
         """Hand the latest queued perception of each enemy to its own agent.

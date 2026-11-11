@@ -1,6 +1,10 @@
 """Unit tests for the SPADE runtime/thread integration."""
 
+import asyncio
+import threading
 import time
+
+import pytest
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
@@ -11,6 +15,7 @@ from distributed_smb.agents.models import (
     Position,
     SightDirection,
 )
+from distributed_smb.agents.spade_thread import SpadeThread
 
 
 def test_spade_runtime_runs_on_dedicated_thread(spade_runtime_thread):
@@ -64,6 +69,29 @@ def test_spade_thread_stops_runtime_cleanly(spade_runtime_thread):
 
     assert thread.is_running is False
     assert fake_agent.stopped is True
+
+
+def test_spade_thread_timeout_logs_worker_stack(caplog):
+    entered_runtime = threading.Event()
+    release_runtime = threading.Event()
+
+    async def blocked_runtime():
+        entered_runtime.set()
+        while not release_runtime.is_set():
+            await asyncio.sleep(0.01)
+
+    thread = SpadeThread(blocked_runtime)
+    thread.start()
+    assert entered_runtime.wait(timeout=2.0)
+
+    try:
+        with pytest.raises(TimeoutError, match="Timed out while stopping"):
+            thread.stop(timeout=0.01)
+        assert "Worker stack:" in caplog.text
+        assert "blocked_runtime" in caplog.text
+    finally:
+        release_runtime.set()
+        thread.stop(timeout=2.0)
 
 
 def make_message(goomba_id, sequence):
