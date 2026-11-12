@@ -333,6 +333,7 @@ def main(
 ) -> NodeController:
     """Bootstrap the local node and start the graphical application."""
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+    logging.getLogger("slixmpp").setLevel(logging.DEBUG)
     use_discovery = host_ip is None
     LOGGER.info(
         "Starting Distributed SMB in %s mode (discovery=%s)", role, use_discovery
