@@ -89,3 +89,51 @@ def test_nearest_player_returns_none_when_there_are_no_players():
 def test_rejects_a_negative_sight_distance():
     with pytest.raises(ValueError):
         Vision(sight_distance=-1)
+
+
+def body(player_id: str, center_x: float, center_y: float = 100):
+    from distributed_smb.agents.models import PlayerPerception
+
+    return PlayerPerception(player_id, Position(center_x - 10, center_y - 20), 20, 40)
+
+
+def test_player_side_notices_players_ahead_and_behind():
+    vision = Vision(sight_distance=200)
+    eye = Position(100, 100)
+
+    assert vision.player_side(eye, [body("p", 180)], (), vertical_tolerance=30) is (
+        SightDirection.RIGHT
+    )
+    assert vision.player_side(eye, [body("p", 20)], (), vertical_tolerance=30) is (
+        SightDirection.LEFT
+    )
+
+
+def test_player_side_requires_the_same_height_and_the_horizontal_range():
+    vision = Vision(sight_distance=200)
+    eye = Position(100, 100)
+
+    above = body("above", 150, center_y=40)
+    too_far = body("far", 350)
+    assert vision.player_side(eye, [above, too_far], (), vertical_tolerance=30) is None
+
+
+def test_player_side_ignores_players_hidden_behind_an_obstacle():
+    vision = Vision(sight_distance=200)
+    pipe = wall(140)
+
+    assert (
+        vision.player_side(Position(100, 100), [body("p", 200)], (pipe,), vertical_tolerance=30)
+        is None
+    )
+
+
+def test_player_side_picks_the_nearest_player_and_ignores_overlapping_ones():
+    vision = Vision(sight_distance=200)
+    eye = Position(100, 100)
+    players = [body("far-right", 250), body("near-left", 60), body("on-top", 102)]
+
+    assert (
+        vision.player_side(eye, players, (), vertical_tolerance=30, deadband=4)
+        is SightDirection.LEFT
+    )

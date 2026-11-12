@@ -69,6 +69,43 @@ class Vision:
                 return True
         return False
 
+    def player_side(
+        self,
+        position: Position,
+        players: Iterable[PlayerPerception],
+        obstacles: Iterable[ObstacleObservation],
+        *,
+        vertical_tolerance: float,
+        deadband: float = 0.0,
+    ) -> SightDirection | None:
+        """Side of the nearest player at the observer's height, if any.
+
+        A player counts when its center is within ``vertical_tolerance`` of
+        the observer's on the y axis (same height), within ``sight_distance``
+        on the x axis and not hidden behind an obstacle. The observer's
+        facing direction is ignored on purpose: a player behind it is noticed
+        too, so that it can turn around. Players closer than ``deadband`` on
+        the x axis are ignored, so that the side cannot flicker while the
+        two bodies overlap.
+        """
+        obstacles = tuple(obstacles)
+        candidates = [
+            player
+            for player in players
+            if abs(player.center.y - position.y) <= vertical_tolerance
+            and deadband < abs(player.center.x - position.x) <= self.sight_distance
+            and has_clear_line(position, player.center, obstacles)
+        ]
+        if not candidates:
+            return None
+        nearest = min(
+            candidates,
+            key=lambda player: (abs(player.center.x - position.x), player.player_id),
+        )
+        if nearest.center.x < position.x:
+            return SightDirection.LEFT
+        return SightDirection.RIGHT
+
     def look(
         self,
         position: Position,
