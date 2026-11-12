@@ -20,17 +20,6 @@ def test_detects_an_obstacle_ahead_but_not_one_behind():
     )
 
 
-def test_obstacle_hidden_behind_a_nearer_obstacle_is_not_seen():
-    vision = Vision()
-    obstacles = (wall(150), wall(220))
-
-    visible = vision.visible_obstacles(
-        Position(100, 100), SightDirection.RIGHT, obstacles
-    )
-
-    assert [obstacle.x for obstacle in visible] == [150]
-
-
 def test_obstacle_detection_respects_sight_distance():
     vision = Vision(sight_distance=100)
 
@@ -80,10 +69,6 @@ def test_goomba_between_two_close_pipes_does_not_see_both_walls():
     assert not Vision(sight_distance=48).obstacle_ahead(
         near_right, SightDirection.LEFT, pipes
     )
-
-
-def test_nearest_player_returns_none_when_there_are_no_players():
-    assert nearest_player(Position(100, 100), []) is None
 
 
 def test_rejects_a_negative_sight_distance():

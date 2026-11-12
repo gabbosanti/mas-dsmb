@@ -124,9 +124,11 @@ class GoombaAgent(BDIAgent):
             vertical_tolerance=PLAYER_VERTICAL_TOLERANCE,
             deadband=PLAYER_SIDE_DEADBAND,
         )
+
         blocked_side = None
         if player_side is not None and self._blocked_towards(perception, player_side):
             blocked_side = player_side
+
         self._set_side_belief("player_near", player_side)
         self._set_side_belief("path_blocked", blocked_side)
 
@@ -197,13 +199,7 @@ class GoombaAgent(BDIAgent):
 
         @actions.add(".turn_around", 1)
         def turn_around(agent, term, intention):
-            # Turn away from the heading of the snapshot that triggered the
-            # plan (passed by the ASL), never from the current belief: by now
-            # a newer perception may have updated it, and turning from that
-            # would send the Goomba straight back towards the hazard.
-            # The move is absolute, so repeated turns for stale snapshots of
-            # the same situation are no-ops instead of cancelling out.
-            # Beliefs are not touched here: perceptions are their only source.
+
             heading = str(asp.grounded(term.args[0], intention.scope))
             if heading == SightDirection.RIGHT.value:
                 self._publish_action(EnemyAction.MOVE_LEFT)

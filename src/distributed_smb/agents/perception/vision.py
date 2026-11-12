@@ -106,48 +106,6 @@ class Vision:
             return SightDirection.LEFT
         return SightDirection.RIGHT
 
-    def look(
-        self,
-        position: Position,
-        direction: SightDirection | None,
-        players: Iterable[PlayerPerception],
-        obstacles: Iterable[ObstacleObservation],
-    ) -> VisualField:
-        obstacles = tuple(obstacles)
-        return VisualField(
-            # players=self.visible_players(position, direction, players, obstacles),
-            obstacles=self.visible_obstacles(position, direction, obstacles),
-        )
-
-    def visible_players(
-        self,
-        position: Position,
-        direction: SightDirection | None,
-        players: Iterable[PlayerPerception],
-        obstacles: Iterable[ObstacleObservation],
-    ) -> tuple[PlayerPerception, ...]:
-        obstacles = tuple(obstacles)
-        return tuple(
-            player
-            for player in players
-            if self.can_see(position, direction, player.center, obstacles)
-        )
-
-    def visible_obstacles(
-        self,
-        position: Position,
-        direction: SightDirection | None,
-        obstacles: Iterable[ObstacleObservation],
-    ) -> tuple[ObstacleObservation, ...]:
-        obstacles = tuple(obstacles)
-        return tuple(
-            obstacle
-            for index, obstacle in enumerate(obstacles)
-            if self.can_see(
-                position, direction, obstacle.center, obstacles, ignored_index=index
-            )
-        )
-
     def can_see(
         self,
         position: Position,
@@ -171,21 +129,6 @@ class Vision:
         if direction is SightDirection.RIGHT and delta_x < 0:
             return False
         return hypot(delta_x, target.y - position.y) <= self.sight_distance
-
-
-# Not used in Milestone 1
-def nearest_player(
-    position: Position, players: Iterable[PlayerPerception]
-) -> PlayerPerception | None:
-    # Return the closest player to position ; ties are broken by player id.
-    return min(
-        players,
-        key=lambda player: (
-            hypot(player.center.x - position.x, player.center.y - position.y),
-            player.player_id,
-        ),
-        default=None,
-    )
 
 
 def has_clear_line(

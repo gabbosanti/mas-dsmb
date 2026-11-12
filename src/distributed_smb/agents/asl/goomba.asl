@@ -1,12 +1,10 @@
 //Belief base
-alive.
 direction(right).
 
 // Each new game perception produces exactly one decision: the first
 // applicable plan below wins, so the order of the plans is their priority.
 // The heading is bound in the context, i.e. taken from the same snapshot
-// that triggered the plan: a newer perception may already have changed the
-// direction belief by the time the action runs.
+// that triggered the plan: a newer perception may already have changed the direction belief by the time the action runs.
 
 // --- Safety first: never walk into a void or a wall ---
 +perception(Sequence) : void_ahead & direction(Direction)
