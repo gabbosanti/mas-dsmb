@@ -105,22 +105,22 @@ class SpadeRuntime:
         latest: dict[str, GoombaPerceptionMessage] = {}
         while True:
             try:
-                message = self.get_perception(AgentType.GOOMBA)
+                goombaPerception = self.get_perception(AgentType.GOOMBA)
             except Empty:
                 break
-            if not isinstance(message, GoombaPerceptionMessage):
+            if not isinstance(goombaPerception, GoombaPerceptionMessage):
                 LOGGER.warning(
-                    "Discarding GOOMBA perception of type %s", type(message).__name__
+                    "Discarding GOOMBA perception of type %s", type(goombaPerception).__name__
                 )
                 continue
-            latest[message.perception.goomba_id] = message
+            latest[goombaPerception.perception.goomba_id] = goombaPerception
 
-        for goomba_id, message in latest.items():
+        for goomba_id, goombaPerception in latest.items():
             agent = self.goomba_agents.get(goomba_id)
             if agent is None:
                 LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
                 continue
-            agent.perceive(message)
+            agent.perceive(goombaPerception)
         return len(latest)
 
     @staticmethod

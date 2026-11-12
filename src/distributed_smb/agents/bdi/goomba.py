@@ -38,7 +38,7 @@ OBSTACLE_REACTION_DISTANCE = 48.0
 MAX_STEPS_PER_CYCLE = 64
 
 
-class ThrottledBDIBehaviour(BDIBehaviour):
+class GoombaPatrolBehaviour(BDIBehaviour):
     """spade_bdi reasoning cycle that runs at most once every ``BDI_CYCLE_PERIOD``.
 
     The stock cycle executes a single interpreter step per run, so a plan of
@@ -55,6 +55,9 @@ class ThrottledBDIBehaviour(BDIBehaviour):
                     break
         await asyncio.sleep(BDI_CYCLE_PERIOD)
 
+class KillMarioBehaviour(BDIBehaviour):
+    pass #TODO
+
 
 class GoombaAgent(BDIAgent):
     # Both injected by SpadeRuntime right after construction.
@@ -68,9 +71,9 @@ class GoombaAgent(BDIAgent):
         # BDIAgent.__init__ installs a plain BDIBehaviour: swap in the
         # throttled one, keeping the same message template.
         if isinstance(behaviour, BDIBehaviour) and not isinstance(
-            behaviour, ThrottledBDIBehaviour
+            behaviour, GoombaPatrolBehaviour
         ):
-            behaviour = ThrottledBDIBehaviour()
+            behaviour = GoombaPatrolBehaviour()
         super().add_behaviour(behaviour, template)
 
     async def setup(self):
@@ -100,6 +103,7 @@ class GoombaAgent(BDIAgent):
             direction=perception.direction,
             obstacles=perception.obstacles,
         )
+        
         void_ahead = self.ground_sensor.is_void_ahead(
             position=perception.position,
             width=perception.width,
@@ -107,6 +111,8 @@ class GoombaAgent(BDIAgent):
             direction=perception.direction,
             obstacles=perception.obstacles,
         )
+
+        #player_near = self.bump_sensor.look
 
         for belief, present in (
             ("obstacle_ahead", obstacle_ahead),
