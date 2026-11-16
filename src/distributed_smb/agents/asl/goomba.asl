@@ -7,17 +7,21 @@ sighting_ttl(180).      // a sighting older than this is ignored by who receives
 encircle_range(600).    // how far (px) a Goomba comes from to close the player in
 same_height(32).        // max vertical distance (px) to be "at the player's height"
 
-// flank(Side): another agent sees a player at my height, and the player
-// stands between that agent and me, on my Side: walking that way closes it in.
-flank(left) :-
-    perception(Now) & player_spotted(PX, PY, SenderX, Seen) & sighting_ttl(TTL)
+// flank(Side, Sender, SenderX, PX): agent Sender (standing at SenderX) sees a
+// player at PX, at my height, and the player stands between Sender and me,
+// on my Side: walking that way closes it in. Sender comes from the source
+// annotation that spade_bdi adds to every received message.
+flank(left, Sender, SenderX, PX) :-
+    perception(Now) & player_spotted(PX, PY, SenderX, Seen)[source(Sender)]
+    & sighting_ttl(TTL)
     & Now - Seen < TTL
     & position(X, Y) & same_height(H) & PY - Y < H & Y - PY < H
     & SenderX < PX & PX < X
     & encircle_range(Range) & X - PX < Range.
 
-flank(right) :-
-    perception(Now) & player_spotted(PX, PY, SenderX, Seen) & sighting_ttl(TTL)
+flank(right, Sender, SenderX, PX) :-
+    perception(Now) & player_spotted(PX, PY, SenderX, Seen)[source(Sender)]
+    & sighting_ttl(TTL)
     & Now - Seen < TTL
     & position(X, Y) & same_height(H) & PY - Y < H & Y - PY < H
     & X < PX & PX < SenderX
@@ -37,7 +41,7 @@ flank(right) :-
 +perception(Sequence) : player_near(Side) & path_blocked(Side)
     <- .hold.
 
-+perception(Sequence) : not player_near(_) & flank(Side) & path_blocked(Side)
++perception(Sequence) : not player_near(_) & flank(Side, _, _, _) & path_blocked(Side)
     <- .hold.
 
 // --- Safety first: never walk into a void or a wall ---
@@ -53,8 +57,10 @@ flank(right) :-
     <- .chase(Side).
 
 // --- Behaviour encircle: close in a player another agent is facing ---
-+perception(Sequence) : flank(Side)
-    <- .encircle(Side).
+// Reached only when this Goomba does not see the player itself (otherwise
+// kill_mario above applies): it acts on what another agent told it.
++perception(Sequence) : flank(Side, Sender, SenderX, PX)
+    <- .encircle(Side, Sender, SenderX, PX).
 
 // --- Behaviour patrol ---
 +perception(Sequence) : clear_ahead & direction(right)

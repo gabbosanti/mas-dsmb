@@ -221,3 +221,17 @@ def test_stale_sighting_from_a_silent_agent_expires(squad):
     squad.think()
 
     assert squad.actions()["enemy-2"] == [EnemyAction.MOVE_RIGHT]
+
+
+def test_both_goombas_log_their_decision_to_close_in(squad, caplog):
+    caplog.set_level("INFO", logger="distributed_smb.agents.bdi.goomba")
+    squad.perceive("enemy-1", 300, sequence=5, players=[player(400)])
+    squad.think()
+    squad.perceive("enemy-2", 800, sequence=10, players=[player(400)])
+    squad.think()
+
+    assert "[enemy-1] start -> kill_mario: sees the player at x=400" in caplog.text
+    assert (
+        "[enemy-2] start -> encircle: cannot see the player, enemy-1 told where it "
+        "is: [enemy-1 x=300 | player x=400 | enemy-2 x=800] -> enemy-2 walks left"
+    ) in caplog.text

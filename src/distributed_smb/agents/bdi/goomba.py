@@ -98,7 +98,9 @@ class GoombaAgent(BDIAgent):
 
     def set_peers(self, jids: Iterable[str]) -> None:
         """Tell the agent which other agents it can talk to (``peers(List)``)."""
-        self.bdi.set_belief("peers", tuple(jids))
+        peers = tuple(jids)
+        self._peer_count = len(peers)
+        self.bdi.set_belief("peers", peers)
 
     def perceive(self, message: GoombaPerceptionMessage) -> None:
         """Entry point used by SpadeRuntime to deliver this Goomba's perception."""
@@ -128,6 +130,7 @@ class GoombaAgent(BDIAgent):
         void_ahead = self._void_towards(perception, perception.direction)
 
         center = perception.center
+        self._last_center = center
         self.bdi.set_belief("position", round(center.x), round(center.y))
 
         # kill_mario: is a player near, and on which side?
@@ -138,6 +141,7 @@ class GoombaAgent(BDIAgent):
             vertical_tolerance=PLAYER_VERTICAL_TOLERANCE,
             deadband=PLAYER_SIDE_DEADBAND,
         )
+        self._last_player = player
         # encircle: the sighting the ASL shares with the other agents.
         self._set_single_belief(
             "player_sighted",
@@ -237,17 +241,19 @@ class GoombaAgent(BDIAgent):
     def add_custom_actions(self, actions):
         @actions.add(".move_right", 0)
         def move_right(agent, term, intention):
+            self._enter_behaviour("patrol", "walking right")
             self._publish_action(EnemyAction.MOVE_RIGHT)
             yield
 
         @actions.add(".move_left", 0)
         def move_left(agent, term, intention):
+            self._enter_behaviour("patrol", "walking left")
             self._publish_action(EnemyAction.MOVE_LEFT)
             yield
 
         @actions.add(".turn_around", 1)
         def turn_around(agent, term, intention):
-
+            self._enter_behaviour("patrol", "turning at a wall or a void")
             heading = str(asp.grounded(term.args[0], intention.scope))
             if heading == SightDirection.RIGHT.value:
                 self._publish_action(EnemyAction.MOVE_LEFT)
@@ -258,26 +264,82 @@ class GoombaAgent(BDIAgent):
             yield
 
         # .chase (kill_mario) and .encircle walk towards a side exactly like
-        # .move_*: they are separate actions only to tell the behaviours apart.
+        # .move_*: they are separate actions to tell the behaviours apart.
         @actions.add(".chase", 1)
         def chase(agent, term, intention):
-            self._walk_towards(term, intention, "chases the player")
+            side = self._grounded(term, intention, 0)
+            player = getattr(self, "_last_player", None)
+            where = f"x={player.center.x:.0f}" if player is not None else "?"
+            self._enter_behaviour(
+                "kill_mario",
+                f"sees the player at {where} on its {side}, "
+                f"sighting shared with {getattr(self, '_peer_count', 0)} agents",
+            )
+            self._walk_towards(side)
             yield
 
-        @actions.add(".encircle", 1)
+        @actions.add(".encircle", 4)
         def encircle(agent, term, intention):
-            self._walk_towards(term, intention, "closes in on the player")
+            side = self._grounded(term, intention, 0)
+            sender = _agent_name(self._grounded(term, intention, 1))
+            sender_x = float(self._grounded(term, intention, 2))
+            player_x = float(self._grounded(term, intention, 3))
+            center = getattr(self, "_last_center", None)
+            my_x = center.x if center is not None else float("nan")
+            # Lay the three of them out left to right for the log.
+            line = " | ".join(
+                label
+                for _, label in sorted(
+                    [
+                        (sender_x, f"{sender} x={sender_x:.0f}"),
+                        (player_x, f"player x={player_x:.0f}"),
+                        (my_x, f"{self.goomba_id} x={my_x:.0f}"),
+                    ]
+                )
+            )
+            self._enter_behaviour(
+                "encircle",
+                f"cannot see the player, {sender} told where it is: [{line}] "
+                f"-> {self.goomba_id} walks {side} to close it in",
+                key=("encircle", sender),
+            )
+            self._walk_towards(side)
             yield
 
         @actions.add(".hold", 0)
         def hold(agent, term, intention):
-            # Wait in place: the way to the player is blocked.
+            self._enter_behaviour(
+                "wait", "the way to the player is blocked by a wall or a void"
+            )
             self._publish_action(EnemyAction.STOP)
             yield
 
-    def _walk_towards(self, term, intention, reason: str) -> None:
-        side = str(asp.grounded(term.args[0], intention.scope))
-        LOGGER.debug("Goomba %s %s on the %s", self.goomba_id, reason, side)
+    @staticmethod
+    def _grounded(term, intention, index: int) -> str:
+        return str(asp.grounded(term.args[index], intention.scope)).strip('"')
+
+    def _enter_behaviour(
+        self, behaviour: str, detail: str, *, key: object = None
+    ) -> None:
+        """Log once per change of behaviour: what the Goomba does now, and why.
+
+        ``key`` tells two situations of the same behaviour apart (e.g. the
+        encircle partner): a new key is logged even if the behaviour is the same.
+        """
+        key = key if key is not None else behaviour
+        if getattr(self, "_behaviour_key", None) == key:
+            return
+        LOGGER.info(
+            "[%s] %s -> %s: %s",
+            self.goomba_id,
+            getattr(self, "_behaviour", None) or "start",
+            behaviour,
+            detail,
+        )
+        self._behaviour = behaviour
+        self._behaviour_key = key
+
+    def _walk_towards(self, side: str) -> None:
         if side == SightDirection.RIGHT.value:
             self._publish_action(EnemyAction.MOVE_RIGHT)
         elif side == SightDirection.LEFT.value:
@@ -294,3 +356,9 @@ class GoombaAgent(BDIAgent):
             AgentType.GOOMBA,
             ActionResult(enemy_id=self.goomba_id, action=action),
         )
+
+
+def _agent_name(jid: str) -> str:
+    """``goomba-enemy-9@localhost`` -> ``enemy-9``."""
+    local = jid.split("@", 1)[0]
+    return local.removeprefix("goomba-")
