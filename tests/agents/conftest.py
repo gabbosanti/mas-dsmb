@@ -34,6 +34,9 @@ def spade_runtime_thread():
         def perceive(self, message):
             self.perceived.append(message)
 
+        def set_peers(self, jids):
+            self.peers = list(jids)
+
         async def start(self):
             self._alive = True
             self.thread_name = threading.current_thread().name

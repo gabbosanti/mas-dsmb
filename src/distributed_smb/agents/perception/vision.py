@@ -69,47 +69,59 @@ class Vision:
                 return True
         return False
 
-    def look(
+    def nearest_player_at_height(
         self,
         position: Position,
-        direction: SightDirection | None,
         players: Iterable[PlayerPerception],
         obstacles: Iterable[ObstacleObservation],
-    ) -> VisualField:
-        obstacles = tuple(obstacles)
-        return VisualField(
-            # players=self.visible_players(position, direction, players, obstacles),
-            obstacles=self.visible_obstacles(position, direction, obstacles),
-        )
+        *,
+        vertical_tolerance: float,
+        deadband: float = 0.0,
+    ) -> PlayerPerception | None:
+        """Nearest visible player at the observer's height, if any.
 
-    def visible_players(
-        self,
-        position: Position,
-        direction: SightDirection | None,
-        players: Iterable[PlayerPerception],
-        obstacles: Iterable[ObstacleObservation],
-    ) -> tuple[PlayerPerception, ...]:
+        A player counts when its center is within ``vertical_tolerance`` of
+        the observer's on the y axis (same height), within ``sight_distance``
+        on the x axis and not hidden behind an obstacle. The observer's
+        facing direction is ignored on purpose: a player behind it is noticed
+        too, so that it can turn around. Players closer than ``deadband`` on
+        the x axis are ignored, so that the side cannot flicker while the
+        two bodies overlap.
+        """
         obstacles = tuple(obstacles)
-        return tuple(
+        candidates = [
             player
             for player in players
-            if self.can_see(position, direction, player.center, obstacles)
+            if abs(player.center.y - position.y) <= vertical_tolerance
+            and deadband < abs(player.center.x - position.x) <= self.sight_distance
+            and has_clear_line(position, player.center, obstacles)
+        ]
+        return min(
+            candidates,
+            key=lambda player: (abs(player.center.x - position.x), player.player_id),
+            default=None,
         )
 
-    def visible_obstacles(
+    def player_side(
         self,
         position: Position,
-        direction: SightDirection | None,
+        players: Iterable[PlayerPerception],
         obstacles: Iterable[ObstacleObservation],
-    ) -> tuple[ObstacleObservation, ...]:
-        obstacles = tuple(obstacles)
-        return tuple(
-            obstacle
-            for index, obstacle in enumerate(obstacles)
-            if self.can_see(
-                position, direction, obstacle.center, obstacles, ignored_index=index
-            )
+        *,
+        vertical_tolerance: float,
+        deadband: float = 0.0,
+    ) -> SightDirection | None:
+        """Side of ``nearest_player_at_height``, or None when there is none."""
+        nearest = self.nearest_player_at_height(
+            position,
+            players,
+            obstacles,
+            vertical_tolerance=vertical_tolerance,
+            deadband=deadband,
         )
+        if nearest is None:
+            return None
+        return side_of(nearest.center, position)
 
     def can_see(
         self,
@@ -136,19 +148,9 @@ class Vision:
         return hypot(delta_x, target.y - position.y) <= self.sight_distance
 
 
-# Not used in Milestone 1
-def nearest_player(
-    position: Position, players: Iterable[PlayerPerception]
-) -> PlayerPerception | None:
-    # Return the closest player to position ; ties are broken by player id.
-    return min(
-        players,
-        key=lambda player: (
-            hypot(player.center.x - position.x, player.center.y - position.y),
-            player.player_id,
-        ),
-        default=None,
-    )
+def side_of(target: Position, position: Position) -> SightDirection:
+    """On which side of ``position`` the ``target`` lies."""
+    return SightDirection.LEFT if target.x < position.x else SightDirection.RIGHT
 
 
 def has_clear_line(

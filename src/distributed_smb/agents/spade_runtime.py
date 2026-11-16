@@ -26,6 +26,7 @@ type GoombaFactory = Callable[[str], "GoombaAgent"]
 # How often the runtime moves perceptions from the game queue to the agents.
 DISPATCH_INTERVAL = 0.01
 GOOMBA_ASL_PATH = Path(__file__).parent / "asl" / "goomba.asl"
+XMPP_DOMAIN = "localhost"
 
 
 class SpadeRuntime:
@@ -58,6 +59,15 @@ class SpadeRuntime:
             agent.goomba_id = enemy_id
             agent.spade_runtime = self
             self.goomba_agents[enemy_id] = agent
+
+        # Agents interact through SPADE messages: each one learns the
+        # addresses of all the others (future agent types included).
+        for enemy_id, agent in self.goomba_agents.items():
+            agent.set_peers(
+                self.jid_for(other_id)
+                for other_id in self.goomba_agents
+                if other_id != enemy_id
+            )
 
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
@@ -105,22 +115,22 @@ class SpadeRuntime:
         latest: dict[str, GoombaPerceptionMessage] = {}
         while True:
             try:
-                message = self.get_perception(AgentType.GOOMBA)
+                goombaPerception = self.get_perception(AgentType.GOOMBA)
             except Empty:
                 break
-            if not isinstance(message, GoombaPerceptionMessage):
+            if not isinstance(goombaPerception, GoombaPerceptionMessage):
                 LOGGER.warning(
-                    "Discarding GOOMBA perception of type %s", type(message).__name__
+                    "Discarding GOOMBA perception of type %s", type(goombaPerception).__name__
                 )
                 continue
-            latest[message.perception.goomba_id] = message
+            latest[goombaPerception.perception.goomba_id] = goombaPerception
 
-        for goomba_id, message in latest.items():
+        for goomba_id, goombaPerception in latest.items():
             agent = self.goomba_agents.get(goomba_id)
             if agent is None:
                 LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
                 continue
-            agent.perceive(message)
+            agent.perceive(goombaPerception)
         return len(latest)
 
     @staticmethod
@@ -131,10 +141,15 @@ class SpadeRuntime:
         if not GOOMBA_ASL_PATH.is_file():
             raise FileNotFoundError(f"Goomba ASL file not found: {GOOMBA_ASL_PATH}")
         return GoombaAgent(
-            f"goomba-{enemy_id}@localhost",
+            SpadeRuntime.jid_for(enemy_id),
             f"goomba-{enemy_id}_password",
             str(GOOMBA_ASL_PATH),
         )
+
+    @staticmethod
+    def jid_for(enemy_id: str) -> str:
+        """XMPP address of the agent that controls ``enemy_id``."""
+        return f"goomba-{enemy_id}@{XMPP_DOMAIN}"
 
     def get_perception(
         self, agent_type: AgentType, timeout: float | None = 0

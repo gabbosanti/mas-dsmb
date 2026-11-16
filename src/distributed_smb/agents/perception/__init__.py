@@ -10,7 +10,7 @@ from distributed_smb.agents.perception.vision import (
     Vision,
     VisualField,
     has_clear_line,
-    nearest_player,
+    side_of,
 )
 
 __all__ = [
@@ -21,5 +21,5 @@ __all__ = [
     "Vision",
     "VisualField",
     "has_clear_line",
-    "nearest_player",
+    "side_of",
 ]
