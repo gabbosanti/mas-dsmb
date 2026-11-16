@@ -100,7 +100,7 @@ class KoopaPerception:
 
 
 @dataclass(frozen=True, slots=True)
-class GoombaPerceptionMessage:
+class KoopaPerceptionMessage:
     """Queue envelope that ties a perception to its simulation tick."""
 
     simulation_sequence: int

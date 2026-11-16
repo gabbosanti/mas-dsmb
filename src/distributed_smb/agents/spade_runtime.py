@@ -12,7 +12,7 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.models import GoombaPerceptionMessage
+from distributed_smb.agents.models import GoombaPerceptionMessage, KoopaPerceptionMessage
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
@@ -60,6 +60,7 @@ class SpadeRuntime:
         # Build every agent (and load its ASL) before the thread starts, and
         # inject the runtime so the agents can publish their actions.
         self.goomba_agents: dict[str, GoombaAgent] = {}
+        self.koopa_agents: dict[str, KoopaAgent] = {}
         for enemy_id in enemy_ids:
             agent = factory(enemy_id)
             agent.goomba_id = enemy_id
@@ -142,11 +143,18 @@ class SpadeRuntime:
             latestKoopa[koopaPerception.perception.koopa_id] = koopaPerception
 
         for goomba_id, goombaPerception in latestGoomba.items():
-            agent = self.goomba_agents.get(goomba_id)
-            if agent is None:
+            goombaAgent = self.goomba_agents.get(goomba_id)
+            if goombaAgent is None:
                 LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
                 continue
-            agent.perceive(goombaPerception)
+            goombaAgent.perceive(goombaPerception)
+    
+        for koopa_id, koopaPerception in latestKoopa.items():
+            koopaAgent = self.koopa_agents.get(goomba_id)
+            if koopaAgent is None:
+                LOGGER.debug("No SPADE agent for %s, perception dropped", koopa_id)
+                continue
+            koopaAgent.perceive(koopaPerception)
     
     
     @staticmethod
