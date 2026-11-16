@@ -43,6 +43,7 @@ class PlayerPerception:
             self.position.x + self.width / 2, self.position.y + self.height / 2
         )
 
+#----------------------------------- GOOMBA #-----------------------------------
 
 @dataclass(frozen=True, slots=True)
 class GoombaPerception:
@@ -74,6 +75,38 @@ class GoombaPerceptionMessage:
     simulation_sequence: int
     perception: GoombaPerception
 
+#----------------------------------- KOOPA #-----------------------------------
+@dataclass(frozen=True, slots=True)
+class KoopaPerception:
+    """Raw, immutable snapshot of the world sent to a Koopa agent.
+
+    It carries facts only: what the Goomba can actually see, or which player
+    is closest, is decided agent-side (see ``distributed_smb.agents.perception``).
+    """
+
+    koopa_id: str
+    position: Position
+    width: float
+    height: float
+    direction: SightDirection
+    players: tuple[PlayerPerception, ...] = ()
+    obstacles: tuple[ObstacleObservation, ...] = ()
+
+    @property
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GoombaPerceptionMessage:
+    """Queue envelope that ties a perception to its simulation tick."""
+
+    simulation_sequence: int
+    perception: KoopaPerception
+
+#---------------------------------------------------------------------------
 
 class EnemyAction(str, Enum):
     TURN_AROUND = "TURN_AROUND"

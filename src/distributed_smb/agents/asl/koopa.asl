@@ -1,0 +1,2 @@
+//Belief base
+direction(right).

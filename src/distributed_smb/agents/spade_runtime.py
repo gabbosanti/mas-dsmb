@@ -16,16 +16,21 @@ from distributed_smb.agents.models import GoombaPerceptionMessage
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
+    from distributed_smb.agents.bdi.koopa import KoopaAgent
+ 
 
 LOGGER = logging.getLogger(__name__)
 
 type PerceptionQueue = dict[AgentType, Queue]
 type ActionQueue = dict[AgentType, Queue]
 type GoombaFactory = Callable[[str], "GoombaAgent"]
+type KoopaFactory = Callable[[str], "KoopaAgent"]
+
 
 # How often the runtime moves perceptions from the game queue to the agents.
 DISPATCH_INTERVAL = 0.01
 GOOMBA_ASL_PATH = Path(__file__).parent / "asl" / "goomba.asl"
+KOOPA_ASL_PATH = Path(__file__).parent / "asl" / "koopa.asl"
 XMPP_DOMAIN = "localhost"
 
 
@@ -45,12 +50,13 @@ class SpadeRuntime:
         enemy_ids: Iterable[str] = (),
         stop_event: threading.Event | None = None,
         goomba_factory: GoombaFactory | None = None,
+        koopa_factory: KoopaFactory | None = None
     ) -> None:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
         self.stop_event = stop_event or threading.Event()
         factory = goomba_factory or self._create_goomba_agent
-
+        
         # Build every agent (and load its ASL) before the thread starts, and
         # inject the runtime so the agents can publish their actions.
         self.goomba_agents: dict[str, GoombaAgent] = {}
@@ -106,16 +112,19 @@ class SpadeRuntime:
                         time.monotonic() - stop_started,
                     )
 
-    def dispatch_perceptions(self) -> int:
+    def dispatch_perceptions(self) -> None:
         """Hand the latest queued perception of each enemy to its own agent.
 
         Older perceptions of the same enemy are superseded and dropped, so a
         slow agent always reasons on the freshest snapshot.
         """
-        latest: dict[str, GoombaPerceptionMessage] = {}
+        latestGoomba: dict[str, GoombaPerceptionMessage] = {}
+        latestKoopa: dict[str, KoopaPerceptionMessage] = {}
+        
         while True:
             try:
                 goombaPerception = self.get_perception(AgentType.GOOMBA)
+                koopaPerception = self.get_perception(AgentType.KOOPA)
             except Empty:
                 break
             if not isinstance(goombaPerception, GoombaPerceptionMessage):
@@ -123,16 +132,23 @@ class SpadeRuntime:
                     "Discarding GOOMBA perception of type %s", type(goombaPerception).__name__
                 )
                 continue
-            latest[goombaPerception.perception.goomba_id] = goombaPerception
+            elif not isinstance(koopaPerception, KoopaPerceptionMessage):
+                LOGGER.warning(
+                    "Discarding KOOPA perception of type %s", type(koopaPerception).__name__
+                )
+                continue
+                        
+            latestGoomba[goombaPerception.perception.goomba_id] = goombaPerception
+            latestKoopa[koopaPerception.perception.koopa_id] = koopaPerception
 
-        for goomba_id, goombaPerception in latest.items():
+        for goomba_id, goombaPerception in latestGoomba.items():
             agent = self.goomba_agents.get(goomba_id)
             if agent is None:
                 LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
                 continue
             agent.perceive(goombaPerception)
-        return len(latest)
-
+    
+    
     @staticmethod
     def _create_goomba_agent(enemy_id: str) -> GoombaAgent:
         """Construct a Goomba BDI agent; SPADE is imported only when needed."""
@@ -144,6 +160,19 @@ class SpadeRuntime:
             SpadeRuntime.jid_for(enemy_id),
             f"goomba-{enemy_id}_password",
             str(GOOMBA_ASL_PATH),
+        )
+    
+    @staticmethod
+    def _create_koopa_agent(enemy_id: str) -> KoopaAgent:
+        """Construct a Goomba BDI agent; SPADE is imported only when needed."""
+        from distributed_smb.agents.bdi.goomba import GoombaAgent
+
+        if not KOOPA_ASL_PATH.is_file():
+            raise FileNotFoundError(f"Goomba ASL file not found: {GOOMBA_ASL_PATH}")
+        return KoopaAgent(
+            SpadeRuntime.jid_for(enemy_id),
+            f"goomba-{enemy_id}_password",
+            str(KOOPA_ASL_PATH),
         )
 
     @staticmethod
