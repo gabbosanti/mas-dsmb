@@ -3,7 +3,7 @@
 import pytest
 
 from distributed_smb.agents.models import ObstacleObservation, Position, SightDirection
-from distributed_smb.agents.perception import Vision, nearest_player
+from distributed_smb.agents.perception import Vision
 
 
 def wall(x: float, *, y=80, width=20, height=100) -> ObstacleObservation:

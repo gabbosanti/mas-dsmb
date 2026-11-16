@@ -67,24 +67,45 @@ def test_player_at_another_height_or_too_far_is_ignored(goomba_agent, run_bdi_st
     assert decide(agent, runtime, run_bdi_steps, snapshot) == [EnemyAction.MOVE_LEFT]
 
 
-def test_goomba_does_not_chase_a_player_beyond_a_void(goomba_agent, run_bdi_steps):
+def test_goomba_waits_when_the_player_is_beyond_a_void(goomba_agent, run_bdi_steps):
     agent, runtime = goomba_agent
     # The floor starts exactly under the Goomba: there is a void on its left.
     floor = ObstacleObservation(100, 100, 300, 32)
 
     snapshot = perception(players=[player(60)], obstacles=(floor,))
 
-    assert decide(agent, runtime, run_bdi_steps, snapshot) == [EnemyAction.MOVE_RIGHT]
+    # It neither walks into the void nor wanders off: it waits at the edge.
+    assert decide(agent, runtime, run_bdi_steps, snapshot) == [EnemyAction.STOP]
     assert "path_blocked(left)" in agent.bdi.get_beliefs()
 
 
-def test_safety_wins_over_chasing(goomba_agent, run_bdi_steps):
+def test_goomba_never_walks_into_a_void_to_reach_the_player(
+    goomba_agent, run_bdi_steps
+):
     agent, runtime = goomba_agent
     short_floor = ObstacleObservation(0, 100, 150, 32)  # void just ahead
 
     snapshot = perception(players=[player(200)], obstacles=(short_floor,))
 
-    assert decide(agent, runtime, run_bdi_steps, snapshot) == [EnemyAction.MOVE_LEFT]
+    assert decide(agent, runtime, run_bdi_steps, snapshot) == [EnemyAction.STOP]
+
+
+def test_goomba_leaves_the_edge_once_the_player_is_gone(goomba_agent, run_bdi_steps):
+    agent, runtime = goomba_agent
+    short_floor = ObstacleObservation(0, 100, 150, 32)
+
+    decide(
+        agent,
+        runtime,
+        run_bdi_steps,
+        perception(players=[player(200)], obstacles=(short_floor,)),
+        sequence=1,
+    )
+    actions = decide(
+        agent, runtime, run_bdi_steps, perception(obstacles=(short_floor,)), sequence=2
+    )
+
+    assert actions == [EnemyAction.MOVE_LEFT]  # safety: turn away from the void
 
 
 def test_goomba_resumes_patrol_when_the_player_leaves(goomba_agent, run_bdi_steps):

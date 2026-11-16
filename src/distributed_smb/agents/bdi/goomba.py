@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 import agentspeak as asp
 from spade_bdi.bdi import BDIAgent
-from spade_bdi.bdi_behaviour import BDIBehaviour
+from spade_bdi.bdi_behaviour import PERCEPT_TAG, BDIBehaviour
 
 from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
@@ -14,7 +15,7 @@ from distributed_smb.agents.models import (
     GoombaPerceptionMessage,
     SightDirection,
 )
-from distributed_smb.agents.perception import GroundSensor, Vision
+from distributed_smb.agents.perception import GroundSensor, Vision, side_of
 
 if TYPE_CHECKING:
     from distributed_smb.agents.spade_runtime import SpadeRuntime
@@ -63,10 +64,16 @@ class GoombaPatrolBehaviour(BDIBehaviour):
 
 class GoombaAgent(BDIAgent):
     """
-    Goomba driven by goomba.asl, which groups its plans in two behaviours:
+    Goomba driven by goomba.asl, which groups its plans in three behaviours:
         - patrol: walk and turn around at walls and at the edge of platforms;
         - kill_mario: when a player is near and at the same height, walk towards
-          it, unless that side is blocked by a wall or a void.
+          it, unless that side is blocked by a wall or a void;
+        - encircle: a Goomba that sees a player tells the other agents where it
+          is (AgentSpeak ``.send``); a Goomba that learns the player stands
+          between itself and the sender walks towards it to close it in.
+
+    This class only senses (snapshot -> beliefs) and acts (ASL action -> game
+    command): every decision, including who talks to whom, is in the ASL.
     """
 
     # Both injected by SpadeRuntime right after construction.
@@ -88,6 +95,10 @@ class GoombaAgent(BDIAgent):
 
     async def setup(self):
         LOGGER.info("Goomba agent %s started", self.goomba_id)
+
+    def set_peers(self, jids: Iterable[str]) -> None:
+        """Tell the agent which other agents it can talk to (``peers(List)``)."""
+        self.bdi.set_belief("peers", tuple(jids))
 
     def perceive(self, message: GoombaPerceptionMessage) -> None:
         """Entry point used by SpadeRuntime to deliver this Goomba's perception."""
@@ -116,21 +127,33 @@ class GoombaAgent(BDIAgent):
         
         void_ahead = self._void_towards(perception, perception.direction)
 
-        # kill_mario: where is the player, and can the Goomba walk that way?
-        player_side = self.player_sensor.player_side(
-            perception.center,
+        center = perception.center
+        self.bdi.set_belief("position", round(center.x), round(center.y))
+
+        # kill_mario: is a player near, and on which side?
+        player = self.player_sensor.nearest_player_at_height(
+            center,
             perception.players,
             perception.obstacles,
             vertical_tolerance=PLAYER_VERTICAL_TOLERANCE,
             deadband=PLAYER_SIDE_DEADBAND,
         )
-
-        blocked_side = None
-        if player_side is not None and self._blocked_towards(perception, player_side):
-            blocked_side = player_side
-
-        self._set_side_belief("player_near", player_side)
-        self._set_side_belief("path_blocked", blocked_side)
+        # encircle: the sighting the ASL shares with the other agents.
+        self._set_single_belief(
+            "player_sighted",
+            (round(player.center.x), round(player.center.y), sequence)
+            if player is not None
+            else None,
+        )
+        self._set_single_belief(
+            "player_near",
+            (side_of(player.center, center).value,) if player is not None else None,
+        )
+        # Which sides cannot be walked: a wall or a void is in the way.
+        for side in SightDirection:
+            self._set_flag_belief(
+                "path_blocked", side.value, self._blocked_towards(perception, side)
+            )
 
         for belief, present in (
             ("obstacle_ahead", obstacle_ahead),
@@ -167,24 +190,49 @@ class GoombaAgent(BDIAgent):
             obstacles=perception.obstacles,
         )
 
-    def _set_side_belief(self, name: str, side: SightDirection | None) -> None:
-        """Keep at most one ``name(left|right)`` belief, or none.
+    def _set_single_belief(self, name: str, args: tuple | None) -> None:
+        """Keep at most one ``name(*args)`` belief, or none when ``args`` is None.
 
         ``remove_belief(name)`` alone would not match ``name(left)`` (different
-        arity), so the side last set is remembered to remove it explicitly.
+        arity), so the arguments last set are remembered to remove them.
         """
-        side_beliefs: dict[str, str | None] = self.__dict__.setdefault(
-            "_side_beliefs", {}
+        single_beliefs: dict[str, tuple | None] = self.__dict__.setdefault(
+            "_single_beliefs", {}
         )
-        previous = side_beliefs.get(name)
-        current = side.value if side is not None else None
-        if previous == current:
+        previous = single_beliefs.get(name)
+        if previous == args:
             return
-        if previous is not None:
-            self.bdi.remove_belief(name, previous)
-        if current is not None:
-            self.bdi.set_belief(name, current)
-        side_beliefs[name] = current
+        if args is not None:
+            self.bdi.set_belief(name, *args)  # also replaces the previous one
+        elif previous is not None:
+            self.bdi.remove_belief(name, *previous)
+        single_beliefs[name] = args
+
+    def _set_flag_belief(self, name: str, arg: str, present: bool) -> None:
+        """Add or remove ``name(arg)`` without touching ``name(other_arg)``.
+
+        ``bdi.set_belief`` replaces every other belief with the same name, so
+        it cannot hold ``path_blocked(left)`` and ``path_blocked(right)`` at
+        the same time: the addition is queued directly, as spade_bdi does.
+        """
+        flags: set[tuple[str, str]] = self.__dict__.setdefault("_flag_beliefs", set())
+        key = (name, arg)
+        if present == (key in flags):
+            return
+        if present:
+            flags.add(key)
+            term = asp.Literal(name, (asp.Literal(arg),), PERCEPT_TAG)
+            self.bdi_intention_buffer.append(
+                (
+                    asp.Trigger.addition,
+                    asp.GoalType.belief,
+                    term,
+                    asp.runtime.Intention(),
+                )
+            )
+        else:
+            flags.discard(key)
+            self.bdi.remove_belief(name, arg)
 
     def add_custom_actions(self, actions):
         @actions.add(".move_right", 0)
@@ -209,19 +257,33 @@ class GoombaAgent(BDIAgent):
                 LOGGER.warning("Goomba %s: unknown heading %r", self.goomba_id, heading)
             yield
 
+        # .chase (kill_mario) and .encircle walk towards a side exactly like
+        # .move_*: they are separate actions only to tell the behaviours apart.
         @actions.add(".chase", 1)
         def chase(agent, term, intention):
-            # kill_mario behaviour: walk towards the player's side. A separate
-            # action from .move_* only to tell the two behaviours apart.
-            side = str(asp.grounded(term.args[0], intention.scope))
-            LOGGER.debug("Goomba %s chases the player on the %s", self.goomba_id, side)
-            if side == SightDirection.RIGHT.value:
-                self._publish_action(EnemyAction.MOVE_RIGHT)
-            elif side == SightDirection.LEFT.value:
-                self._publish_action(EnemyAction.MOVE_LEFT)
-            else:
-                LOGGER.warning("Goomba %s: unknown side %r", self.goomba_id, side)
+            self._walk_towards(term, intention, "chases the player")
             yield
+
+        @actions.add(".encircle", 1)
+        def encircle(agent, term, intention):
+            self._walk_towards(term, intention, "closes in on the player")
+            yield
+
+        @actions.add(".hold", 0)
+        def hold(agent, term, intention):
+            # Wait in place: the way to the player is blocked.
+            self._publish_action(EnemyAction.STOP)
+            yield
+
+    def _walk_towards(self, term, intention, reason: str) -> None:
+        side = str(asp.grounded(term.args[0], intention.scope))
+        LOGGER.debug("Goomba %s %s on the %s", self.goomba_id, reason, side)
+        if side == SightDirection.RIGHT.value:
+            self._publish_action(EnemyAction.MOVE_RIGHT)
+        elif side == SightDirection.LEFT.value:
+            self._publish_action(EnemyAction.MOVE_LEFT)
+        else:
+            LOGGER.warning("Goomba %s: unknown side %r", self.goomba_id, side)
 
     def _publish_action(self, action: EnemyAction) -> None:
         """Publish the action selected by the ASL plan to the game thread."""

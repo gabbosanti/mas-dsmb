@@ -69,7 +69,7 @@ class Vision:
                 return True
         return False
 
-    def player_side(
+    def nearest_player_at_height(
         self,
         position: Position,
         players: Iterable[PlayerPerception],
@@ -77,8 +77,8 @@ class Vision:
         *,
         vertical_tolerance: float,
         deadband: float = 0.0,
-    ) -> SightDirection | None:
-        """Side of the nearest player at the observer's height, if any.
+    ) -> PlayerPerception | None:
+        """Nearest visible player at the observer's height, if any.
 
         A player counts when its center is within ``vertical_tolerance`` of
         the observer's on the y axis (same height), within ``sight_distance``
@@ -96,15 +96,32 @@ class Vision:
             and deadband < abs(player.center.x - position.x) <= self.sight_distance
             and has_clear_line(position, player.center, obstacles)
         ]
-        if not candidates:
-            return None
-        nearest = min(
+        return min(
             candidates,
             key=lambda player: (abs(player.center.x - position.x), player.player_id),
+            default=None,
         )
-        if nearest.center.x < position.x:
-            return SightDirection.LEFT
-        return SightDirection.RIGHT
+
+    def player_side(
+        self,
+        position: Position,
+        players: Iterable[PlayerPerception],
+        obstacles: Iterable[ObstacleObservation],
+        *,
+        vertical_tolerance: float,
+        deadband: float = 0.0,
+    ) -> SightDirection | None:
+        """Side of ``nearest_player_at_height``, or None when there is none."""
+        nearest = self.nearest_player_at_height(
+            position,
+            players,
+            obstacles,
+            vertical_tolerance=vertical_tolerance,
+            deadband=deadband,
+        )
+        if nearest is None:
+            return None
+        return side_of(nearest.center, position)
 
     def can_see(
         self,
@@ -129,6 +146,11 @@ class Vision:
         if direction is SightDirection.RIGHT and delta_x < 0:
             return False
         return hypot(delta_x, target.y - position.y) <= self.sight_distance
+
+
+def side_of(target: Position, position: Position) -> SightDirection:
+    """On which side of ``position`` the ``target`` lies."""
+    return SightDirection.LEFT if target.x < position.x else SightDirection.RIGHT
 
 
 def has_clear_line(

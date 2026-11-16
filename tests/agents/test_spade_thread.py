@@ -118,6 +118,9 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
         def perceive(self, message):
             self.perceived.append(message)
 
+        def set_peers(self, jids):
+            self.peers = list(jids)
+
     runtime = SpadeRuntime(
         make_agent_queues(),
         make_agent_queues(),
