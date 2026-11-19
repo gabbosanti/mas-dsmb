@@ -75,6 +75,30 @@ class GoombaPerceptionMessage:
     perception: GoombaPerception
 
 
+@dataclass(frozen=True, slots=True)
+class PlayerPerceptionMessage:
+    """Queue envelope for a dummy player's snapshot."""
+
+    simulation_sequence: int
+    perception: PlayerPerception
+
+
+class PlayerAction(str, Enum):
+    MOVE_LEFT = "MOVE_LEFT"
+    MOVE_RIGHT = "MOVE_RIGHT"
+    JUMP = "JUMP"
+    CROUCH = "CROUCH"
+    STOP = "STOP"
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerActionResult:
+    """Random action selected by a dummy SPADE player agent."""
+
+    player_id: str
+    action: PlayerAction
+
+
 class EnemyAction(str, Enum):
     TURN_AROUND = "TURN_AROUND"
     MOVE_LEFT = "MOVE_LEFT"

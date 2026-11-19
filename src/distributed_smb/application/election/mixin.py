@@ -124,7 +124,7 @@ class ElectionMixin:
                 None,
             )
             if entry:
-                self._evict_player(entry.player_id)  # removes from roster + world state
+                self._evict_player(entry.player_id)
         self._pending_election_acks.clear()
         self._promote_to_host()
 
@@ -153,7 +153,7 @@ class ElectionMixin:
         # Update roster: evict crashed host, mark self as new host
         crashed = self.roster.get_host()
         if crashed is not None:
-            self._evict_player(crashed.player_id)  # removes from roster + world state
+            self._evict_player(crashed.player_id)
         self.roster.promote_host(self.local_player_id)
 
         # Rebuild UDP socket bound to the authoritative host port

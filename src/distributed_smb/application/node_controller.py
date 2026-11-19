@@ -187,6 +187,7 @@ class NodeController(
     reconnected: bool = False
     rejoin_join_index: int | None = None
     rejoin_states: dict[int, Player] = field(default_factory=dict)
+    dummy_player_ids: set[str] = field(default_factory=set)
     # --- Election: pending acks for the claim we broadcast ---
     _pending_election_acks: set = field(default_factory=set)
     _election_claim_deadline: float = 0.0

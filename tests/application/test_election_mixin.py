@@ -48,12 +48,30 @@ def test_a_sole_survivor_promotes_immediately_without_claiming():
         assert nc.role is PlayerRole.HOST
         assert nc.engine.is_authoritative is True
         assert broker.promoted_port == GAME_EVENT_WS_PORT
-        assert nc.roster.get_player("player1") is None  # the crashed host is gone
+        assert nc.roster.get_player("player1") is None
         assert nc.roster.get_host().player_id == "player2"
 
         broker.promoted_port = None
         nc._promote_to_host()
         assert broker.promoted_port is None  # promoting twice does nothing
+    finally:
+        nc.udp_handler.close_socket()
+
+
+def test_promotion_replaces_a_crashed_host_in_world_and_roster_with_a_dummy():
+    nc, broker = make_controller(with_host_in_roster=True)
+    nc.engine.world_state.add_player(
+        Player(player_id="player1", x=250, y=100, join_index=0)
+    )
+
+    try:
+        nc._on_self_elected(SelfElected(my_ip="10.0.0.2"))
+
+        assert nc.engine.world_state.get_player("player1") is not None
+        assert nc.roster.get_player("player1") is not None
+        assert "player1" in nc.dummy_player_ids
+        assert "player1" in nc.agent_integration.spade_controlled_player_ids
+        assert "player1" in nc.spade_runtime.player_agents
     finally:
         nc.udp_handler.close_socket()
 

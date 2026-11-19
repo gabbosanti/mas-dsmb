@@ -1,6 +1,10 @@
 """Exercise the BDI decision through the shared queues and game adapter."""
 
 from distributed_smb.agents.agent_type import AgentType
+from distributed_smb.agents.models import (
+    PlayerAction,
+    PlayerActionResult,
+)
 from distributed_smb.application.agent_integration import AgentGameIntegration
 from distributed_smb.application.spade_agent_bridge import SpadeAgentBridge
 from distributed_smb.domain.game_engine import GameEngine
@@ -32,3 +36,26 @@ def test_bdi_action_moves_the_controlled_goomba(goomba_agent, run_bdi_steps):
     integration.tick(0.1, {})
 
     assert enemy.x > initial_x
+
+
+def test_player_action_queue_moves_a_spade_replaced_player():
+    engine = GameEngine()
+    engine.spawn_player("player2", x=100, y=100, join_index=1)
+    integration = AgentGameIntegration(
+        engine,
+        enabled=True,
+        perception_interval_ticks=1,
+    )
+    integration.control_player_with_spade("player2")
+
+    integration.bridge.submit_action(
+        AgentType.PLAYER,
+        PlayerActionResult(
+            player_id="player2",
+            action=PlayerAction.MOVE_RIGHT,
+        ),
+    )
+    initial_x = engine.world_state.characters["player2"].x
+    integration.tick(0.1, {})
+
+    assert engine.world_state.characters["player2"].x > initial_x

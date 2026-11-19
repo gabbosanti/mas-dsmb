@@ -120,9 +120,8 @@ def test_one_event_reaches_every_connected_client():
     assert [msg.position for msg in received] == [(50, 50), (50, 50)]
 
 
-def test_host_evicts_a_silent_player_everywhere_and_tells_the_others():
-    """A peer that stops sending input is dropped from world, roster and every
-    per-player cache, and the others are told so they drop it too."""
+def test_host_replaces_a_silent_player_with_a_dummy_spade_agent():
+    """A peer that stops sending input stays in the game and is handed to SPADE."""
     host = _node(PlayerRole.HOST)
     host.last_input_time["player2"] = time.time() - UDP_INPUT_TIMEOUT - 1.0
 
@@ -136,28 +135,27 @@ def test_host_evicts_a_silent_player_everywhere_and_tells_the_others():
 
     host._check_player_disconnections()
 
-    assert "player2" not in host.engine.world_state.characters
-    assert host.roster.get_player("player2") is None
+    assert "player2" in host.engine.world_state.characters
+    assert host.roster.get_player("player2") is not None
     assert "player2" not in host.cached_remote_inputs
     assert "player2" not in host.last_remote_input_sequence
     assert "player2" not in host.last_input_time
-
-    assert len(sent) == 1
-    msg = _serializer.decode_ws_message(json.loads(sent[0]))
-    assert isinstance(msg, PlayerLeft)
-    assert msg.player_id == "player2"
+    assert "player2" in host.dummy_player_ids
+    assert "player2" in host.agent_integration.spade_controlled_player_ids
+    assert "player2" in host.spade_runtime.player_agents
+    assert sent == []
 
 
 def test_client_applies_player_left_unless_it_names_itself():
-    """A false eviction — e.g. a UDP timeout misfiring right after a migration —
-    would otherwise make a live node remove itself from its own world."""
+    """Crash events replace remote players, while never replacing local self."""
     client = _node(PlayerRole.CLIENT)
     assert "player1" in client.engine.world_state.characters
 
     _publish_to(client, PlayerLeft(player_id="player1"))
 
-    assert "player1" not in client.engine.world_state.characters
-    assert client.roster.get_player("player1") is None
+    assert "player1" in client.engine.world_state.characters
+    assert client.roster.get_player("player1") is not None
+    assert "player1" in client.dummy_player_ids
 
     _publish_to(client, PlayerLeft(player_id=client.local_player_id))
 

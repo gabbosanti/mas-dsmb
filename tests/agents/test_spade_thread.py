@@ -14,6 +14,8 @@ from distributed_smb.agents.models import (
     GoombaPerceptionMessage,
     Position,
     SightDirection,
+    PlayerPerception,
+    PlayerPerceptionMessage,
 )
 from distributed_smb.agents.spade_thread import SpadeThread
 
@@ -143,3 +145,49 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
     assert [m.simulation_sequence for m in first.perceived] == [10]
     assert [m.perception.goomba_id for m in second.perceived] == ["enemy-2"]
     assert queue.empty()
+
+
+def test_dummy_player_perception_is_processed_through_player_action_queue():
+    from distributed_smb.agents.spade_runtime import SpadeRuntime
+    from distributed_smb.application.spade_agent_bridge import make_agent_queues
+
+    class DummyAgent:
+        def __init__(self, player_id):
+            self.player_id = player_id
+            self.perceived = []
+            self.spade_runtime = None
+
+        def perceive(self, message):
+            self.perceived.append(message)
+            from distributed_smb.agents.models import PlayerAction, PlayerActionResult
+
+            self.spade_runtime.put_action(
+                AgentType.PLAYER,
+                PlayerActionResult(
+                    player_id=self.player_id,
+                    action=PlayerAction.MOVE_RIGHT,
+                ),
+            )
+
+    runtime = SpadeRuntime(
+        make_agent_queues(),
+        make_agent_queues(),
+        dummy_player_factory=DummyAgent,
+    )
+    runtime.add_player_agent("player2")
+    runtime.perception_queue[AgentType.PLAYER].put(
+        PlayerPerceptionMessage(
+            simulation_sequence=11,
+            perception=PlayerPerception(
+                player_id="player2",
+                position=Position(10, 20),
+                width=50,
+                height=50,
+            ),
+        )
+    )
+
+    assert runtime.dispatch_perceptions() == 1
+    action = runtime.action_queue[AgentType.PLAYER].get_nowait()
+    assert action.player_id == "player2"
+    assert action.action.value == "MOVE_RIGHT"

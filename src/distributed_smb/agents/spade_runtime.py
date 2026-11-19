@@ -12,7 +12,10 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.models import GoombaPerceptionMessage
+from distributed_smb.agents.models import (
+    GoombaPerceptionMessage,
+    PlayerPerceptionMessage,
+)
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.goomba import GoombaAgent
@@ -22,6 +25,7 @@ LOGGER = logging.getLogger(__name__)
 type PerceptionQueue = dict[AgentType, Queue]
 type ActionQueue = dict[AgentType, Queue]
 type GoombaFactory = Callable[[str], "GoombaAgent"]
+type DummyPlayerFactory = Callable[[str], object]
 
 # How often the runtime moves perceptions from the game queue to the agents.
 DISPATCH_INTERVAL = 0.01
@@ -45,11 +49,15 @@ class SpadeRuntime:
         enemy_ids: Iterable[str] = (),
         stop_event: threading.Event | None = None,
         goomba_factory: GoombaFactory | None = None,
+        dummy_player_factory: DummyPlayerFactory | None = None,
     ) -> None:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
         self.stop_event = stop_event or threading.Event()
         factory = goomba_factory or self._create_goomba_agent
+        self.dummy_player_factory = dummy_player_factory or self._create_dummy_player
+        self.player_agents: dict[str, object] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
 
         # Build every agent (and load its ASL) before the thread starts, and
         # inject the runtime so the agents can publish their actions.
@@ -76,6 +84,7 @@ class SpadeRuntime:
     async def run(self) -> None:
         """Start the agents, dispatch perceptions until stopped, then stop them."""
         try:
+            self._loop = asyncio.get_running_loop()
             for enemy_id, agent in self.goomba_agents.items():
                 LOGGER.info("Starting SPADE agent for %s", enemy_id)
                 start_started = time.monotonic()
@@ -85,6 +94,11 @@ class SpadeRuntime:
                     enemy_id,
                     time.monotonic() - start_started,
                 )
+            for player_id, agent in list(self.player_agents.items()):
+                if getattr(agent, "is_alive", lambda: False)():
+                    continue
+                LOGGER.info("Starting SPADE dummy agent for %s", player_id)
+                await agent.start()
 
             while not self.stop_event.is_set():
                 self.dispatch_perceptions()
@@ -105,6 +119,9 @@ class SpadeRuntime:
                         enemy_id,
                         time.monotonic() - stop_started,
                     )
+            for player_id, agent in self.player_agents.items():
+                if getattr(agent, "is_alive", lambda: False)():
+                    await agent.stop()
 
     def dispatch_perceptions(self) -> int:
         """Hand the latest queued perception of each enemy to its own agent.
@@ -113,6 +130,7 @@ class SpadeRuntime:
         slow agent always reasons on the freshest snapshot.
         """
         latest: dict[str, GoombaPerceptionMessage] = {}
+        latest_players: dict[str, PlayerPerceptionMessage] = {}
         while True:
             try:
                 goombaPerception = self.get_perception(AgentType.GOOMBA)
@@ -125,13 +143,57 @@ class SpadeRuntime:
                 continue
             latest[goombaPerception.perception.goomba_id] = goombaPerception
 
+        while True:
+            try:
+                player_perception = self.get_perception(AgentType.PLAYER)
+            except Empty:
+                break
+            if not isinstance(player_perception, PlayerPerceptionMessage):
+                LOGGER.warning(
+                    "Discarding PLAYER perception of type %s",
+                    type(player_perception).__name__,
+                )
+                continue
+            latest_players[player_perception.perception.player_id] = player_perception
+
         for goomba_id, goombaPerception in latest.items():
             agent = self.goomba_agents.get(goomba_id)
             if agent is None:
                 LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
                 continue
             agent.perceive(goombaPerception)
-        return len(latest)
+
+        for player_id, player_perception in latest_players.items():
+            agent = self.player_agents.get(player_id)
+            if agent is None:
+                LOGGER.debug(
+                    "No SPADE dummy agent for %s, perception dropped", player_id
+                )
+                continue
+            agent.perceive(player_perception)
+        return len(latest) + len(latest_players)
+
+    def add_player_agent(self, player_id: str) -> None:
+        """Create and register a dummy SPADE agent for a crashed player."""
+        if player_id in self.player_agents:
+            return
+        agent = self.dummy_player_factory(player_id)
+        agent.player_id = player_id
+        agent.spade_runtime = self
+        self.player_agents[player_id] = agent
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(agent.start())
+            )
+
+    def remove_player_agent(self, player_id: str) -> None:
+        """Release a player ID back to normal network input."""
+        agent = self.player_agents.pop(player_id, None)
+        if agent is not None and getattr(agent, "is_alive", lambda: False)():
+            if self._loop is not None:
+                self._loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(agent.stop())
+                )
 
     @staticmethod
     def _create_goomba_agent(enemy_id: str) -> GoombaAgent:
@@ -144,6 +206,15 @@ class SpadeRuntime:
             SpadeRuntime.jid_for(enemy_id),
             f"goomba-{enemy_id}_password",
             str(GOOMBA_ASL_PATH),
+        )
+
+    def _create_dummy_player(self, player_id: str) -> object:
+        from distributed_smb.agents.dummy_player import DummyPlayerAgent
+
+        return DummyPlayerAgent(
+            jid=f"dummy-{player_id}@{XMPP_DOMAIN}",
+            password=f"dummy-{player_id}_password",
+            player_id=player_id,
         )
 
     @staticmethod

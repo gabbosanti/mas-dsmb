@@ -186,6 +186,11 @@ class HostGameplayMixin:
                 self.roster.remove_player(existing.player_id)
                 self.roster.add_player(entry)
 
+            if entry.player_id in self.dummy_player_ids:
+                self.dummy_player_ids.discard(entry.player_id)
+                self.agent_integration.release_player(entry.player_id)
+                self.spade_runtime.remove_player_agent(entry.player_id)
+
             if restored is not None:
                 restored.player_id = entry.player_id
                 restored.join_index = entry.join_index

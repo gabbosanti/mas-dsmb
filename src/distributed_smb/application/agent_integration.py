@@ -18,6 +18,11 @@ from distributed_smb.agents.models import (
     EnemyAction,
     GoombaPerception,
     GoombaPerceptionMessage,
+    PlayerAction,
+    PlayerActionResult,
+    PlayerPerception,
+    PlayerPerceptionMessage,
+    Position,
 )
 from distributed_smb.application.enemy_perceptor import (
     EnemyNotFoundError,
@@ -52,6 +57,7 @@ class AgentGameIntegration:
     spade_controlled_enemy_ids: set[str] = field(
         default_factory=set
     )  # tracks spade agents
+    spade_controlled_player_ids: set[str] = field(default_factory=set)
     perceptor: EnemyPerceptor = field(init=False)
     # The engine honours STOP for a single tick only, so a STOP chosen by an
     # agent is re-sent every tick until that agent picks another action.
@@ -77,6 +83,15 @@ class AgentGameIntegration:
         self._stopped_enemy_ids.discard(enemy_id)
         self._enemies_with_decision.discard(enemy_id)
 
+    def control_player_with_spade(self, player_id: str) -> None:
+        """Hand a remaining player character to a dummy SPADE agent."""
+        if self.engine.world_state.get_player(player_id) is None:
+            raise LookupError(f"Player {player_id!r} does not exist")
+        self.spade_controlled_player_ids.add(player_id)
+
+    def release_player(self, player_id: str) -> None:
+        self.spade_controlled_player_ids.discard(player_id)
+
     def observe(self, enemy_id: str) -> GoombaPerception:
         return self.perceptor.observe(enemy_id)
 
@@ -92,9 +107,15 @@ class AgentGameIntegration:
 
         # Retreive agents' action and turn them into engine commands.
         enemy_commands = self._retreive_agent_actions()
+        authoritative_player_inputs = dict(player_inputs)
+        authoritative_player_inputs.update(self._retrieve_player_actions())
 
         # Advance the authoritative simulation.
-        self.engine.tick(dt, player_inputs, enemy_commands=enemy_commands)
+        self.engine.tick(
+            dt,
+            authoritative_player_inputs,
+            enemy_commands=enemy_commands,
+        )
 
         # Sense: observe the new world state and hand it to the agents.
         sequence = self.engine.world_state.sequence_number
@@ -111,6 +132,24 @@ class AgentGameIntegration:
                 ),
             )
 
+        for player_id in sorted(self.spade_controlled_player_ids):
+            player = self.engine.world_state.get_player(player_id)
+            if player is None:
+                continue
+            perception = PlayerPerception(
+                player_id=player.player_id,
+                position=Position(player.x, player.y),
+                width=player.width,
+                height=player.height,
+            )
+            self.bridge.publish(
+                AgentType.PLAYER,
+                PlayerPerceptionMessage(
+                    simulation_sequence=sequence,
+                    perception=perception,
+                ),
+            )
+
     def _live_spade_enemy_ids(self) -> list[str]:
         """SPADE-controlled enemies still present in the world, in stable order."""
         enemies = self.engine.world_state.environment.enemies
@@ -119,6 +158,33 @@ class AgentGameIntegration:
             for enemy_id in self.spade_controlled_enemy_ids
             if enemy_id in enemies
         )
+
+    def _retrieve_player_actions(self) -> dict[str, InputState]:
+        """Translate dummy SPADE player actions into normal engine InputState."""
+        latest: dict[str, PlayerAction] = {}
+        while (result := self.bridge.poll_action(AgentType.PLAYER)) is not None:
+            if not isinstance(result, PlayerActionResult):
+                LOGGER.warning(
+                    "Discarding PLAYER action of type %s: expected PlayerActionResult",
+                    type(result).__name__,
+                )
+                continue
+            if result.player_id not in self.spade_controlled_player_ids:
+                LOGGER.debug(
+                    "Discarding action for uncontrolled player %r", result.player_id
+                )
+                continue
+            latest[result.player_id] = result.action
+
+        player_inputs: dict[str, InputState] = {}
+        for player_id, action in latest.items():
+            player_inputs[player_id] = InputState(
+                left=action is PlayerAction.MOVE_LEFT,
+                right=action is PlayerAction.MOVE_RIGHT,
+                jump=action is PlayerAction.JUMP,
+                down=action is PlayerAction.CROUCH,
+            )
+        return player_inputs
 
     def _retreive_agent_actions(self) -> dict[str, EnemyMovementCommand]:
         # Pop every queued ActionResult and translate it into an engine command.
