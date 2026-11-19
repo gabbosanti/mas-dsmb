@@ -2,12 +2,24 @@
 direction(right).
 
 // Tunables.
-patrol_area(150).   // half width (px) of the area patrolled around home(X)
-overhead(8).        // |dx| (px) below which the Lakitu is above the player
+patrol_area(150).    // half width (px) of the area patrolled around home(X)
+dive_cone(32).       // |dx| (px) within which the player is "right below"
+altitude_margin(8).  // tolerance (px) on the cruise altitude
 
-// in_area(X): X lies inside the patrol area. home(X) is set by the agent
-// from its first perception, i.e. its spawn point.
+// home(X) and cruise(Y) are set by the agent from its first perception,
+// i.e. its spawn point: the centre of the patrol area and the flight altitude.
+
+// in_area(X): X lies inside the patrol area.
 in_area(X) :- home(H) & patrol_area(A) & X > H - A & X < H + A.
+
+// player_below: a player of the area is right under the Lakitu
+// (y grows downwards, so "below" means a greater y).
+player_below :-
+    player_seen(PX, PY) & in_area(PX) & position(X, Y) & dive_cone(C)
+    & PX - X < C & X - PX < C & PY > Y.
+
+// below_cruise: the Lakitu is lower than its flight altitude (after a dive).
+below_cruise :- position(_, Y) & cruise(CY) & altitude_margin(M) & Y > CY + M.
 
 // ---------------------------------------------------------------------------
 // Each new game perception produces exactly one decision: the first
@@ -16,13 +28,17 @@ in_area(X) :- home(H) & patrol_area(A) & X > H - A & X < H + A.
 // that triggered the plan.
 // ---------------------------------------------------------------------------
 
-// --- Behaviour kill_mario: a player is inside the patrol area ---
-// Above it already: stay there.
-+perception(Sequence)
-    : player_seen(PX, _) & in_area(PX) & position(X, _) & overhead(D)
-      & PX - X < D & X - PX < D
-    <- .hold.
+// --- Behaviour kill_mario ---
+// The player is right below: dive on it, but never into the ground (the
+// game applies no collision to enemies, the Lakitu has to stop by itself).
++perception(Sequence) : player_below & not near_ground
+    <- .dive.
 
+// After a dive (player hit, dodged, or ground reached): climb back up.
++perception(Sequence) : below_cruise
+    <- .rise.
+
+// The player is in the area but not below: fly over it.
 +perception(Sequence) : player_seen(PX, _) & in_area(PX) & position(X, _) & PX < X
     <- .chase(left).
 

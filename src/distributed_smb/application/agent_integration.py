@@ -38,6 +38,14 @@ __all__ = [
     "agent_type_of",
 ]
 
+HELD_COMMANDS = frozenset(
+    {
+        EnemyMovementCommand.STOP,
+        EnemyMovementCommand.DIVE,
+        EnemyMovementCommand.RISE,
+    }
+)
+
 # Agent types that drive enemies: their action queues are drained every tick.
 ENEMY_AGENT_TYPES = tuple(dict.fromkeys(AGENT_TYPE_OF.values()))
 
@@ -58,9 +66,12 @@ class AgentGameIntegration:
         default_factory=set
     )  # tracks spade agents
     perceptor: EnemyPerceptor = field(init=False)
-    # The engine honours STOP for a single tick only, so a STOP chosen by an
-    # agent is re-sent every tick until that agent picks another action.
-    _stopped_enemy_ids: set[str] = field(default_factory=set, init=False, repr=False)
+    # Commands re-sent every tick until the agent picks another action: the
+    # engine honours STOP for a single tick, and DIVE/RISE would otherwise be
+    # cancelled by the horizontal command derived from the enemy's heading.
+    _held_commands: dict[str, EnemyMovementCommand] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # Enemies whose agent has sent at least one valid action.
     _enemies_with_decision: set[str] = field(
         default_factory=set, init=False, repr=False
@@ -79,7 +90,7 @@ class AgentGameIntegration:
     # Test only
     def release_enemy(self, enemy_id: str) -> None:
         self.spade_controlled_enemy_ids.discard(enemy_id)
-        self._stopped_enemy_ids.discard(enemy_id)
+        self._held_commands.pop(enemy_id, None)
         self._enemies_with_decision.discard(enemy_id)
 
     def observe(self, enemy_id: str) -> EnemyPerception:
@@ -88,7 +99,7 @@ class AgentGameIntegration:
     def tick(self, dt: float, player_inputs: dict[str, InputState]) -> None:
         """Run one simulation tick without waiting for SPADE."""
         if self.enabled == False:
-            self._stopped_enemy_ids.clear()
+            self._held_commands.clear()
             self._enemies_with_decision.clear()
             self.bridge.discard_actions()
             self.bridge.discard_perceptions()
@@ -130,18 +141,17 @@ class AgentGameIntegration:
     def _retreive_agent_actions(self) -> dict[str, EnemyMovementCommand]:
         # Pop every queued ActionResult and translate it into an engine command.
         enemies = self.engine.world_state.environment.enemies
-        self._stopped_enemy_ids &= enemies.keys()  # maintains only alive enemies
+        for enemy_id in self._held_commands.keys() - enemies.keys():
+            del self._held_commands[enemy_id]  # maintains only alive enemies
         self._enemies_with_decision &= enemies.keys()
         # Include all SPADE-controlled enemies every tick, preserving their
         # last heading between asynchronous BDI decisions.
         commands: dict[str, EnemyMovementCommand] = {}
         for enemy_id in self._live_spade_enemy_ids():
             enemy = enemies[enemy_id]
-            if (
-                enemy_id not in self._enemies_with_decision
-                or enemy_id in self._stopped_enemy_ids
-                or enemy.vx == 0
-            ):
+            if enemy_id in self._held_commands:
+                commands[enemy_id] = self._held_commands[enemy_id]
+            elif enemy_id not in self._enemies_with_decision or enemy.vx == 0:
                 # Until its agent has decided at least once (SPADE may take
                 # seconds to start), the enemy waits instead of walking blind.
                 commands[enemy_id] = EnemyMovementCommand.STOP
@@ -169,10 +179,10 @@ class AgentGameIntegration:
 
             commands[result.enemy_id] = command
             self._enemies_with_decision.add(result.enemy_id)
-            if command is EnemyMovementCommand.STOP:
-                self._stopped_enemy_ids.add(result.enemy_id)
+            if command in HELD_COMMANDS:
+                self._held_commands[result.enemy_id] = command
             else:
-                self._stopped_enemy_ids.discard(result.enemy_id)
+                self._held_commands.pop(result.enemy_id, None)
 
         return commands
 
@@ -217,6 +227,10 @@ class AgentGameIntegration:
             return EnemyMovementCommand.MOVE_RIGHT
         if action is EnemyAction.STOP:
             return EnemyMovementCommand.STOP
+        if action is EnemyAction.DIVE:
+            return EnemyMovementCommand.DIVE
+        if action is EnemyAction.RISE:
+            return EnemyMovementCommand.RISE
         if action is EnemyAction.TURN_AROUND:
             # Turn relative to a move already chosen this tick, else to the
             # current velocity (STOP keeps vx, so a stopped enemy still has one).

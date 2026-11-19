@@ -100,6 +100,10 @@ class Enemy:
     vx: float = 50.0
     movement_speed: float | None = None
     enemy_type: EnemyType | None = None
+    # Vertical motion, used only by flying enemies (Lakitu's dive). While vy
+    # is not zero the enemy moves vertically only; vx keeps its heading.
+    vy: float = 0.0
+    vertical_speed: float = 240.0
 
     def __post_init__(self) -> None:
         self.enemy_type = EnemyType(self.enemy_type)

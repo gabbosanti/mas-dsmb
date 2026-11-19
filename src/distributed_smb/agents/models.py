@@ -94,6 +94,8 @@ class EnemyAction(str, Enum):
     MOVE_RIGHT = "MOVE_RIGHT"
     STOP = "STOP"
     JUMP = "JUMP"
+    DIVE = "DIVE"  # flying enemies: straight down
+    RISE = "RISE"  # flying enemies: straight up
 
 
 @dataclass(frozen=True, slots=True)

@@ -51,6 +51,28 @@ class GroundSensor:
         )  # Return the Position poiint under probe
         return not any(self._supports(obstacle, probe) for obstacle in obstacles)
 
+    def clearance_below(
+        self,
+        position: Position,  # top-left corner, as in the perceptions
+        width: float,
+        height: float,
+        obstacles: Iterable[ObstacleObservation],
+    ) -> float | None:
+        """Free space between the body's bottom and the first surface under it.
+
+        Only surfaces horizontally under the body count. None when there is
+        nothing under it (e.g. a flyer above a pit).
+        """
+        bottom = position.y + height
+        gaps = [
+            obstacle.y - bottom
+            for obstacle in obstacles
+            if obstacle.x < position.x + width
+            and position.x < obstacle.x + obstacle.width
+            and obstacle.y >= bottom - self.tolerance
+        ]
+        return min(gaps, default=None)
+
     def probe_point(
         self,
         position: Position,

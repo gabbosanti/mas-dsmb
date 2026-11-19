@@ -22,11 +22,17 @@ VOID_DEATH_CAUSE = "void"
 
 
 class EnemyMovementCommand(IntEnum):
-    """Horizontal intent consumed by the next enemy update."""
+    """Intent consumed by the next enemy update.
+
+    MOVE_LEFT/MOVE_RIGHT fly or walk horizontally; DIVE/RISE move a flying
+    enemy straight down/up. STOP freezes the enemy for that tick only.
+    """
 
     MOVE_LEFT = -1
     STOP = 0
     MOVE_RIGHT = 1
+    DIVE = 2
+    RISE = 3
 
 
 @dataclass(slots=True)
@@ -281,21 +287,35 @@ class GameEngine:
         dt: float,
         enemy_commands: dict[str, EnemyMovementCommand] | None = None,
     ) -> None:
+        """Move every enemy; the engine applies no gravity nor collision to them.
+
+        An enemy moves vertically while its vy is not zero (a dive), otherwise
+        horizontally: the same rule runs on the host and on the clients, so a
+        client keeps extrapolating the right motion between two snapshots.
+        """
         for enemy_id, enemy in self.world_state.environment.enemies.items():
-            command = None
             if enemy_commands is not None and enemy_id in enemy_commands:
                 command = enemy_commands[enemy_id]
                 if not isinstance(command, EnemyMovementCommand):
                     raise ValueError(f"Invalid enemy movement command: {command!r}")
                 if command is EnemyMovementCommand.STOP:
                     continue
-                speed = (
-                    enemy.movement_speed
-                    if enemy.movement_speed is not None
-                    else abs(enemy.vx)
-                )
-                enemy.vx = command.value * speed
-            enemy.x += enemy.vx * dt
+                if command is EnemyMovementCommand.DIVE:
+                    enemy.vy = enemy.vertical_speed
+                elif command is EnemyMovementCommand.RISE:
+                    enemy.vy = -enemy.vertical_speed
+                else:
+                    speed = (
+                        enemy.movement_speed
+                        if enemy.movement_speed is not None
+                        else abs(enemy.vx)
+                    )
+                    enemy.vx = command.value * speed
+                    enemy.vy = 0.0
+            if enemy.vy:
+                enemy.y += enemy.vy * dt
+            else:
+                enemy.x += enemy.vx * dt
 
     def _is_stomp(self, player: Player, enemy: Enemy) -> bool:
         """A stomp is a landing from above: feet over the enemy's head, falling."""
