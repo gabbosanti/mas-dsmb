@@ -98,9 +98,13 @@ class WorldRenderer:
                 pygame.draw.rect(sprite, (36, 24, 18), door, width=max(1, width // 18))
             return sprite
         if sprite_kind == "enemy":
+            # Regions of Enemies.png, cropped tight on the sprite (square, so
+            # that the square enemy hitbox does not stretch it):
+            # - koopa: Lakitu on its cloud (the flying Koopa of this game);
+            # - goomba: the walking Goomba, feet on the bottom edge.
             source_rect = {
-                "koopa": (100, 6, 18, 25),
-                "goomba": (4, 6, 18, 25),
+                "koopa": (514, 3, 29, 29),
+                "goomba": (7, 14, 18, 18),
             }[state]
             return self.sprite_factory._get_asset_sprite(
                 "Enemies.png", source_rect, width, height

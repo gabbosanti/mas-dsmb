@@ -16,8 +16,8 @@ class _SpriteFactory:
 @pytest.mark.parametrize(
     ("enemy_type", "expected_rect"),
     [
-        (EnemyType.KOOPA, (100, 6, 18, 25)),
-        (EnemyType.GOOMBA, (4, 6, 18, 25)),
+        (EnemyType.KOOPA, (514, 3, 29, 29)),
+        (EnemyType.GOOMBA, (7, 14, 18, 18)),
     ],
 )
 def test_enemy_renderer_selects_sprite_by_type(enemy_type, expected_rect):
