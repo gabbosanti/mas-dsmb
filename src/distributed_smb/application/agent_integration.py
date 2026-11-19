@@ -12,16 +12,17 @@ adapter only:
 import logging
 from dataclasses import dataclass, field
 
-from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
-    GoombaPerception,
-    GoombaPerceptionMessage,
+    EnemyPerception,
+    EnemyPerceptionMessage,
 )
 from distributed_smb.application.enemy_perceptor import (
+    AGENT_TYPE_OF,
     EnemyNotFoundError,
     EnemyPerceptor,
+    agent_type_of,
 )
 from distributed_smb.application.spade_agent_bridge import SpadeAgentBridge
 from distributed_smb.domain.entity import Enemy
@@ -34,7 +35,11 @@ __all__ = [
     "AgentGameIntegration",
     "EnemyNotFoundError",
     "SpadeAgentBridge",
+    "agent_type_of",
 ]
+
+# Agent types that drive enemies: their action queues are drained every tick.
+ENEMY_AGENT_TYPES = tuple(dict.fromkeys(AGENT_TYPE_OF.values()))
 
 
 @dataclass(slots=True)
@@ -77,7 +82,7 @@ class AgentGameIntegration:
         self._stopped_enemy_ids.discard(enemy_id)
         self._enemies_with_decision.discard(enemy_id)
 
-    def observe(self, enemy_id: str) -> GoombaPerception:
+    def observe(self, enemy_id: str) -> EnemyPerception:
         return self.perceptor.observe(enemy_id)
 
     def tick(self, dt: float, player_inputs: dict[str, InputState]) -> None:
@@ -101,11 +106,13 @@ class AgentGameIntegration:
         if sequence % self.perception_interval_ticks != 0:  # every 5 ticks
             return
 
+        enemies = self.engine.world_state.environment.enemies
         for enemy_id in self._live_spade_enemy_ids():
             perception = self.observe(enemy_id)
-            self.bridge.publish(  # in futuro dobbiamo estrarre il tipo di agente
-                AgentType.GOOMBA,
-                GoombaPerceptionMessage(
+            # Each enemy's perception goes to the queue of its agent type.
+            self.bridge.publish(
+                agent_type_of(enemies[enemy_id]),
+                EnemyPerceptionMessage(
                     simulation_sequence=sequence,
                     perception=perception,
                 ),
@@ -143,15 +150,7 @@ class AgentGameIntegration:
             else:
                 commands[enemy_id] = EnemyMovementCommand.MOVE_LEFT
 
-        while (result := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
-            if not isinstance(result, ActionResult):
-                # Never let a malformed agent message crash the game thread.
-                LOGGER.warning(
-                    "Discarding GOOMBA action of type %s: expected ActionResult",
-                    type(result).__name__,
-                )
-                continue
-
+        for result in self._poll_agent_actions():
             enemy = enemies.get(result.enemy_id)
             if enemy is None or result.enemy_id not in self.spade_controlled_enemy_ids:
                 LOGGER.debug(
@@ -176,6 +175,34 @@ class AgentGameIntegration:
                 self._stopped_enemy_ids.discard(result.enemy_id)
 
         return commands
+
+    def _poll_agent_actions(self):
+        """Every queued ActionResult, from the queue of each enemy agent type.
+
+        An action is accepted only from the queue of the enemy's own agent
+        type: a Goomba agent cannot drive a Koopa, and vice versa.
+        """
+        enemies = self.engine.world_state.environment.enemies
+        for agent_type in ENEMY_AGENT_TYPES:
+            while (result := self.bridge.poll_action(agent_type)) is not None:
+                if not isinstance(result, ActionResult):
+                    # Never let a malformed agent message crash the game thread.
+                    LOGGER.warning(
+                        "Discarding %s action of type %s: expected ActionResult",
+                        agent_type.value,
+                        type(result).__name__,
+                    )
+                    continue
+                enemy = enemies.get(result.enemy_id)
+                if enemy is not None and agent_type_of(enemy) is not agent_type:
+                    LOGGER.warning(
+                        "Discarding %s action for %s enemy %r",
+                        agent_type.value,
+                        enemy.enemy_type.value,
+                        result.enemy_id,
+                    )
+                    continue
+                yield result
 
     @staticmethod
     def _to_engine_command(

@@ -6,40 +6,36 @@ import asyncio
 import logging
 import threading
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.models import GoombaPerceptionMessage, KoopaPerceptionMessage
+from distributed_smb.agents.models import EnemyPerceptionMessage
 
 if TYPE_CHECKING:
-    from distributed_smb.agents.bdi.goomba import GoombaAgent
-    from distributed_smb.agents.bdi.koopa import KoopaAgent
- 
+    from distributed_smb.agents.bdi.enemy_agent import EnemyAgent
 
 LOGGER = logging.getLogger(__name__)
 
 type PerceptionQueue = dict[AgentType, Queue]
 type ActionQueue = dict[AgentType, Queue]
-type GoombaFactory = Callable[[str], "GoombaAgent"]
-type KoopaFactory = Callable[[str], "KoopaAgent"]
-
+type AgentFactory = Callable[[str], "EnemyAgent"]
 
 # How often the runtime moves perceptions from the game queue to the agents.
 DISPATCH_INTERVAL = 0.01
-GOOMBA_ASL_PATH = Path(__file__).parent / "asl" / "goomba.asl"
-KOOPA_ASL_PATH = Path(__file__).parent / "asl" / "koopa.asl"
+ASL_DIR = Path(__file__).parent / "asl"
 XMPP_DOMAIN = "localhost"
 
 
 class SpadeRuntime:
     """Own SPADE setup, agent lifecycle, and shutdown on an asyncio loop.
 
-    The game thread puts every Goomba's perception on the single GOOMBA queue.
-    The runtime is its only reader: it routes each perception to the agent
-    that owns that enemy, so agents never steal each other's perceptions.
+    The game thread puts each enemy's perception on the queue of its agent
+    type (GOOMBA, KOOPA, ...). The runtime is the only reader of those queues:
+    it routes each perception to the agent that owns that enemy, so agents
+    never steal each other's perceptions.
     """
 
     def __init__(
@@ -47,34 +43,56 @@ class SpadeRuntime:
         perception_queue: PerceptionQueue,
         action_queue: ActionQueue,
         *,
-        enemy_ids: Iterable[str] = (),
+        enemies: Mapping[str, AgentType] | None = None,
         stop_event: threading.Event | None = None,
-        goomba_factory: GoombaFactory | None = None,
-        koopa_factory: KoopaFactory | None = None
+        goomba_factory: AgentFactory | None = None,
+        koopa_factory: AgentFactory | None = None,
     ) -> None:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
         self.stop_event = stop_event or threading.Event()
-        factory = goomba_factory or self._create_goomba_agent
-        
+        factories: dict[AgentType, AgentFactory] = {
+            AgentType.GOOMBA: goomba_factory or self._create_goomba_agent,
+            AgentType.KOOPA: koopa_factory or self._create_koopa_agent,
+        }
+
         # Build every agent (and load its ASL) before the thread starts, and
         # inject the runtime so the agents can publish their actions.
-        self.goomba_agents: dict[str, GoombaAgent] = {}
-        self.koopa_agents: dict[str, KoopaAgent] = {}
-        for enemy_id in enemy_ids:
-            agent = factory(enemy_id)
-            agent.goomba_id = enemy_id
+        self.agent_types: dict[str, AgentType] = {}
+        self.agents: dict[str, EnemyAgent] = {}
+        for enemy_id, agent_type in (enemies or {}).items():
+            agent_type = AgentType(agent_type)
+            if agent_type not in factories:
+                raise ValueError(f"No SPADE agent for {agent_type.value} {enemy_id!r}")
+            agent = factories[agent_type](enemy_id)
+            agent.enemy_id = enemy_id
             agent.spade_runtime = self
-            self.goomba_agents[enemy_id] = agent
+            self.agents[enemy_id] = agent
+            self.agent_types[enemy_id] = agent_type
 
         # Agents interact through SPADE messages: each one learns the
-        # addresses of all the others (future agent types included).
-        for enemy_id, agent in self.goomba_agents.items():
+        # addresses of all the others, whatever their kind.
+        for enemy_id, agent in self.agents.items():
             agent.set_peers(
-                self.jid_for(other_id)
-                for other_id in self.goomba_agents
+                self.jid_for(other_id, other_type)
+                for other_id, other_type in self.agent_types.items()
                 if other_id != enemy_id
             )
+
+    def agents_of(self, agent_type: AgentType) -> dict[str, EnemyAgent]:
+        return {
+            enemy_id: agent
+            for enemy_id, agent in self.agents.items()
+            if self.agent_types[enemy_id] is agent_type
+        }
+
+    @property
+    def goomba_agents(self) -> dict[str, EnemyAgent]:
+        return self.agents_of(AgentType.GOOMBA)
+
+    @property
+    def koopa_agents(self) -> dict[str, EnemyAgent]:
+        return self.agents_of(AgentType.KOOPA)
 
     def request_stop(self) -> None:
         """Request graceful shutdown; safe to call from the game thread."""
@@ -83,12 +101,14 @@ class SpadeRuntime:
     async def run(self) -> None:
         """Start the agents, dispatch perceptions until stopped, then stop them."""
         try:
-            for enemy_id, agent in self.goomba_agents.items():
-                LOGGER.info("Starting SPADE agent for %s", enemy_id)
+            for enemy_id, agent in self.agents.items():
+                agent_type = self.agent_types[enemy_id].value
+                LOGGER.info("Starting SPADE %s agent for %s", agent_type, enemy_id)
                 start_started = time.monotonic()
                 await agent.start()
                 LOGGER.info(
-                    "Started SPADE agent for %s in %.2f seconds",
+                    "Started SPADE %s agent for %s in %.2f seconds",
+                    agent_type,
                     enemy_id,
                     time.monotonic() - start_started,
                 )
@@ -98,7 +118,7 @@ class SpadeRuntime:
                 await asyncio.sleep(DISPATCH_INTERVAL)
 
         finally:
-            for enemy_id, agent in self.goomba_agents.items():
+            for enemy_id, agent in self.agents.items():
                 if agent.is_alive():
                     LOGGER.info("Stopping SPADE agent for %s", enemy_id)
                     stop_started = time.monotonic()
@@ -113,80 +133,74 @@ class SpadeRuntime:
                         time.monotonic() - stop_started,
                     )
 
-    def dispatch_perceptions(self) -> None:
+    def dispatch_perceptions(self) -> int:
         """Hand the latest queued perception of each enemy to its own agent.
 
-        Older perceptions of the same enemy are superseded and dropped, so a
-        slow agent always reasons on the freshest snapshot.
+        Each agent type's queue is drained on its own. Older perceptions of
+        the same enemy are superseded and dropped, so a slow agent always
+        reasons on the freshest snapshot. Returns how many were delivered.
         """
-        latestGoomba: dict[str, GoombaPerceptionMessage] = {}
-        latestKoopa: dict[str, KoopaPerceptionMessage] = {}
-        
-        while True:
-            try:
-                goombaPerception = self.get_perception(AgentType.GOOMBA)
-                koopaPerception = self.get_perception(AgentType.KOOPA)
-            except Empty:
-                break
-            if not isinstance(goombaPerception, GoombaPerceptionMessage):
-                LOGGER.warning(
-                    "Discarding GOOMBA perception of type %s", type(goombaPerception).__name__
-                )
-                continue
-            elif not isinstance(koopaPerception, KoopaPerceptionMessage):
-                LOGGER.warning(
-                    "Discarding KOOPA perception of type %s", type(koopaPerception).__name__
-                )
-                continue
-                        
-            latestGoomba[goombaPerception.perception.goomba_id] = goombaPerception
-            latestKoopa[koopaPerception.perception.koopa_id] = koopaPerception
+        delivered = 0
+        for agent_type in sorted(set(self.agent_types.values()), key=lambda t: t.value):
+            latest: dict[str, EnemyPerceptionMessage] = {}
+            while True:
+                try:
+                    message = self.get_perception(agent_type)
+                except Empty:
+                    break
+                if not isinstance(message, EnemyPerceptionMessage):
+                    LOGGER.warning(
+                        "Discarding %s perception of type %s",
+                        agent_type.value,
+                        type(message).__name__,
+                    )
+                    continue
+                latest[message.perception.enemy_id] = message
 
-        for goomba_id, goombaPerception in latestGoomba.items():
-            goombaAgent = self.goomba_agents.get(goomba_id)
-            if goombaAgent is None:
-                LOGGER.debug("No SPADE agent for %s, perception dropped", goomba_id)
-                continue
-            goombaAgent.perceive(goombaPerception)
-    
-        for koopa_id, koopaPerception in latestKoopa.items():
-            koopaAgent = self.koopa_agents.get(goomba_id)
-            if koopaAgent is None:
-                LOGGER.debug("No SPADE agent for %s, perception dropped", koopa_id)
-                continue
-            koopaAgent.perceive(koopaPerception)
-    
-    
+            for enemy_id, message in latest.items():
+                agent = self.agents.get(enemy_id)
+                if agent is None or self.agent_types[enemy_id] is not agent_type:
+                    LOGGER.debug(
+                        "No SPADE %s agent for %s, perception dropped",
+                        agent_type.value,
+                        enemy_id,
+                    )
+                    continue
+                agent.perceive(message)
+                delivered += 1
+        return delivered
+
     @staticmethod
-    def _create_goomba_agent(enemy_id: str) -> GoombaAgent:
+    def _create_goomba_agent(enemy_id: str) -> EnemyAgent:
         """Construct a Goomba BDI agent; SPADE is imported only when needed."""
         from distributed_smb.agents.bdi.goomba import GoombaAgent
 
-        if not GOOMBA_ASL_PATH.is_file():
-            raise FileNotFoundError(f"Goomba ASL file not found: {GOOMBA_ASL_PATH}")
-        return GoombaAgent(
-            SpadeRuntime.jid_for(enemy_id),
-            f"goomba-{enemy_id}_password",
-            str(GOOMBA_ASL_PATH),
-        )
-    
-    @staticmethod
-    def _create_koopa_agent(enemy_id: str) -> KoopaAgent:
-        """Construct a Goomba BDI agent; SPADE is imported only when needed."""
-        from distributed_smb.agents.bdi.goomba import GoombaAgent
-
-        if not KOOPA_ASL_PATH.is_file():
-            raise FileNotFoundError(f"Goomba ASL file not found: {GOOMBA_ASL_PATH}")
-        return KoopaAgent(
-            SpadeRuntime.jid_for(enemy_id),
-            f"goomba-{enemy_id}_password",
-            str(KOOPA_ASL_PATH),
-        )
+        return SpadeRuntime._create_agent(GoombaAgent, AgentType.GOOMBA, enemy_id)
 
     @staticmethod
-    def jid_for(enemy_id: str) -> str:
+    def _create_koopa_agent(enemy_id: str) -> EnemyAgent:
+        """Construct a Koopa BDI agent; SPADE is imported only when needed."""
+        from distributed_smb.agents.bdi.koopa import KoopaAgent
+
+        return SpadeRuntime._create_agent(KoopaAgent, AgentType.KOOPA, enemy_id)
+
+    @staticmethod
+    def _create_agent(agent_cls, agent_type: AgentType, enemy_id: str) -> EnemyAgent:
+        asl_path = ASL_DIR / f"{agent_type.value}.asl"
+        if not asl_path.is_file():
+            raise FileNotFoundError(
+                f"{agent_type.value} ASL file not found: {asl_path}"
+            )
+        return agent_cls(
+            SpadeRuntime.jid_for(enemy_id, agent_type),
+            f"{agent_type.value}-{enemy_id}_password",
+            str(asl_path),
+        )
+
+    @staticmethod
+    def jid_for(enemy_id: str, agent_type: AgentType = AgentType.GOOMBA) -> str:
         """XMPP address of the agent that controls ``enemy_id``."""
-        return f"goomba-{enemy_id}@{XMPP_DOMAIN}"
+        return f"{AgentType(agent_type).value}-{enemy_id}@{XMPP_DOMAIN}"
 
     def get_perception(
         self, agent_type: AgentType, timeout: float | None = 0

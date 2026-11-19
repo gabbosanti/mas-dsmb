@@ -8,13 +8,17 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
+from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.spade_runtime import (
     ActionQueue,
     PerceptionQueue,
     SpadeRuntime,
 )
 from distributed_smb.agents.spade_thread import SpadeThread
-from distributed_smb.application.agent_integration import AgentGameIntegration
+from distributed_smb.application.agent_integration import (
+    AgentGameIntegration,
+    agent_type_of,
+)
 from distributed_smb.application.dto import RenderFrame, build_render_frame
 from distributed_smb.application.election import (
     ElectionCoordinator,
@@ -208,7 +212,7 @@ class NodeController(
         self.spade_runtime = SpadeRuntime(
             perception_queue=self.perception_queue,
             action_queue=self.action_queue,
-            enemy_ids=self._spade_enemy_ids(),
+            enemies=self._spade_enemies(),
         )
         self.spade_thread = SpadeThread(self.spade_runtime.run)
         self.agent_integration = AgentGameIntegration(
@@ -221,10 +225,12 @@ class NodeController(
         if isinstance(self.prediction_engine, NoopPredictionEngine):
             self.prediction_engine._engine = self.engine
 
-    def _spade_enemy_ids(self) -> list[str]:
-        """Configured SPADE-controlled enemies that exist in the loaded level."""
-        enemies = self.engine.world_state.environment.enemies
-        return [enemy_id for enemy_id in enemies]
+    def _spade_enemies(self) -> dict[str, AgentType]:
+        """Every enemy of the loaded level, with the agent type that drives it."""
+        return {
+            enemy_id: agent_type_of(enemy)
+            for enemy_id, enemy in self.engine.world_state.environment.enemies.items()
+        }
 
     def _make_ws_client(self, host: str, port: int, path: str) -> None:
         """Create a WebSocket client handler and assign it as the game event receiver."""
@@ -261,7 +267,7 @@ class NodeController(
         self._bootstrap_world()
 
         # Hand the configured enemies to their SPADE agents.
-        for enemy_id in self._spade_enemy_ids():
+        for enemy_id in self._spade_enemies():
             self.agent_integration.control_enemy_with_spade(enemy_id)
         self.agent_integration.enabled = True
 

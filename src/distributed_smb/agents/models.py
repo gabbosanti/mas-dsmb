@@ -43,17 +43,17 @@ class PlayerPerception:
             self.position.x + self.width / 2, self.position.y + self.height / 2
         )
 
-#----------------------------------- GOOMBA #-----------------------------------
-
 @dataclass(frozen=True, slots=True)
-class GoombaPerception:
-    """Raw, immutable snapshot of the world sent to a Goomba agent.
+class EnemyPerception:
+    """Raw, immutable snapshot of the world sent to an enemy agent.
 
-    It carries facts only: what the Goomba can actually see, or which player
+    It carries facts only: what the enemy can actually see, or which player
     is closest, is decided agent-side (see ``distributed_smb.agents.perception``).
+    Each enemy kind has its own subclass, so a perception can never reach an
+    agent of the wrong kind.
     """
 
-    goomba_id: str
+    enemy_id: str
     position: Position
     width: float
     height: float
@@ -69,42 +69,22 @@ class GoombaPerception:
 
 
 @dataclass(frozen=True, slots=True)
-class GoombaPerceptionMessage:
-    """Queue envelope that ties a perception to its simulation tick."""
-
-    simulation_sequence: int
-    perception: GoombaPerception
-
-#----------------------------------- KOOPA #-----------------------------------
-@dataclass(frozen=True, slots=True)
-class KoopaPerception:
-    """Raw, immutable snapshot of the world sent to a Koopa agent.
-
-    It carries facts only: what the Goomba can actually see, or which player
-    is closest, is decided agent-side (see ``distributed_smb.agents.perception``).
-    """
-
-    koopa_id: str
-    position: Position
-    width: float
-    height: float
-    direction: SightDirection
-    players: tuple[PlayerPerception, ...] = ()
-    obstacles: tuple[ObstacleObservation, ...] = ()
-
-    @property
-    def center(self) -> Position:
-        return Position(
-            self.position.x + self.width / 2, self.position.y + self.height / 2
-        )
+class GoombaPerception(EnemyPerception):
+    """Snapshot for a Goomba: a walker on the ground."""
 
 
 @dataclass(frozen=True, slots=True)
-class KoopaPerceptionMessage:
+class KoopaPerception(EnemyPerception):
+    """Snapshot for a Koopa (Lakitu): a flyer, not bound to the ground."""
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyPerceptionMessage:
     """Queue envelope that ties a perception to its simulation tick."""
 
     simulation_sequence: int
-    perception: KoopaPerception
+    perception: EnemyPerception
+
 
 #---------------------------------------------------------------------------
 
