@@ -166,3 +166,25 @@ def test_a_star_lets_the_player_kill_enemies_by_touch_for_a_while():
 
     assert enemy.enemy_id not in engine.world_state.environment.enemies
     assert engine.world_state.get_player("player1") is player
+
+
+def test_flying_enemy_dives_and_rises_straight_without_collisions():
+    from distributed_smb.domain.game_engine import EnemyMovementCommand
+
+    engine = GameEngine()
+    enemy = engine.world_state.environment.enemies["enemy-3"]
+    x, y = enemy.x, enemy.y
+
+    engine.tick(0.1, {}, enemy_commands={"enemy-3": EnemyMovementCommand.DIVE})
+    assert (enemy.x, enemy.y) == (x, y + enemy.vertical_speed * 0.1)
+    # No command: a client keeps extrapolating the dive between snapshots.
+    engine.tick(0.1, {})
+    assert (enemy.x, enemy.y) == (x, y + 2 * enemy.vertical_speed * 0.1)
+
+    engine.tick(0.1, {}, enemy_commands={"enemy-3": EnemyMovementCommand.RISE})
+    assert enemy.y == y + enemy.vertical_speed * 0.1
+
+    # A horizontal command ends the vertical motion.
+    engine.tick(0.1, {}, enemy_commands={"enemy-3": EnemyMovementCommand.MOVE_RIGHT})
+    assert enemy.vy == 0
+    assert enemy.x > x

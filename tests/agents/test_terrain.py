@@ -80,3 +80,14 @@ def test_rejects_negative_parameters():
         GroundSensor(lookahead=-1)
     with pytest.raises(ValueError):
         GroundSensor(tolerance=-1)
+
+
+def test_clearance_below_measures_the_space_under_the_body():
+    sensor = GroundSensor()
+    floor_ = ObstacleObservation(x=0, y=200, width=400, height=32)
+    ledge = ObstacleObservation(x=500, y=150, width=50, height=32)
+
+    # 50x50 body at (100, 100): bottom at 150, floor top at 200.
+    assert sensor.clearance_below(Position(100, 100), 50, 50, [floor_, ledge]) == 50
+    # Above a pit: nothing under the body.
+    assert sensor.clearance_below(Position(420, 100), 50, 50, [floor_]) is None

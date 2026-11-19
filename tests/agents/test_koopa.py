@@ -14,6 +14,7 @@ from distributed_smb.agents.models import (
     EnemyPerceptionMessage,
     GoombaPerception,
     KoopaPerception,
+    ObstacleObservation,
     PlayerPerception,
     Position,
     SightDirection,
@@ -163,18 +164,31 @@ def lakitu():
     return runtime.agents["enemy-3"], runtime
 
 
-def perceive(agent, center_x, sequence, *, direction=SightDirection.RIGHT, player_x=None):
+# The ground: its top at y=910, a player standing on it has its center at 890.
+FLOOR = ObstacleObservation(0, 910, 3000, 32)
+
+
+def perceive(
+    agent,
+    center_x,
+    sequence,
+    *,
+    center_y=LAKITU_Y,
+    direction=SightDirection.RIGHT,
+    player_x=None,
+):
     players = ()
-    if player_x is not None:  # a player on the ground, 165px below the Lakitu
+    if player_x is not None:  # a player on the ground, below the Lakitu
         players = (PlayerPerception("player1", Position(player_x - 10, 870), 20, 40),)
     agent._update_beliefs(
         KoopaPerception(
             "enemy-3",
-            Position(center_x - 25, LAKITU_Y - 25),
+            Position(center_x - 25, center_y - 25),
             50,
             50,
             direction,
             players,
+            (FLOOR,),
         ),
         sequence,
     )
@@ -213,9 +227,9 @@ def test_lakitu_attacks_a_player_inside_its_area(lakitu):
     assert decide(agent, runtime, HOME_X + 20, 2, player_x=HOME_X - 80) == [
         EnemyAction.MOVE_LEFT
     ]
-    # Right above the player: hover there.
+    # Right above the player: dive on it.
     assert decide(agent, runtime, HOME_X - 78, 3, player_x=HOME_X - 80) == [
-        EnemyAction.STOP
+        EnemyAction.DIVE
     ]
 
 
@@ -237,3 +251,82 @@ def test_lakitu_logs_when_it_starts_attacking(lakitu, caplog):
     decide(agent, runtime, HOME_X, 2, player_x=HOME_X + 100)
 
     assert "[koopa enemy-3] patrol -> kill_mario: sees the player at x=1100" in caplog.text
+
+
+def test_lakitu_dives_only_while_the_player_is_right_below(lakitu):
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X, 1)
+
+    # Above the player, already lower than cruise: keep diving.
+    assert decide(
+        agent, runtime, HOME_X, 2, center_y=LAKITU_Y + 80, player_x=HOME_X + 10
+    ) == [EnemyAction.DIVE]
+    # The player stepped aside (out of the dive cone): climb back up.
+    assert decide(
+        agent, runtime, HOME_X, 3, center_y=LAKITU_Y + 80, player_x=HOME_X + 60
+    ) == [EnemyAction.RISE]
+
+
+def test_lakitu_never_dives_into_the_ground(lakitu):
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X, 1)
+
+    # Bottom 15px above the floor (<= GROUND_MARGIN), player still below.
+    near_floor = 910 - 15 - 25
+    assert decide(
+        agent, runtime, HOME_X, 2, center_y=near_floor, player_x=HOME_X + 10
+    ) == [EnemyAction.RISE]
+    assert "near_ground" in agent.bdi.get_beliefs()
+
+
+def test_lakitu_climbs_back_to_its_cruise_altitude_then_patrols(lakitu):
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X, 1)
+
+    assert decide(agent, runtime, HOME_X, 2, center_y=LAKITU_Y + 50) == [
+        EnemyAction.RISE
+    ]
+    # Back within altitude_margin of the cruise altitude: patrol again.
+    assert decide(agent, runtime, HOME_X, 3, center_y=LAKITU_Y + 5) == [
+        EnemyAction.MOVE_RIGHT
+    ]
+
+
+def test_lakitu_does_not_dive_on_a_player_outside_its_area(lakitu):
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X + 140, 1)  # home is HOME_X + 140
+
+    # The area spans HOME_X - 10 .. HOME_X + 290. The Lakitu (x=HOME_X) is
+    # inside it; the player is right below it but 20px beyond the border.
+    assert decide(
+        agent,
+        runtime,
+        HOME_X,
+        2,
+        direction=SightDirection.LEFT,
+        player_x=HOME_X - 20,
+    ) == [EnemyAction.MOVE_LEFT]
+
+
+def test_lakitu_dive_kills_the_player_in_the_game():
+    """The full chain: agent DIVE -> integration -> engine -> collision."""
+    engine = GameEngine()
+    integration = AgentGameIntegration(engine, enabled=True)
+    integration.control_enemy_with_spade("enemy-3")
+    lakitu = engine.world_state.environment.enemies["enemy-3"]
+    lakitu.x = 2100
+    engine.spawn_player("player1", x=lakitu.x - 12, y=853)
+
+    integration.bridge.submit_action(
+        AgentType.KOOPA, ActionResult("enemy-3", EnemyAction.DIVE)
+    )
+    integration.tick(1 / 60, {})
+    start_x, start_y = lakitu.x, lakitu.y
+    for _ in range(60):  # no further action: the dive is held every tick
+        integration.tick(1 / 60, {})
+        if "player1" not in engine.world_state.characters:
+            break
+
+    assert lakitu.x == start_x  # straight down
+    assert lakitu.y > start_y
+    assert "player1" not in engine.world_state.characters  # hit
