@@ -1,0 +1,239 @@
+"""Koopa (Lakitu) agent: runtime wiring, per-type routing and koopa.asl plans."""
+
+import asyncio
+
+import pytest
+
+from distributed_smb.agents.agent_type import AgentType
+from distributed_smb.agents.bdi.enemy_agent import EnemyAgent
+from distributed_smb.agents.bdi.goomba import GoombaAgent
+from distributed_smb.agents.bdi.koopa import KoopaAgent
+from distributed_smb.agents.models import (
+    ActionResult,
+    EnemyAction,
+    EnemyPerceptionMessage,
+    GoombaPerception,
+    KoopaPerception,
+    PlayerPerception,
+    Position,
+    SightDirection,
+)
+from distributed_smb.agents.spade_runtime import SpadeRuntime
+from distributed_smb.application.agent_integration import AgentGameIntegration
+from distributed_smb.application.spade_agent_bridge import (
+    SpadeAgentBridge,
+    make_agent_queues,
+)
+from distributed_smb.domain.game_engine import GameEngine
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+
+
+def mixed_runtime() -> SpadeRuntime:
+    return SpadeRuntime(
+        make_agent_queues(),
+        make_agent_queues(),
+        enemies={"enemy-1": AgentType.GOOMBA, "enemy-3": AgentType.KOOPA},
+    )
+
+
+def test_runtime_builds_the_agent_of_each_enemy_kind():
+    runtime = mixed_runtime()
+
+    assert isinstance(runtime.agents["enemy-1"], GoombaAgent)
+    assert isinstance(runtime.agents["enemy-3"], KoopaAgent)
+    assert all(isinstance(agent, EnemyAgent) for agent in runtime.agents.values())
+    assert list(runtime.goomba_agents) == ["enemy-1"]
+    assert list(runtime.koopa_agents) == ["enemy-3"]
+    assert str(runtime.agents["enemy-3"].jid) == "koopa-enemy-3@localhost"
+
+
+def test_every_agent_knows_the_agents_of_the_other_kinds(run_bdi_steps):
+    runtime = mixed_runtime()
+    goomba = runtime.agents["enemy-1"]
+    run_bdi_steps(goomba, count=1)
+
+    peers = next(b for b in goomba.bdi.get_beliefs() if b.startswith("peers"))
+    assert "koopa-enemy-3@localhost" in peers
+
+
+class Recorder:
+    def __init__(self):
+        self.perceived = []
+
+    def perceive(self, message):
+        self.perceived.append(message)
+
+    def set_peers(self, jids):
+        pass
+
+
+def message(perception_cls, enemy_id, sequence):
+    return EnemyPerceptionMessage(
+        sequence,
+        perception_cls(enemy_id, Position(0, 0), 51, 51, SightDirection.RIGHT),
+    )
+
+
+def test_dispatch_drains_each_kind_queue_independently():
+    """Regression: an empty KOOPA queue used to swallow GOOMBA perceptions."""
+    runtime = SpadeRuntime(
+        make_agent_queues(),
+        make_agent_queues(),
+        enemies={"enemy-1": AgentType.GOOMBA, "enemy-3": AgentType.KOOPA},
+        goomba_factory=lambda _id: Recorder(),
+        koopa_factory=lambda _id: Recorder(),
+    )
+    runtime.perception_queue[AgentType.GOOMBA].put(message(GoombaPerception, "enemy-1", 5))
+
+    assert runtime.dispatch_perceptions() == 1
+    assert len(runtime.agents["enemy-1"].perceived) == 1
+
+    runtime.perception_queue[AgentType.KOOPA].put(message(KoopaPerception, "enemy-3", 10))
+    # A Koopa perception that ended up on the Goomba queue is not delivered.
+    runtime.perception_queue[AgentType.GOOMBA].put(message(KoopaPerception, "enemy-3", 10))
+
+    assert runtime.dispatch_perceptions() == 1
+    assert len(runtime.agents["enemy-3"].perceived) == 1
+    assert len(runtime.agents["enemy-1"].perceived) == 1
+
+
+# ---------------------------------------------------------------------------
+# Game side: each enemy kind uses its own queues
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def level_integration():
+    engine = GameEngine()  # the real level: enemy-3 is a Lakitu
+    integration = AgentGameIntegration(
+        engine, enabled=True, perception_interval_ticks=1, bridge=SpadeAgentBridge()
+    )
+    integration.control_enemy_with_spade("enemy-1")
+    integration.control_enemy_with_spade("enemy-3")
+    return engine, integration
+
+
+def test_each_enemy_perception_goes_to_the_queue_of_its_kind(level_integration):
+    _engine, integration = level_integration
+    integration.tick(1 / 60, {})
+
+    goomba = integration.bridge.poll_perception(AgentType.GOOMBA)
+    koopa = integration.bridge.poll_perception(AgentType.KOOPA)
+    assert isinstance(goomba.perception, GoombaPerception)
+    assert goomba.perception.enemy_id == "enemy-1"
+    assert isinstance(koopa.perception, KoopaPerception)
+    assert koopa.perception.enemy_id == "enemy-3"
+
+
+def test_koopa_actions_are_read_from_the_koopa_queue_only(level_integration):
+    engine, integration = level_integration
+    lakitu = engine.world_state.environment.enemies["enemy-3"]
+    start_x = lakitu.x
+
+    # Wrong queue: a Goomba agent cannot drive a Lakitu.
+    integration.bridge.submit_action(
+        AgentType.GOOMBA, ActionResult("enemy-3", EnemyAction.MOVE_LEFT)
+    )
+    integration.tick(0.1, {})
+    assert lakitu.x == start_x  # still waiting for its own agent
+
+    integration.bridge.submit_action(
+        AgentType.KOOPA, ActionResult("enemy-3", EnemyAction.MOVE_LEFT)
+    )
+    integration.tick(0.1, {})
+    assert lakitu.x < start_x
+
+
+# ---------------------------------------------------------------------------
+# koopa.asl
+# ---------------------------------------------------------------------------
+
+HOME_X = 1000
+LAKITU_Y = 700
+
+
+@pytest.fixture
+def lakitu():
+    runtime = SpadeRuntime(
+        make_agent_queues(), make_agent_queues(), enemies={"enemy-3": AgentType.KOOPA}
+    )
+    return runtime.agents["enemy-3"], runtime
+
+
+def perceive(agent, center_x, sequence, *, direction=SightDirection.RIGHT, player_x=None):
+    players = ()
+    if player_x is not None:  # a player on the ground, 165px below the Lakitu
+        players = (PlayerPerception("player1", Position(player_x - 10, 870), 20, 40),)
+    agent._update_beliefs(
+        KoopaPerception(
+            "enemy-3",
+            Position(center_x - 25, LAKITU_Y - 25),
+            50,
+            50,
+            direction,
+            players,
+        ),
+        sequence,
+    )
+
+
+def decide(agent, runtime, center_x, sequence, **kwargs):
+    perceive(agent, center_x, sequence, **kwargs)
+
+    async def cycle():
+        await agent.bdi.run()
+
+    asyncio.run(cycle())
+    queue = runtime.action_queue[AgentType.KOOPA]
+    actions = []
+    while not queue.empty():
+        actions.append(queue.get_nowait().action)
+    return actions
+
+
+def test_lakitu_patrols_inside_its_area(lakitu):
+    agent, runtime = lakitu
+    assert decide(agent, runtime, HOME_X, 1) == [EnemyAction.MOVE_RIGHT]
+    # At the right border of the area (home + 150): turn back.
+    assert decide(agent, runtime, HOME_X + 150, 2) == [EnemyAction.MOVE_LEFT]
+    # At the left border: turn back again.
+    assert decide(
+        agent, runtime, HOME_X - 150, 3, direction=SightDirection.LEFT
+    ) == [EnemyAction.MOVE_RIGHT]
+
+
+def test_lakitu_attacks_a_player_inside_its_area(lakitu):
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X, 1)  # spawn: sets home
+
+    # Player behind it (left) but inside the area: fly towards it.
+    assert decide(agent, runtime, HOME_X + 20, 2, player_x=HOME_X - 80) == [
+        EnemyAction.MOVE_LEFT
+    ]
+    # Right above the player: hover there.
+    assert decide(agent, runtime, HOME_X - 78, 3, player_x=HOME_X - 80) == [
+        EnemyAction.STOP
+    ]
+
+
+def test_lakitu_ignores_a_player_outside_its_area(lakitu):
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X, 1)
+
+    # Visible (within 300px) but beyond the area border (home - 150).
+    assert decide(
+        agent, runtime, HOME_X + 40, 2, direction=SightDirection.LEFT, player_x=HOME_X - 200
+    ) == [EnemyAction.MOVE_LEFT]  # plain patrol, keeps its heading
+    assert agent._behaviour == "patrol"
+
+
+def test_lakitu_logs_when_it_starts_attacking(lakitu, caplog):
+    caplog.set_level("INFO", logger="distributed_smb.agents.bdi.koopa")
+    agent, runtime = lakitu
+    decide(agent, runtime, HOME_X, 1)
+    decide(agent, runtime, HOME_X, 2, player_x=HOME_X + 100)
+
+    assert "[koopa enemy-3] patrol -> kill_mario: sees the player at x=1100" in caplog.text

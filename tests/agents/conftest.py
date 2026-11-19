@@ -5,6 +5,7 @@ import threading
 
 import pytest
 
+from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.spade_runtime import SpadeRuntime
 from distributed_smb.agents.spade_thread import SpadeThread
 from distributed_smb.application.spade_agent_bridge import make_agent_queues
@@ -28,7 +29,7 @@ def spade_runtime_thread():
             self._alive = False
             self.bdi_agent = object()
             self.spade_runtime = None
-            self.goomba_id = None
+            self.enemy_id = None
             self.perceived = []
 
         def perceive(self, message):
@@ -56,7 +57,7 @@ def spade_runtime_thread():
     runtime = SpadeRuntime(
         perception_queue=perceptions,
         action_queue=actions,
-        enemy_ids=["enemy-1"],
+        enemies={"enemy-1": AgentType.GOOMBA},
         goomba_factory=lambda _enemy_id: fake_agent,
     )
     thread = SpadeThread(runtime.run)
@@ -77,7 +78,7 @@ def goomba_agent():
     runtime = SpadeRuntime(
         perception_queue=perceptions,
         action_queue=actions,
-        enemy_ids=["enemy-1"],
+        enemies={"enemy-1": AgentType.GOOMBA},
     )
     agent = runtime.goomba_agents["enemy-1"]
     return agent, runtime

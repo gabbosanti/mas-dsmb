@@ -11,7 +11,7 @@ from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
     GoombaPerception,
-    GoombaPerceptionMessage,
+    EnemyPerceptionMessage,
     Position,
     SightDirection,
 )
@@ -36,10 +36,10 @@ def test_runtime_routes_perceptions_and_actions_through_agent_queues(
 ):
     runtime, _thread, _fake_agent = spade_runtime_thread
 
-    perception = GoombaPerceptionMessage(
+    perception = EnemyPerceptionMessage(
         simulation_sequence=7,
         perception=GoombaPerception(
-            goomba_id="enemy-1",
+            enemy_id="enemy-1",
             position=Position(10, 20),
             width=40,
             height=50,
@@ -95,10 +95,10 @@ def test_spade_thread_timeout_logs_worker_stack(caplog):
 
 
 def make_message(goomba_id, sequence):
-    return GoombaPerceptionMessage(
+    return EnemyPerceptionMessage(
         simulation_sequence=sequence,
         perception=GoombaPerception(
-            goomba_id=goomba_id,
+            enemy_id=goomba_id,
             position=Position(10, 20),
             width=40,
             height=50,
@@ -124,7 +124,7 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
     runtime = SpadeRuntime(
         make_agent_queues(),
         make_agent_queues(),
-        enemy_ids=["enemy-1", "enemy-2"],
+        enemies={"enemy-1": AgentType.GOOMBA, "enemy-2": AgentType.GOOMBA},
         goomba_factory=lambda _enemy_id: Recorder(),
     )
     queue = runtime.perception_queue[AgentType.GOOMBA]
@@ -139,7 +139,7 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
     runtime.dispatch_perceptions()
 
     first, second = runtime.goomba_agents["enemy-1"], runtime.goomba_agents["enemy-2"]
-    assert first.goomba_id == "enemy-1" and second.goomba_id == "enemy-2"
+    assert first.enemy_id == "enemy-1" and second.enemy_id == "enemy-2"
     assert [m.simulation_sequence for m in first.perceived] == [10]
-    assert [m.perception.goomba_id for m in second.perceived] == ["enemy-2"]
+    assert [m.perception.enemy_id for m in second.perceived] == ["enemy-2"]
     assert queue.empty()

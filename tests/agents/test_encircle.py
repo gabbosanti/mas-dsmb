@@ -30,7 +30,9 @@ class Squad:
 
     def __init__(self, *enemy_ids: str) -> None:
         self.runtime = SpadeRuntime(
-            make_agent_queues(), make_agent_queues(), enemy_ids=enemy_ids
+            make_agent_queues(),
+            make_agent_queues(),
+            enemies={enemy_id: AgentType.GOOMBA for enemy_id in enemy_ids},
         )
         self.agents = self.runtime.goomba_agents
         self.sent: list = []
@@ -55,7 +57,7 @@ class Squad:
     def perceive(self, enemy_id, center_x, *, sequence, players=(), direction=SightDirection.RIGHT, obstacles=(FLOOR,)):
         self.agents[enemy_id]._update_beliefs(
             GoombaPerception(
-                goomba_id=enemy_id,
+                enemy_id=enemy_id,
                 position=Position(center_x - GOOMBA_WIDTH / 2, 100 - GOOMBA_HEIGHT),
                 width=GOOMBA_WIDTH,
                 height=GOOMBA_HEIGHT,
@@ -230,8 +232,8 @@ def test_both_goombas_log_their_decision_to_close_in(squad, caplog):
     squad.perceive("enemy-2", 800, sequence=10, players=[player(400)])
     squad.think()
 
-    assert "[enemy-1] start -> kill_mario: sees the player at x=400" in caplog.text
+    assert "[goomba enemy-1] start -> kill_mario: sees the player at x=400" in caplog.text
     assert (
-        "[enemy-2] start -> encircle: cannot see the player, enemy-1 told where it "
+        "[goomba enemy-2] start -> encircle: cannot see the player, enemy-1 told where it "
         "is: [enemy-1 x=300 | player x=400 | enemy-2 x=800] -> enemy-2 walks left"
     ) in caplog.text

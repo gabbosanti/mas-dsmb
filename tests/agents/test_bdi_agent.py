@@ -12,7 +12,7 @@ from distributed_smb.agents.models import (
 
 def perception(*, direction=SightDirection.RIGHT, obstacles=()):
     return GoombaPerception(
-        goomba_id="enemy-1",
+        enemy_id="enemy-1",
         position=Position(100, 50),
         width=40,
         height=50,
@@ -125,14 +125,14 @@ def test_turn_around_is_an_absolute_move_so_repeated_turns_do_not_cancel_out(
 
 
 def test_bdi_behaviour_is_throttled():
-    from distributed_smb.agents.bdi.goomba import GoombaPatrolBehaviour
+    from distributed_smb.agents.bdi.enemy_agent import ThrottledBDIBehaviour
     from distributed_smb.agents.spade_runtime import SpadeRuntime
     from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
     runtime = SpadeRuntime(
-        make_agent_queues(), make_agent_queues(), enemy_ids=["enemy-1"]
+        make_agent_queues(), make_agent_queues(), enemies={"enemy-1": AgentType.GOOMBA}
     )
-    assert isinstance(runtime.goomba_agents["enemy-1"].bdi, GoombaPatrolBehaviour)
+    assert isinstance(runtime.goomba_agents["enemy-1"].bdi, ThrottledBDIBehaviour)
 
 
 def test_turn_uses_the_heading_of_the_triggering_snapshot_not_a_newer_one(
