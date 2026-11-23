@@ -10,12 +10,11 @@ from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
-    GoombaPerception,
     EnemyPerceptionMessage,
+    GoombaPerception,
+    PlayerPerceptionMessage,
     Position,
     SightDirection,
-    PlayerPerception,
-    PlayerPerceptionMessage,
 )
 from distributed_smb.agents.spade_thread import SpadeThread
 
@@ -147,47 +146,35 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
     assert queue.empty()
 
 
-def test_dummy_player_perception_is_processed_through_player_action_queue():
+def test_player_perception_is_routed_to_the_agent_of_that_player():
+    from distributed_smb.agents.models import PlayerAgentPerception
     from distributed_smb.agents.spade_runtime import SpadeRuntime
     from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
-    class DummyAgent:
+    class Recorder:
         def __init__(self, player_id):
             self.player_id = player_id
             self.perceived = []
-            self.spade_runtime = None
 
         def perceive(self, message):
             self.perceived.append(message)
-            from distributed_smb.agents.models import PlayerAction, PlayerActionResult
-
-            self.spade_runtime.put_action(
-                AgentType.PLAYER,
-                PlayerActionResult(
-                    player_id=self.player_id,
-                    action=PlayerAction.MOVE_RIGHT,
-                ),
-            )
 
     runtime = SpadeRuntime(
-        make_agent_queues(),
-        make_agent_queues(),
-        dummy_player_factory=DummyAgent,
+        make_agent_queues(), make_agent_queues(), player_factory=Recorder
     )
     runtime.add_player_agent("player2")
-    runtime.perception_queue[AgentType.PLAYER].put(
-        PlayerPerceptionMessage(
-            simulation_sequence=11,
-            perception=PlayerPerception(
-                player_id="player2",
-                position=Position(10, 20),
-                width=50,
-                height=50,
-            ),
-        )
+    runtime.add_player_agent("player2")  # idempotent
+    message = PlayerPerceptionMessage(
+        simulation_sequence=11,
+        perception=PlayerAgentPerception(
+            "player2", Position(10, 20), 50, 75, on_ground=True, goal_x=None
+        ),
     )
+    runtime.perception_queue[AgentType.PLAYER].put(message)
 
     assert runtime.dispatch_perceptions() == 1
-    action = runtime.action_queue[AgentType.PLAYER].get_nowait()
-    assert action.player_id == "player2"
-    assert action.action.value == "MOVE_RIGHT"
+    assert runtime.player_agents["player2"].perceived == [message]
+
+    runtime.remove_player_agent("player2")
+    runtime.perception_queue[AgentType.PLAYER].put(message)
+    assert runtime.dispatch_perceptions() == 0
