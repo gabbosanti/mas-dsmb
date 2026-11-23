@@ -141,8 +141,9 @@ def test_an_unanswered_claim_promotes_us_and_fully_evicts_the_silent_peer():
 
     assert nc._promotion_done is True
     assert nc.role is PlayerRole.HOST
-    assert nc.roster.get_player("player3") is None
-    assert nc.engine.world_state.get_player("player3") is None
+    assert nc.roster.get_player("player3") is not None
+    assert nc.engine.world_state.get_player("player3") is not None
+    assert "player3" in nc.dummy_player_ids
     assert "player3" not in nc.cached_remote_inputs
     assert "player3" not in nc.last_remote_input_sequence
-    assert "player3" not in nc.last_input_time
+    assert "player3" in nc.last_input_time

@@ -36,14 +36,28 @@ class GameEventMixin:
         self.game_event_broker.send(payload)
         LOGGER.info("game event sent: %s", msg)
 
-    def _evict_player(self, pid: str) -> None:
-        """Remove a player from the local world and clean up associated state."""
+    def _evict_player(self, pid: str, *, replace_with_dummy: bool = True) -> None:
+        """Replace a disconnected player with its dummy SPADE agent."""
         entry = self.roster.get_player(pid)
         player = self.engine.world_state.get_player(pid)
+        if not replace_with_dummy or player is None:
+            # Election/migration paths can evict a peer that is already absent
+            # from the local world. Preserve their existing full-removal behavior.
+            if entry is not None and player is not None:
+                self.rejoin_states[entry.join_index] = deepcopy(player)
+            self.roster.remove_player(pid)
+            self.engine.world_state.remove_player(pid)
+            self.cached_remote_inputs.pop(pid, None)
+            self.last_remote_input_sequence.pop(pid, None)
+            self.last_input_time.pop(pid, None)
+            if hasattr(self, "shadow_copies"):
+                self.shadow_copies.pop(pid, None)
+            return
         if entry is not None and player is not None:
             self.rejoin_states[entry.join_index] = deepcopy(player)
-        self.engine.world_state.remove_player(pid)
-        self.roster.remove_player(pid)
+        self.dummy_player_ids.add(pid)
+        self.agent_integration.control_player_with_spade(pid)
+        self.spade_runtime.add_player_agent(pid)
         self.cached_remote_inputs.pop(pid, None)
         self.last_remote_input_sequence.pop(pid, None)
         self.last_input_time.pop(pid, None)
@@ -58,21 +72,20 @@ class GameEventMixin:
         LOGGER.info("PlayerLeft broadcast: %s", pid)
 
     def _check_player_disconnections(self) -> None:
-        """Detect players that dropped their connection and evict them."""
+        """Detect crashes and replace affected players with dummy SPADE agents."""
         while True:
             pid = self.game_event_broker.get_disconnected_player()
             if pid is None:
                 break
             LOGGER.info("Player left the game (WebSocket): %s", pid)
             self._evict_player(pid)
-            self._send_player_left(pid)
+            LOGGER.info("Replaced disconnected player %s with dummy SPADE agent", pid)
 
         now = time.time()
         for pid in list(self.last_input_time):
             if now - self.last_input_time[pid] > UDP_INPUT_TIMEOUT:
                 LOGGER.info("Player left the game (UDP timeout): %s", pid)
                 self._evict_player(pid)
-                self._send_player_left(pid)
 
     def _drain_game_events(self) -> None:
         """Poll incoming game events and apply them to the local world state."""
