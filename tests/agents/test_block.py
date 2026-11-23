@@ -75,7 +75,7 @@ class Squad:
 
     def lakitu_sees(
         self, enemy_id, center_x, *, sequence, center_y=CRUISE_Y,
-        direction=SightDirection.RIGHT,
+        direction=SightDirection.RIGHT, obstacles=(FLOOR,),
     ):
         self.agents[enemy_id]._update_beliefs(
             KoopaPerception(
@@ -85,7 +85,7 @@ class Squad:
                 50,
                 direction,
                 (),
-                (FLOOR,),
+                tuple(obstacles),
             ),
             sequence=sequence,
         )
@@ -253,3 +253,41 @@ def test_both_agents_log_their_part(squad, caplog):
         "[goomba enemy-1 x=300 | player x=400 | lakitu enemy-3 x=700] "
         "-> diving to block the way"
     ) in caplog.text
+
+
+# Over a pit: no ground under the Lakitu. The player (center y=75) stands on
+# the edge of the pit, block_margin is 24px.
+PIT_EDGE = ObstacleObservation(0, 100, 450, 32)  # the floor ends at x=450
+
+
+@pytest.mark.parametrize(
+    ("center_y", "expected"),
+    [
+        (75 - 30, EnemyAction.DIVE),  # still above the player's height
+        (75 - 10, EnemyAction.STOP),  # at the player's height: stop there
+        (75 + 3, EnemyAction.STOP),  # slightly past it (latency): no bounce up
+    ],
+)
+def test_lakitu_over_a_pit_stops_at_the_player_height(squad, center_y, expected):
+    squad.goomba_sees("enemy-1", 300, sequence=5, player_x=400)
+    squad.think()
+    squad.lakitu_sees(
+        "enemy-3", 700, sequence=10, center_y=center_y, obstacles=(PIT_EDGE,)
+    )
+    squad.think()
+
+    assert squad.actions()["enemy-3"] == [expected]
+
+
+def test_lakitu_over_a_pit_holds_steady_while_blocking(squad):
+    squad.goomba_sees("enemy-1", 300, sequence=5, player_x=400)
+    squad.think()
+    actions = []
+    for sequence, center_y in enumerate([65, 70, 78, 66], start=10):
+        squad.lakitu_sees(
+            "enemy-3", 700, sequence=sequence, center_y=center_y, obstacles=(PIT_EDGE,)
+        )
+        squad.think()
+        actions += squad.actions()["enemy-3"]
+
+    assert actions == [EnemyAction.STOP] * 4  # holds every time, never a RISE
