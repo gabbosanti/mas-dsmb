@@ -12,6 +12,7 @@ adapter only:
 import logging
 from dataclasses import dataclass, field
 
+from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
@@ -250,9 +251,7 @@ class AgentGameIntegration:
             else:
                 self._held_commands.pop(result.enemy_id, None)
 
-        return commands    def observe(self, enemy_id: str) -> GoombaPerception:
-115
-
+        return commands    
 
     def _poll_agent_actions(self):
         """Every queued ActionResult, from the queue of each enemy agent type.
