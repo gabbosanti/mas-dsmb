@@ -1,5 +1,5 @@
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.bdi.enemy_agent import EnemyAgent, agent_name
+from distributed_smb.agents.bdi.enemy_agent import EnemyAgent
 from distributed_smb.agents.models import GoombaPerception, SightDirection
 from distributed_smb.agents.perception import GroundSensor, Vision, side_of
 
@@ -25,13 +25,12 @@ PLAYER_SIDE_DEADBAND = 4.0
 
 class GoombaAgent(EnemyAgent):
     """
-    Goomba driven by goomba.asl, which groups its plans in three behaviours:
+    Goomba driven by goomba.asl, which groups its plans in two behaviours:
         - patrol: walk and turn around at walls and at the edge of platforms;
         - kill_mario: when a player is near and at the same height, walk towards
-          it, unless that side is blocked by a wall or a void;
-        - encircle: a Goomba that sees a player tells the other agents where it
-          is (AgentSpeak ``.send``); a Goomba that learns the player stands
-          between itself and the sender walks towards it to close it in.
+          it, unless that side is blocked by a wall or a void. Meanwhile it
+          tells the Lakitus where the player is (AgentSpeak ``.send``), so a
+          Lakitu on the other side can dive to block its escape.
     """
 
     agent_type = AgentType.GOOMBA
@@ -109,32 +108,3 @@ class GoombaAgent(EnemyAgent):
             direction=direction,
             obstacles=perception.obstacles,
         )
-
-    def _add_actions(self, actions) -> None:
-        @actions.add(".encircle", 4)
-        def encircle(agent, term, intention):
-            side = self._grounded(term, intention, 0)
-            sender = agent_name(self._grounded(term, intention, 1))
-            sender_x = float(self._grounded(term, intention, 2))
-            player_x = float(self._grounded(term, intention, 3))
-            center = getattr(self, "_last_center", None)
-            my_x = center.x if center is not None else float("nan")
-            # Lay the three of them out left to right for the log.
-            line = " | ".join(
-                label
-                for _, label in sorted(
-                    [
-                        (sender_x, f"{sender} x={sender_x:.0f}"),
-                        (player_x, f"player x={player_x:.0f}"),
-                        (my_x, f"{self.enemy_id} x={my_x:.0f}"),
-                    ]
-                )
-            )
-            self._enter_behaviour(
-                "encircle",
-                f"cannot see the player, {sender} told where it is: [{line}] "
-                f"-> {self.enemy_id} walks {side} to close it in",
-                key=("encircle", sender),
-            )
-            self._walk_towards(side)
-            yield

@@ -1,5 +1,5 @@
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.bdi.enemy_agent import EnemyAgent
+from distributed_smb.agents.bdi.enemy_agent import EnemyAgent, agent_name
 from distributed_smb.agents.models import EnemyAction, KoopaPerception
 from distributed_smb.agents.perception import GroundSensor, Vision
 
@@ -19,11 +19,14 @@ GROUND_MARGIN = 24.0
 
 class KoopaAgent(EnemyAgent):
     """
-    Koopa (Lakitu) driven by koopa.asl, which groups its plans in two behaviours:
+    Koopa (Lakitu) driven by koopa.asl, which groups its plans in three behaviours:
         - patrol: fly back and forth inside an area centred on its spawn point,
           at its spawn altitude; no walls or voids to care about, it is in the air;
         - kill_mario: as soon as a player is inside that area, fly over it and
-          dive on it; then climb back to its cruise altitude.
+          dive on it; then climb back to its cruise altitude;
+        - block: a Goomba tells it that it is chasing a player, and the player
+          stands between that Goomba and this Lakitu: dive down where it is and
+          stay there, to block the player's escape.
     """
 
     agent_type = AgentType.KOOPA
@@ -81,6 +84,37 @@ class KoopaAgent(EnemyAgent):
             )
             self._enter_behaviour("dive", f"the player is right below it ({where})")
             self._publish_action(EnemyAction.DIVE)
+            yield
+
+        @actions.add(".block", 4)
+        def block(agent, term, intention):
+            # stay: already down at the ground, hold there; otherwise descend.
+            phase = self._grounded(term, intention, 0)
+            sender = agent_name(self._grounded(term, intention, 1))
+            sender_x = float(self._grounded(term, intention, 2))
+            player_x = float(self._grounded(term, intention, 3))
+            center = getattr(self, "_last_center", None)
+            my_x = center.x if center is not None else float("nan")
+            # Lay the three of them out left to right for the log.
+            line = " | ".join(
+                label
+                for _, label in sorted(
+                    [
+                        (sender_x, f"goomba {sender} x={sender_x:.0f}"),
+                        (player_x, f"player x={player_x:.0f}"),
+                        (my_x, f"lakitu {self.enemy_id} x={my_x:.0f}"),
+                    ]
+                )
+            )
+            self._enter_behaviour(
+                "block",
+                f"{sender} is chasing the player towards it: [{line}] "
+                f"-> diving to block the way",
+                key=("block", sender),
+            )
+            self._publish_action(
+                EnemyAction.STOP if phase == "stay" else EnemyAction.DIVE
+            )
             yield
 
         @actions.add(".rise", 0)

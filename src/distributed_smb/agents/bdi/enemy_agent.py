@@ -10,7 +10,7 @@ if needed, adds the ASL actions that only it knows (``_add_actions``).
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, ClassVar
 
 import agentspeak as asp
@@ -103,11 +103,21 @@ class EnemyAgent(BDIAgent, ABC):
     async def setup(self):
         self.logger.info("%s agent %s started", self.agent_type.value, self.enemy_id)
 
-    def set_peers(self, jids: Iterable[str]) -> None:
-        """Tell the agent which other agents it can talk to (``peers(List)``)."""
-        peers = tuple(jids)
-        self._peer_count = len(peers)
-        self.bdi.set_belief("peers", peers)
+    def set_peers(self, peers: Mapping[AgentType, Iterable[str]]) -> None:
+        """Tell the agent which other agents it can talk to.
+
+        Beliefs: ``peers(All)`` and one list per kind, e.g. ``goomba_peers(L)``
+        and ``koopa_peers(L)`` (possibly empty), so that a plan can address
+        only the agents of a given kind.
+        """
+        by_type = {AgentType(t): tuple(jids) for t, jids in peers.items()}
+        everyone = tuple(jid for jids in by_type.values() for jid in jids)
+        self._peer_count = len(everyone)
+        self.bdi.set_belief("peers", everyone)
+        for agent_type in AgentType:
+            self.bdi.set_belief(
+                f"{agent_type.value}_peers", by_type.get(agent_type, ())
+            )
 
     def perceive(self, message: EnemyPerceptionMessage) -> None:
         """Entry point used by SpadeRuntime to deliver this agent's perception."""

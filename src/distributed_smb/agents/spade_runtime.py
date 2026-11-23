@@ -76,13 +76,15 @@ class SpadeRuntime:
             self.agent_types[enemy_id] = agent_type
 
         # Agents interact through SPADE messages: each one learns the
-        # addresses of all the others, whatever their kind.
+        # addresses of all the others, grouped by kind.
         for enemy_id, agent in self.agents.items():
-            agent.set_peers(
-                self.jid_for(other_id, other_type)
-                for other_id, other_type in self.agent_types.items()
-                if other_id != enemy_id
-            )
+            peers: dict[AgentType, list[str]] = {}
+            for other_id, other_type in self.agent_types.items():
+                if other_id != enemy_id:
+                    peers.setdefault(other_type, []).append(
+                        self.jid_for(other_id, other_type)
+                    )
+            agent.set_peers(peers)
 
     def agents_of(self, agent_type: AgentType) -> dict[str, EnemyAgent]:
         return {
