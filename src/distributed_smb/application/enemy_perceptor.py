@@ -66,7 +66,7 @@ class EnemyPerceptor:
                     key=lambda player: player.player_id,
                 )
             ),
-            obstacles=self._perceive_obstacles(),
+            obstacles=self.perceive_obstacles(),
         )
 
     @staticmethod
@@ -78,7 +78,7 @@ class EnemyPerceptor:
             height=player.height,
         )
 
-    def _perceive_obstacles(self) -> tuple[ObstacleObservation, ...]:
+    def perceive_obstacles(self) -> tuple[ObstacleObservation, ...]:
         """Every solid rectangle in the world: platforms and intact blocks.
 
         To an agent they are the same thing: something that blocks sight and

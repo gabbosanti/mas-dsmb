@@ -155,6 +155,9 @@ class ElectionMixin:
         if crashed is not None:
             self._evict_player(crashed.player_id)
         self.roster.promote_host(self.local_player_id)
+        # Now authoritative: hand the characters of the missing players to
+        # BDI agents (started with the SPADE runtime below).
+        self._drive_replaced_players_with_agents()
 
         # Rebuild UDP socket bound to the authoritative host port
         # (promoted client was on an OS-assigned ephemeral port)

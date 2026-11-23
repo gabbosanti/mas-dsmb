@@ -89,24 +89,65 @@ class EnemyPerceptionMessage:
 #---------------------------------------------------------------------------
 
 @dataclass(frozen=True, slots=True)
+class EnemyObservation:
+    """An enemy as seen by a player agent."""
+
+    kind: str  # "goomba" | "koopa"
+    position: Position
+    width: float
+    height: float
+
+    @property
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerAgentPerception:
+    """Raw snapshot sent to the agent that drives a disconnected player.
+
+    Facts only, like the enemies' perceptions: whether there is a wall, a
+    pit or an enemy ahead is decided agent-side.
+    """
+
+    player_id: str
+    position: Position  # top-left corner
+    width: float
+    height: float
+    on_ground: bool
+    goal_x: float | None  # left edge of the castle (final gate), if any
+    obstacles: tuple[ObstacleObservation, ...] = ()
+    enemies: tuple[EnemyObservation, ...] = ()
+
+    @property
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerPerceptionMessage:
-    """Queue envelope for a dummy player's snapshot."""
+    """Queue envelope that ties a player agent's perception to its tick."""
 
     simulation_sequence: int
-    perception: PlayerPerception
+    perception: PlayerAgentPerception
 
 
 class PlayerAction(str, Enum):
     MOVE_LEFT = "MOVE_LEFT"
     MOVE_RIGHT = "MOVE_RIGHT"
     JUMP = "JUMP"
+    JUMP_RIGHT = "JUMP_RIGHT"  # running jump
     CROUCH = "CROUCH"
     STOP = "STOP"
 
 
 @dataclass(frozen=True, slots=True)
 class PlayerActionResult:
-    """Random action selected by a dummy SPADE player agent."""
+    """Action chosen by the BDI agent that drives a disconnected player."""
 
     player_id: str
     action: PlayerAction

@@ -20,9 +20,7 @@ from distributed_smb.agents.models import (
     EnemyPerceptionMessage,
     PlayerAction,
     PlayerActionResult,
-    PlayerPerception,
     PlayerPerceptionMessage,
-    Position,
 )
 from distributed_smb.application.enemy_perceptor import (
     AGENT_TYPE_OF,
@@ -30,6 +28,7 @@ from distributed_smb.application.enemy_perceptor import (
     EnemyPerceptor,
     agent_type_of,
 )
+from distributed_smb.application.player_perceptor import PlayerPerceptor
 from distributed_smb.application.spade_agent_bridge import SpadeAgentBridge
 from distributed_smb.domain.entity import Enemy
 from distributed_smb.domain.game_engine import EnemyMovementCommand, GameEngine
@@ -67,12 +66,22 @@ class AgentGameIntegration:
     engine: GameEngine
     enabled: bool = False
     perception_interval_ticks: int = 5
+    # A running character moves ~6 times faster than an enemy (300 vs 50-80
+    # px/s): its agent needs fresher snapshots to jump in time.
+    player_perception_interval_ticks: int = 2
     bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
     spade_controlled_enemy_ids: set[str] = field(
         default_factory=set
     )  # tracks spade agents
+    # Characters of disconnected players, driven by a player agent.
     spade_controlled_player_ids: set[str] = field(default_factory=set)
     perceptor: EnemyPerceptor = field(init=False)
+    player_perceptor: PlayerPerceptor = field(init=False)
+    # Last input chosen by each player agent: like a held key, it is applied
+    # on every tick until the agent decides again (~every 5 ticks).
+    _held_player_inputs: dict[str, InputState] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # Commands re-sent every tick until the agent picks another action: the
     # engine honours STOP for a single tick, and DIVE/RISE would otherwise be
     # cancelled by the horizontal command derived from the enemy's heading.
@@ -88,6 +97,7 @@ class AgentGameIntegration:
         if self.perception_interval_ticks < 1:
             raise ValueError("perception_interval_ticks must be at least one")
         self.perceptor = EnemyPerceptor(self.engine)
+        self.player_perceptor = PlayerPerceptor(self.engine)
 
     def control_enemy_with_spade(self, enemy_id: str) -> None:
         if enemy_id not in self.engine.world_state.environment.enemies:
@@ -104,18 +114,22 @@ class AgentGameIntegration:
         return self.perceptor.observe(enemy_id)
 
     def control_player_with_spade(self, player_id: str) -> None:
-        """Hand a remaining player character to a dummy SPADE agent."""
-        if self.engine.world_state.get_player(player_id) is None:
+        """Hand the character of a disconnected player to its player agent."""
+        world = self.engine.world_state
+        if world.get_player(player_id) is None and player_id not in world.respawn_timers:
             raise LookupError(f"Player {player_id!r} does not exist")
         self.spade_controlled_player_ids.add(player_id)
 
     def release_player(self, player_id: str) -> None:
+        """The player is back: its own inputs drive the character again."""
         self.spade_controlled_player_ids.discard(player_id)
+        self._held_player_inputs.pop(player_id, None)
 
     def tick(self, dt: float, player_inputs: dict[str, InputState]) -> None:
         """Run one simulation tick without waiting for SPADE."""
         if self.enabled == False:
             self._held_commands.clear()
+            self._held_player_inputs.clear()
             self._enemies_with_decision.clear()
             self.bridge.discard_actions()
             self.bridge.discard_perceptions()
@@ -136,6 +150,8 @@ class AgentGameIntegration:
 
         # Sense: observe the new world state and hand it to the agents.
         sequence = self.engine.world_state.sequence_number
+        if sequence % self.player_perception_interval_ticks == 0:
+            self._publish_player_perceptions(sequence)
         if sequence % self.perception_interval_ticks != 0:  # every 5 ticks
             return
 
@@ -151,16 +167,11 @@ class AgentGameIntegration:
                 ),
             )
 
+    def _publish_player_perceptions(self, sequence: int) -> None:
         for player_id in sorted(self.spade_controlled_player_ids):
-            player = self.engine.world_state.get_player(player_id)
-            if player is None:
+            perception = self.player_perceptor.observe(player_id)
+            if perception is None:  # dead, waiting to respawn
                 continue
-            perception = PlayerPerception(
-                player_id=player.player_id,
-                position=Position(player.x, player.y),
-                width=player.width,
-                height=player.height,
-            )
             self.bridge.publish(
                 AgentType.PLAYER,
                 PlayerPerceptionMessage(
@@ -179,8 +190,12 @@ class AgentGameIntegration:
         )
 
     def _retrieve_player_actions(self) -> dict[str, InputState]:
-        """Translate dummy SPADE player actions into normal engine InputState."""
-        latest: dict[str, PlayerAction] = {}
+        """Input of every agent-driven character for this tick.
+
+        The newest action of each player agent replaces its held input; the
+        held input is then applied on every tick, so the character keeps
+        running (or keeps the jump key down) between two decisions.
+        """
         while (result := self.bridge.poll_action(AgentType.PLAYER)) is not None:
             if not isinstance(result, PlayerActionResult):
                 LOGGER.warning(
@@ -193,17 +208,13 @@ class AgentGameIntegration:
                     "Discarding action for uncontrolled player %r", result.player_id
                 )
                 continue
-            latest[result.player_id] = result.action
+            self._held_player_inputs[result.player_id] = _player_input(result.action)
 
-        player_inputs: dict[str, InputState] = {}
-        for player_id, action in latest.items():
-            player_inputs[player_id] = InputState(
-                left=action is PlayerAction.MOVE_LEFT,
-                right=action is PlayerAction.MOVE_RIGHT,
-                jump=action is PlayerAction.JUMP,
-                down=action is PlayerAction.CROUCH,
-            )
-        return player_inputs
+        return {
+            player_id: held
+            for player_id, held in self._held_player_inputs.items()
+            if player_id in self.spade_controlled_player_ids
+        }
 
     def _retreive_agent_actions(self) -> dict[str, EnemyMovementCommand]:
         # Pop every queued ActionResult and translate it into an engine command.
@@ -314,3 +325,13 @@ class AgentGameIntegration:
                 else EnemyMovementCommand.MOVE_LEFT
             )
         return None
+
+
+def _player_input(action: PlayerAction) -> InputState:
+    """The keys a player would press for ``action``."""
+    return InputState(
+        left=action is PlayerAction.MOVE_LEFT,
+        right=action in (PlayerAction.MOVE_RIGHT, PlayerAction.JUMP_RIGHT),
+        jump=action in (PlayerAction.JUMP, PlayerAction.JUMP_RIGHT),
+        down=action is PlayerAction.CROUCH,
+    )

@@ -12,17 +12,22 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
 from distributed_smb.agents.agent_type import AgentType
-from distributed_smb.agents.models import EnemyPerceptionMessage
+from distributed_smb.agents.models import (
+    EnemyPerceptionMessage,
+    PlayerPerceptionMessage,
+)
 
 if TYPE_CHECKING:
     from distributed_smb.agents.bdi.enemy_agent import EnemyAgent
+    from distributed_smb.agents.bdi.game_agent import GameAgent
+    from distributed_smb.agents.bdi.player import PlayerAgent
 
 LOGGER = logging.getLogger(__name__)
 
 type PerceptionQueue = dict[AgentType, Queue]
 type ActionQueue = dict[AgentType, Queue]
 type AgentFactory = Callable[[str], "EnemyAgent"]
-type DummyPlayerFactory = Callable[[str], object]
+type PlayerFactory = Callable[[str], "PlayerAgent"]
 
 # How often the runtime moves perceptions from the game queue to the agents.
 DISPATCH_INTERVAL = 0.01
@@ -48,7 +53,7 @@ class SpadeRuntime:
         stop_event: threading.Event | None = None,
         goomba_factory: AgentFactory | None = None,
         koopa_factory: AgentFactory | None = None,
-        dummy_player_factory: DummyPlayerFactory | None = None,
+        player_factory: PlayerFactory | None = None,
     ) -> None:
         self.perception_queue = perception_queue
         self.action_queue = action_queue
@@ -57,8 +62,10 @@ class SpadeRuntime:
             AgentType.GOOMBA: goomba_factory or self._create_goomba_agent,
             AgentType.KOOPA: koopa_factory or self._create_koopa_agent,
         }
-        self.dummy_player_factory = dummy_player_factory or self._create_dummy_player
-        self.player_agents: dict[str, object] = {}
+        # Agents that drive the characters of disconnected players: created
+        # and removed while the game runs (see add/remove_player_agent).
+        self.player_factory = player_factory or self._create_player_agent
+        self.player_agents: dict[str, PlayerAgent] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
         # Build every agent (and load its ASL) before the thread starts, and
@@ -120,10 +127,8 @@ class SpadeRuntime:
                     time.monotonic() - start_started,
                 )
             for player_id, agent in list(self.player_agents.items()):
-                if getattr(agent, "is_alive", lambda: False)():
-                    continue
-                LOGGER.info("Starting SPADE dummy agent for %s", player_id)
-                await agent.start()
+                if not agent.is_alive():
+                    await self._start_player_agent(player_id, agent)
 
             while not self.stop_event.is_set():
                 self.dispatch_perceptions()
@@ -144,8 +149,8 @@ class SpadeRuntime:
                         enemy_id,
                         time.monotonic() - stop_started,
                     )
-            for player_id, agent in self.player_agents.items():
-                if getattr(agent, "is_alive", lambda: False)():
+            for agent in list(self.player_agents.values()):
+                if agent.is_alive():
                     await agent.stop()
 
     def dispatch_perceptions(self) -> int:
@@ -183,52 +188,62 @@ class SpadeRuntime:
                     continue
                 agent.perceive(message)
                 delivered += 1
-        return delivered
-        latest_players: dict[str, PlayerPerceptionMessage] = {}
+        return delivered + self._dispatch_player_perceptions()
+
+    def _dispatch_player_perceptions(self) -> int:
+        """Same as for the enemies, for the agents of disconnected players."""
+        latest: dict[str, PlayerPerceptionMessage] = {}
         while True:
             try:
-                player_perception = self.get_perception(AgentType.PLAYER)
+                message = self.get_perception(AgentType.PLAYER)
             except Empty:
                 break
-            if not isinstance(player_perception, PlayerPerceptionMessage):
+            if not isinstance(message, PlayerPerceptionMessage):
                 LOGGER.warning(
-                    "Discarding PLAYER perception of type %s",
-                    type(player_perception).__name__,
+                    "Discarding PLAYER perception of type %s", type(message).__name__
                 )
                 continue
-            latest_players[player_perception.perception.player_id] = player_perception
+            latest[message.perception.player_id] = message
 
-        for player_id, player_perception in latest_players.items():
+        delivered = 0
+        for player_id, message in latest.items():
             agent = self.player_agents.get(player_id)
             if agent is None:
-                LOGGER.debug(
-                    "No SPADE dummy agent for %s, perception dropped", player_id
-                )
+                LOGGER.debug("No SPADE agent for player %s, perception dropped", player_id)
                 continue
-            agent.perceive(player_perception)
-        return len(latest) + len(latest_players)
+            agent.perceive(message)
+            delivered += 1
+        return delivered
 
     def add_player_agent(self, player_id: str) -> None:
-        """Create and register a dummy SPADE agent for a crashed player."""
+        """Hand the character of a disconnected player to a new BDI agent.
+
+        Safe to call from the game thread: the agent is started on the SPADE
+        event loop (or by ``run`` if the loop is not running yet).
+        """
         if player_id in self.player_agents:
             return
-        agent = self.dummy_player_factory(player_id)
+        agent = self.player_factory(player_id)
         agent.player_id = player_id
         agent.spade_runtime = self
         self.player_agents[player_id] = agent
         if self._loop is not None:
-            self._loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(agent.start())
+            asyncio.run_coroutine_threadsafe(
+                self._start_player_agent(player_id, agent), self._loop
             )
 
     def remove_player_agent(self, player_id: str) -> None:
-        """Release a player ID back to normal network input."""
+        """The player is back: stop the agent that was driving its character."""
         agent = self.player_agents.pop(player_id, None)
-        if agent is not None and getattr(agent, "is_alive", lambda: False)():
-            if self._loop is not None:
-                self._loop.call_soon_threadsafe(
-                    lambda: asyncio.create_task(agent.stop())
-                )
+        if agent is None:
+            return
+        LOGGER.info("Player %s is back: stopping its SPADE agent", player_id)
+        if self._loop is not None:
+            asyncio.run_coroutine_threadsafe(agent.stop(), self._loop)
+
+    async def _start_player_agent(self, player_id: str, agent: PlayerAgent) -> None:
+        LOGGER.info("Starting SPADE player agent for disconnected %s", player_id)
+        await agent.start()
 
     @staticmethod
     def _create_goomba_agent(enemy_id: str) -> EnemyAgent:
@@ -245,31 +260,29 @@ class SpadeRuntime:
         return SpadeRuntime._create_agent(KoopaAgent, AgentType.KOOPA, enemy_id)
 
     @staticmethod
-    def _create_agent(agent_cls, agent_type: AgentType, enemy_id: str) -> EnemyAgent:
+    def _create_agent(agent_cls, agent_type: AgentType, agent_id: str) -> GameAgent:
         asl_path = ASL_DIR / f"{agent_type.value}.asl"
         if not asl_path.is_file():
             raise FileNotFoundError(
                 f"{agent_type.value} ASL file not found: {asl_path}"
             )
         return agent_cls(
-            SpadeRuntime.jid_for(enemy_id, agent_type),
-            f"{agent_type.value}-{enemy_id}_password",
+            SpadeRuntime.jid_for(agent_id, agent_type),
+            f"{agent_type.value}-{agent_id}_password",
             str(asl_path),
         )
 
-    def _create_dummy_player(self, player_id: str) -> object:
-        from distributed_smb.agents.dummy_player import DummyPlayerAgent
+    @staticmethod
+    def _create_player_agent(player_id: str) -> PlayerAgent:
+        """Construct a player BDI agent; SPADE is imported only when needed."""
+        from distributed_smb.agents.bdi.player import PlayerAgent
 
-        return DummyPlayerAgent(
-            jid=f"dummy-{player_id}@{XMPP_DOMAIN}",
-            password=f"dummy-{player_id}_password",
-            player_id=player_id,
-        )
+        return SpadeRuntime._create_agent(PlayerAgent, AgentType.PLAYER, player_id)
 
     @staticmethod
-    def jid_for(enemy_id: str, agent_type: AgentType = AgentType.GOOMBA) -> str:
-        """XMPP address of the agent that controls ``enemy_id``."""
-        return f"{AgentType(agent_type).value}-{enemy_id}@{XMPP_DOMAIN}"
+    def jid_for(agent_id: str, agent_type: AgentType = AgentType.GOOMBA) -> str:
+        """XMPP address of the agent that controls ``agent_id``."""
+        return f"{AgentType(agent_type).value}-{agent_id}@{XMPP_DOMAIN}"
 
     def get_perception(
         self, agent_type: AgentType, timeout: float | None = 0
