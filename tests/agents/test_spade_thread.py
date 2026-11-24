@@ -178,3 +178,50 @@ def test_player_perception_is_routed_to_the_agent_of_that_player():
     runtime.remove_player_agent("player2")
     runtime.perception_queue[AgentType.PLAYER].put(message)
     assert runtime.dispatch_perceptions() == 0
+
+
+def test_a_player_agent_added_while_the_runtime_runs_is_started_once():
+    """Regression: the SPADE loop was never recorded, so an agent added for a
+    player that disconnected mid-game was registered but never started."""
+    from distributed_smb.agents.spade_runtime import SpadeRuntime
+    from distributed_smb.application.spade_agent_bridge import make_agent_queues
+
+    class FakePlayerAgent:
+        def __init__(self, _player_id):
+            self.starts = 0
+            self.started = threading.Event()
+            self.stopped = threading.Event()
+            self._alive = False
+
+        async def start(self):
+            self.starts += 1
+            self._alive = True
+            self.started.set()
+
+        def is_alive(self):
+            return self._alive
+
+        async def stop(self):
+            self._alive = False
+            self.stopped.set()
+
+    runtime = SpadeRuntime(
+        make_agent_queues(), make_agent_queues(), player_factory=FakePlayerAgent
+    )
+    thread = SpadeThread(runtime.run)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 2
+        while runtime._loop is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        runtime.add_player_agent("player2")  # the game is already running
+        agent = runtime.player_agents["player2"]
+        assert agent.started.wait(timeout=2)
+
+        runtime.remove_player_agent("player2")  # the player is back
+        assert agent.stopped.wait(timeout=2)
+        assert agent.starts == 1
+    finally:
+        runtime.request_stop()
+        thread.stop(timeout=2)

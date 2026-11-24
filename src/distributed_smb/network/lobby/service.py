@@ -163,11 +163,18 @@ class LobbyManager:
         if record is None:
             return False
         if rejoin_join_index is not None:
-            return rejoin_join_index not in record.reserved_join_indices and not any(
-                entry["join_index"] == rejoin_join_index
-                and entry["player_id"] != player_id_for(rejoin_join_index)
-                for entry in record.entries
+            # Same rule as join_session: a rejoin reclaims its own slot, which
+            # is either still in the roster (a client that crashed: the lobby
+            # only lost its connection) or reserved (after a host migration).
+            # The session is "full" for it only if that slot is someone else's,
+            # or neither present nor reserved.
+            existing = next(
+                (e for e in record.entries if e["join_index"] == rejoin_join_index),
+                None,
             )
+            if existing is not None:
+                return existing["player_id"] != player_id_for(rejoin_join_index)
+            return rejoin_join_index not in record.reserved_join_indices
         return (
             len(
                 {entry["join_index"] for entry in record.entries}

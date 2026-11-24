@@ -318,3 +318,44 @@ def test_a_dropped_connection_does_not_evict_anyone():
         e.player_id for e in lobby_manager.get_roster(session_id).get_all_players()
     }
     assert players == {"player1", "player2"}
+
+
+def test_a_crashed_client_reclaims_its_own_slot_in_the_running_session():
+    """Regression: is_full refused this rejoin with "already has 4 players".
+
+    A crashed client's WebSocket drops, but its roster entry stays (the lobby
+    only loses the connection): the rejoin must reclaim that very slot.
+    """
+    with client.websocket_connect("/lobby") as host_ws:
+        session_id = _create_session(host_ws, player_id="player1")
+
+        with client.websocket_connect("/lobby") as crashed:
+            assert _join_session(crashed, session_id, player_id="player2") == 1
+        _next(host_ws)  # roster_update for the first join
+
+        with client.websocket_connect("/lobby") as back:
+            assert (
+                _join_session(
+                    back,
+                    session_id,
+                    player_id="player2",
+                    port=49999,  # a new UDP port after the restart
+                    rejoin_join_index=1,
+                )
+                == 1
+            )
+
+    roster = lobby_manager.get_roster(session_id)
+    assert [e.player_id for e in roster.get_all_players()] == ["player1", "player2"]
+    assert roster.get_player("player2").udp_port == 49999
+
+
+def test_a_rejoin_cannot_take_the_slot_of_another_player():
+    with client.websocket_connect("/lobby") as host_ws:
+        session_id = _create_session(host_ws, player_id="player1")
+        with client.websocket_connect("/lobby") as other:
+            _join_session(other, session_id, player_id="player2")
+
+            assert lobby_manager.is_full(session_id, rejoin_join_index=1) is False
+            # Slot 0 belongs to the host (player1), slot 3 was never assigned.
+            assert lobby_manager.is_full(session_id, rejoin_join_index=3) is True

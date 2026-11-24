@@ -66,7 +66,10 @@ class SpadeRuntime:
         # and removed while the game runs (see add/remove_player_agent).
         self.player_factory = player_factory or self._create_player_agent
         self.player_agents: dict[str, PlayerAgent] = {}
+        # The SPADE event loop, once run() is running: player agents created
+        # later (a player disconnects mid-game) are started on it.
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._started_player_ids: set[str] = set()
 
         # Build every agent (and load its ASL) before the thread starts, and
         # inject the runtime so the agents can publish their actions.
@@ -114,6 +117,7 @@ class SpadeRuntime:
 
     async def run(self) -> None:
         """Start the agents, dispatch perceptions until stopped, then stop them."""
+        self._loop = asyncio.get_running_loop()
         try:
             for enemy_id, agent in self.agents.items():
                 agent_type = self.agent_types[enemy_id].value
@@ -126,9 +130,9 @@ class SpadeRuntime:
                     enemy_id,
                     time.monotonic() - start_started,
                 )
+            # Players that disconnected while the enemies were starting.
             for player_id, agent in list(self.player_agents.items()):
-                if not agent.is_alive():
-                    await self._start_player_agent(player_id, agent)
+                await self._start_player_agent(player_id, agent)
 
             while not self.stop_event.is_set():
                 self.dispatch_perceptions()
@@ -239,11 +243,24 @@ class SpadeRuntime:
             return
         LOGGER.info("Player %s is back: stopping its SPADE agent", player_id)
         if self._loop is not None:
-            asyncio.run_coroutine_threadsafe(agent.stop(), self._loop)
+            asyncio.run_coroutine_threadsafe(
+                self._stop_player_agent(player_id, agent), self._loop
+            )
 
     async def _start_player_agent(self, player_id: str, agent: PlayerAgent) -> None:
+        # Runs on the SPADE loop only, so this check cannot race: an agent
+        # scheduled by add_player_agent while run() was still starting the
+        # enemies would otherwise be started twice.
+        if player_id in self._started_player_ids:
+            return
+        self._started_player_ids.add(player_id)
         LOGGER.info("Starting SPADE player agent for disconnected %s", player_id)
         await agent.start()
+
+    async def _stop_player_agent(self, player_id: str, agent: PlayerAgent) -> None:
+        self._started_player_ids.discard(player_id)
+        if agent.is_alive():
+            await agent.stop()
 
     @staticmethod
     def _create_goomba_agent(enemy_id: str) -> EnemyAgent:
