@@ -40,59 +40,78 @@
 </data>
  </layer>
  <objectgroup id="7" name="Enemies" visible="0">
-  <object id="2" name="enemy-1" type="Enemies" x="520" y="877" width="64" height="96" enemy_type="Goomba">
+  <!-- Goombas: on the ground, where they were before -->
+  <object id="2" name="enemy-1" type="Enemies" x="520" y="877" width="51" height="51">
    <properties>
+    <property name="enemy_type" value="goomba"/>
     <property name="vx" type="float" value="50"/>
    </properties>
   </object>
-  <object id="3" name="enemy-2" type="Enemies" x="1120" y="877" width="64" height="96" enemy_type="Goomba">
+  <object id="3" name="enemy-2" type="Enemies" x="1120" y="877" width="51" height="51">
    <properties>
+    <property name="enemy_type" value="goomba"/>
     <property name="vx" type="float" value="55"/>
    </properties>
   </object>
-  <object id="4" name="enemy-3" type="Enemies" x="1160" y="877" width="64" height="96">
+  <object id="6" name="enemy-5" type="Enemies" x="2996" y="877" width="51" height="51">
    <properties>
+    <property name="enemy_type" value="goomba"/>
     <property name="vx" type="float" value="70"/>
    </properties>
   </object>
-  <object id="5" name="enemy-4" type="Enemies" x="2820" y="877" width="64" height="96">
+  <object id="7" name="enemy-6" type="Enemies" x="3576" y="877" width="51" height="51">
    <properties>
-    <property name="vx" type="float" value="60"/>
-   </properties>
-  </object>
-  <object id="6" name="enemy-5" type="Enemies" x="2996" y="877" width="64" height="96">
-   <properties>
-    <property name="vx" type="float" value="70"/>
-   </properties>
-  </object>
-  <object id="7" name="enemy-6" type="Enemies" x="3576" y="877" width="64" height="96">
-   <properties>
+    <property name="enemy_type" value="goomba"/>
     <property name="vx" type="float" value="65"/>
    </properties>
   </object>
-  <object id="8" name="enemy-7" type="Enemies" x="3876" y="877" width="64" height="96">
+  <object id="10" name="enemy-9" type="Enemies" x="4960" y="877" width="51" height="51">
    <properties>
+    <property name="enemy_type" value="goomba"/>
+    <property name="vx" type="float" value="60"/>
+   </properties>
+  </object>
+  <object id="12" name="enemy-11" type="Enemies" x="5796" y="877" width="51" height="51">
+   <properties>
+    <property name="enemy_type" value="goomba"/>
+    <property name="vx" type="float" value="65"/>
+   </properties>
+  </object>
+  <!-- Lakitus (enemy_type koopa): flying above the 5 pits of the level, at y=700
+       (bottom at 751: clear of a standing player, in the way of a jump). -->
+  <!-- pit 2200..2296 -->
+  <object id="4" name="enemy-3" type="Enemies" x="2222" y="700" width="51" height="51">
+   <properties>
+    <property name="enemy_type" value="koopa"/>
+    <property name="vx" type="float" value="70"/>
+   </properties>
+  </object>
+  <!-- pit 3260..3356 -->
+  <object id="5" name="enemy-4" type="Enemies" x="3282" y="700" width="51" height="51">
+   <properties>
+    <property name="enemy_type" value="koopa"/>
+    <property name="vx" type="float" value="60"/>
+   </properties>
+  </object>
+  <!-- pit 3996..4092 -->
+  <object id="8" name="enemy-7" type="Enemies" x="4018" y="700" width="51" height="51">
+   <properties>
+    <property name="enemy_type" value="koopa"/>
     <property name="vx" type="float" value="75"/>
    </properties>
   </object>
-  <object id="9" name="enemy-8" type="Enemies" x="4132" y="877" width="64" height="96">
+  <!-- pit 4604..4700 -->
+  <object id="9" name="enemy-8" type="Enemies" x="4626" y="700" width="51" height="51">
    <properties>
+    <property name="enemy_type" value="koopa"/>
     <property name="vx" type="float" value="55"/>
    </properties>
   </object>
-  <object id="10" name="enemy-9" type="Enemies" x="4960" y="877" width="64" height="96">
+  <!-- pit 5400..5496 -->
+  <object id="11" name="enemy-10" type="Enemies" x="5422" y="700" width="51" height="51">
    <properties>
-    <property name="vx" type="float" value="60"/>
-   </properties>
-  </object>
-  <object id="11" name="enemy-10" type="Enemies" x="5160" y="877" width="64" height="96">
-   <properties>
+    <property name="enemy_type" value="koopa"/>
     <property name="vx" type="float" value="80"/>
-   </properties>
-  </object>
-  <object id="12" name="enemy-11" type="Enemies" x="5796" y="877" width="64" height="96">
-   <properties>
-    <property name="vx" type="float" value="65"/>
    </properties>
   </object>
  </objectgroup>

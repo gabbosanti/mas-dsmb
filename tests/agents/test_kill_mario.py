@@ -20,7 +20,7 @@ def player(center_x: float, center_y: float = 75) -> PlayerPerception:
 
 def perception(*, direction=SightDirection.RIGHT, players=(), obstacles=(FLOOR,)):
     return GoombaPerception(
-        goomba_id="enemy-1",
+        enemy_id="enemy-1",
         position=Position(100, 50),
         width=40,
         height=50,

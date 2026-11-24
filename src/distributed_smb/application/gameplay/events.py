@@ -37,10 +37,17 @@ class GameEventMixin:
         LOGGER.info("game event sent: %s", msg)
 
     def _evict_player(self, pid: str, *, replace_with_dummy: bool = True) -> None:
-        """Replace a disconnected player with its dummy SPADE agent."""
+        """Hand the character of a disconnected player to a BDI player agent.
+
+        The character stays in the game, driven by the agent, until the player
+        rejoins (see ``_check_for_rejoining_players``).
+        """
         entry = self.roster.get_player(pid)
         player = self.engine.world_state.get_player(pid)
-        if not replace_with_dummy or player is None:
+        # A player that died just before disconnecting is respawning: the
+        # engine will bring its character back, so it needs an agent too.
+        respawning = pid in self.engine.world_state.respawn_timers
+        if not replace_with_dummy or (player is None and not respawning):
             # Election/migration paths can evict a peer that is already absent
             # from the local world. Preserve their existing full-removal behavior.
             if entry is not None and player is not None:
@@ -55,14 +62,38 @@ class GameEventMixin:
             return
         if entry is not None and player is not None:
             self.rejoin_states[entry.join_index] = deepcopy(player)
+        # The character stays in the game. Only the authoritative node drives
+        # it (it runs SPADE and the simulation); a client just keeps it, as it
+        # keeps receiving it in the host's snapshots.
         self.dummy_player_ids.add(pid)
-        self.agent_integration.control_player_with_spade(pid)
-        self.spade_runtime.add_player_agent(pid)
+        if self.engine.is_authoritative:
+            self._drive_with_agent(pid)
         self.cached_remote_inputs.pop(pid, None)
         self.last_remote_input_sequence.pop(pid, None)
         self.last_input_time.pop(pid, None)
         if hasattr(self, "shadow_copies"):
             self.shadow_copies.pop(pid, None)
+
+    def _drive_with_agent(self, pid: str) -> None:
+        """Start a BDI player agent for the character of ``pid``."""
+        LOGGER.info("Player %s disconnected: a BDI agent takes its character", pid)
+        self.agent_integration.control_player_with_spade(pid)
+        self.spade_runtime.add_player_agent(pid)
+
+    def _drive_replaced_players_with_agents(self) -> None:
+        """On becoming host: drive every character whose player is gone.
+
+        Some were marked while this node was still a client (it could not
+        drive them then), others during the election itself.
+        """
+        world = self.engine.world_state
+        for pid in sorted(self.dummy_player_ids):
+            if pid in self.spade_runtime.player_agents:
+                continue
+            if world.get_player(pid) is None and pid not in world.respawn_timers:
+                self.dummy_player_ids.discard(pid)
+                continue
+            self._drive_with_agent(pid)
 
     def _send_player_left(self, pid: str) -> None:
         """Broadcast a PlayerLeft message to all remaining clients."""
@@ -79,7 +110,6 @@ class GameEventMixin:
                 break
             LOGGER.info("Player left the game (WebSocket): %s", pid)
             self._evict_player(pid)
-            LOGGER.info("Replaced disconnected player %s with dummy SPADE agent", pid)
 
         now = time.time()
         for pid in list(self.last_input_time):

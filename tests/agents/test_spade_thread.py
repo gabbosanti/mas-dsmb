@@ -10,12 +10,11 @@ from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
+    EnemyPerceptionMessage,
     GoombaPerception,
-    GoombaPerceptionMessage,
+    PlayerPerceptionMessage,
     Position,
     SightDirection,
-    PlayerPerception,
-    PlayerPerceptionMessage,
 )
 from distributed_smb.agents.spade_thread import SpadeThread
 
@@ -38,10 +37,10 @@ def test_runtime_routes_perceptions_and_actions_through_agent_queues(
 ):
     runtime, _thread, _fake_agent = spade_runtime_thread
 
-    perception = GoombaPerceptionMessage(
+    perception = EnemyPerceptionMessage(
         simulation_sequence=7,
         perception=GoombaPerception(
-            goomba_id="enemy-1",
+            enemy_id="enemy-1",
             position=Position(10, 20),
             width=40,
             height=50,
@@ -97,10 +96,10 @@ def test_spade_thread_timeout_logs_worker_stack(caplog):
 
 
 def make_message(goomba_id, sequence):
-    return GoombaPerceptionMessage(
+    return EnemyPerceptionMessage(
         simulation_sequence=sequence,
         perception=GoombaPerception(
-            goomba_id=goomba_id,
+            enemy_id=goomba_id,
             position=Position(10, 20),
             width=40,
             height=50,
@@ -126,7 +125,7 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
     runtime = SpadeRuntime(
         make_agent_queues(),
         make_agent_queues(),
-        enemy_ids=["enemy-1", "enemy-2"],
+        enemies={"enemy-1": AgentType.GOOMBA, "enemy-2": AgentType.GOOMBA},
         goomba_factory=lambda _enemy_id: Recorder(),
     )
     queue = runtime.perception_queue[AgentType.GOOMBA]
@@ -141,53 +140,88 @@ def test_dispatch_routes_each_perception_to_its_own_agent_only():
     runtime.dispatch_perceptions()
 
     first, second = runtime.goomba_agents["enemy-1"], runtime.goomba_agents["enemy-2"]
-    assert first.goomba_id == "enemy-1" and second.goomba_id == "enemy-2"
+    assert first.enemy_id == "enemy-1" and second.enemy_id == "enemy-2"
     assert [m.simulation_sequence for m in first.perceived] == [10]
-    assert [m.perception.goomba_id for m in second.perceived] == ["enemy-2"]
+    assert [m.perception.enemy_id for m in second.perceived] == ["enemy-2"]
     assert queue.empty()
 
 
-def test_dummy_player_perception_is_processed_through_player_action_queue():
+def test_player_perception_is_routed_to_the_agent_of_that_player():
+    from distributed_smb.agents.models import PlayerAgentPerception
     from distributed_smb.agents.spade_runtime import SpadeRuntime
     from distributed_smb.application.spade_agent_bridge import make_agent_queues
 
-    class DummyAgent:
+    class Recorder:
         def __init__(self, player_id):
             self.player_id = player_id
             self.perceived = []
-            self.spade_runtime = None
 
         def perceive(self, message):
             self.perceived.append(message)
-            from distributed_smb.agents.models import PlayerAction, PlayerActionResult
-
-            self.spade_runtime.put_action(
-                AgentType.PLAYER,
-                PlayerActionResult(
-                    player_id=self.player_id,
-                    action=PlayerAction.MOVE_RIGHT,
-                ),
-            )
 
     runtime = SpadeRuntime(
-        make_agent_queues(),
-        make_agent_queues(),
-        dummy_player_factory=DummyAgent,
+        make_agent_queues(), make_agent_queues(), player_factory=Recorder
     )
     runtime.add_player_agent("player2")
-    runtime.perception_queue[AgentType.PLAYER].put(
-        PlayerPerceptionMessage(
-            simulation_sequence=11,
-            perception=PlayerPerception(
-                player_id="player2",
-                position=Position(10, 20),
-                width=50,
-                height=50,
-            ),
-        )
+    runtime.add_player_agent("player2")  # idempotent
+    message = PlayerPerceptionMessage(
+        simulation_sequence=11,
+        perception=PlayerAgentPerception(
+            "player2", Position(10, 20), 50, 75, on_ground=True, goal_x=None
+        ),
     )
+    runtime.perception_queue[AgentType.PLAYER].put(message)
 
     assert runtime.dispatch_perceptions() == 1
-    action = runtime.action_queue[AgentType.PLAYER].get_nowait()
-    assert action.player_id == "player2"
-    assert action.action.value == "MOVE_RIGHT"
+    assert runtime.player_agents["player2"].perceived == [message]
+
+    runtime.remove_player_agent("player2")
+    runtime.perception_queue[AgentType.PLAYER].put(message)
+    assert runtime.dispatch_perceptions() == 0
+
+
+def test_a_player_agent_added_while_the_runtime_runs_is_started_once():
+    """Regression: the SPADE loop was never recorded, so an agent added for a
+    player that disconnected mid-game was registered but never started."""
+    from distributed_smb.agents.spade_runtime import SpadeRuntime
+    from distributed_smb.application.spade_agent_bridge import make_agent_queues
+
+    class FakePlayerAgent:
+        def __init__(self, _player_id):
+            self.starts = 0
+            self.started = threading.Event()
+            self.stopped = threading.Event()
+            self._alive = False
+
+        async def start(self):
+            self.starts += 1
+            self._alive = True
+            self.started.set()
+
+        def is_alive(self):
+            return self._alive
+
+        async def stop(self):
+            self._alive = False
+            self.stopped.set()
+
+    runtime = SpadeRuntime(
+        make_agent_queues(), make_agent_queues(), player_factory=FakePlayerAgent
+    )
+    thread = SpadeThread(runtime.run)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 2
+        while runtime._loop is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        runtime.add_player_agent("player2")  # the game is already running
+        agent = runtime.player_agents["player2"]
+        assert agent.started.wait(timeout=2)
+
+        runtime.remove_player_agent("player2")  # the player is back
+        assert agent.stopped.wait(timeout=2)
+        assert agent.starts == 1
+    finally:
+        runtime.request_stop()
+        thread.stop(timeout=2)

@@ -123,6 +123,9 @@ class TiledLevel:
                         width=ENEMY_WIDTH,
                         height=ENEMY_HEIGHT,
                         vx=float(obj.properties.get("vx", 50.0)),
+                        vertical_speed=float(
+                            obj.properties.get("vertical_speed", 240.0)
+                        ),
                         enemy_type=EnemyType(str(enemy_type).casefold()),
                     )
                 )

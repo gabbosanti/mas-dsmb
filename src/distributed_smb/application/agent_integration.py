@@ -16,18 +16,19 @@ from distributed_smb.agents.agent_type import AgentType
 from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
-    GoombaPerception,
-    GoombaPerceptionMessage,
+    EnemyPerception,
+    EnemyPerceptionMessage,
     PlayerAction,
     PlayerActionResult,
-    PlayerPerception,
     PlayerPerceptionMessage,
-    Position,
 )
 from distributed_smb.application.enemy_perceptor import (
+    AGENT_TYPE_OF,
     EnemyNotFoundError,
     EnemyPerceptor,
+    agent_type_of,
 )
+from distributed_smb.application.player_perceptor import PlayerPerceptor
 from distributed_smb.application.spade_agent_bridge import SpadeAgentBridge
 from distributed_smb.domain.entity import Enemy
 from distributed_smb.domain.game_engine import EnemyMovementCommand, GameEngine
@@ -39,7 +40,19 @@ __all__ = [
     "AgentGameIntegration",
     "EnemyNotFoundError",
     "SpadeAgentBridge",
+    "agent_type_of",
 ]
+
+HELD_COMMANDS = frozenset(
+    {
+        EnemyMovementCommand.STOP,
+        EnemyMovementCommand.DIVE,
+        EnemyMovementCommand.RISE,
+    }
+)
+
+# Agent types that drive enemies: their action queues are drained every tick.
+ENEMY_AGENT_TYPES = tuple(dict.fromkeys(AGENT_TYPE_OF.values()))
 
 
 @dataclass(slots=True)
@@ -53,15 +66,28 @@ class AgentGameIntegration:
     engine: GameEngine
     enabled: bool = False
     perception_interval_ticks: int = 5
+    # A running character moves ~6 times faster than an enemy (300 vs 50-80
+    # px/s): its agent needs fresher snapshots to jump in time.
+    player_perception_interval_ticks: int = 2
     bridge: SpadeAgentBridge = field(default_factory=SpadeAgentBridge)
     spade_controlled_enemy_ids: set[str] = field(
         default_factory=set
     )  # tracks spade agents
+    # Characters of disconnected players, driven by a player agent.
     spade_controlled_player_ids: set[str] = field(default_factory=set)
     perceptor: EnemyPerceptor = field(init=False)
-    # The engine honours STOP for a single tick only, so a STOP chosen by an
-    # agent is re-sent every tick until that agent picks another action.
-    _stopped_enemy_ids: set[str] = field(default_factory=set, init=False, repr=False)
+    player_perceptor: PlayerPerceptor = field(init=False)
+    # Last input chosen by each player agent: like a held key, it is applied
+    # on every tick until the agent decides again (~every 5 ticks).
+    _held_player_inputs: dict[str, InputState] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    # Commands re-sent every tick until the agent picks another action: the
+    # engine honours STOP for a single tick, and DIVE/RISE would otherwise be
+    # cancelled by the horizontal command derived from the enemy's heading.
+    _held_commands: dict[str, EnemyMovementCommand] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # Enemies whose agent has sent at least one valid action.
     _enemies_with_decision: set[str] = field(
         default_factory=set, init=False, repr=False
@@ -71,6 +97,7 @@ class AgentGameIntegration:
         if self.perception_interval_ticks < 1:
             raise ValueError("perception_interval_ticks must be at least one")
         self.perceptor = EnemyPerceptor(self.engine)
+        self.player_perceptor = PlayerPerceptor(self.engine)
 
     def control_enemy_with_spade(self, enemy_id: str) -> None:
         if enemy_id not in self.engine.world_state.environment.enemies:
@@ -80,25 +107,29 @@ class AgentGameIntegration:
     # Test only
     def release_enemy(self, enemy_id: str) -> None:
         self.spade_controlled_enemy_ids.discard(enemy_id)
-        self._stopped_enemy_ids.discard(enemy_id)
+        self._held_commands.pop(enemy_id, None)
         self._enemies_with_decision.discard(enemy_id)
 
+    def observe(self, enemy_id: str) -> EnemyPerception:
+        return self.perceptor.observe(enemy_id)
+
     def control_player_with_spade(self, player_id: str) -> None:
-        """Hand a remaining player character to a dummy SPADE agent."""
-        if self.engine.world_state.get_player(player_id) is None:
+        """Hand the character of a disconnected player to its player agent."""
+        world = self.engine.world_state
+        if world.get_player(player_id) is None and player_id not in world.respawn_timers:
             raise LookupError(f"Player {player_id!r} does not exist")
         self.spade_controlled_player_ids.add(player_id)
 
     def release_player(self, player_id: str) -> None:
+        """The player is back: its own inputs drive the character again."""
         self.spade_controlled_player_ids.discard(player_id)
-
-    def observe(self, enemy_id: str) -> GoombaPerception:
-        return self.perceptor.observe(enemy_id)
+        self._held_player_inputs.pop(player_id, None)
 
     def tick(self, dt: float, player_inputs: dict[str, InputState]) -> None:
         """Run one simulation tick without waiting for SPADE."""
         if self.enabled == False:
-            self._stopped_enemy_ids.clear()
+            self._held_commands.clear()
+            self._held_player_inputs.clear()
             self._enemies_with_decision.clear()
             self.bridge.discard_actions()
             self.bridge.discard_perceptions()
@@ -119,29 +150,28 @@ class AgentGameIntegration:
 
         # Sense: observe the new world state and hand it to the agents.
         sequence = self.engine.world_state.sequence_number
+        if sequence % self.player_perception_interval_ticks == 0:
+            self._publish_player_perceptions(sequence)
         if sequence % self.perception_interval_ticks != 0:  # every 5 ticks
             return
 
+        enemies = self.engine.world_state.environment.enemies
         for enemy_id in self._live_spade_enemy_ids():
             perception = self.observe(enemy_id)
-            self.bridge.publish(  # in futuro dobbiamo estrarre il tipo di agente
-                AgentType.GOOMBA,
-                GoombaPerceptionMessage(
+            # Each enemy's perception goes to the queue of its agent type.
+            self.bridge.publish(
+                agent_type_of(enemies[enemy_id]),
+                EnemyPerceptionMessage(
                     simulation_sequence=sequence,
                     perception=perception,
                 ),
             )
 
+    def _publish_player_perceptions(self, sequence: int) -> None:
         for player_id in sorted(self.spade_controlled_player_ids):
-            player = self.engine.world_state.get_player(player_id)
-            if player is None:
+            perception = self.player_perceptor.observe(player_id)
+            if perception is None:  # dead, waiting to respawn
                 continue
-            perception = PlayerPerception(
-                player_id=player.player_id,
-                position=Position(player.x, player.y),
-                width=player.width,
-                height=player.height,
-            )
             self.bridge.publish(
                 AgentType.PLAYER,
                 PlayerPerceptionMessage(
@@ -160,8 +190,12 @@ class AgentGameIntegration:
         )
 
     def _retrieve_player_actions(self) -> dict[str, InputState]:
-        """Translate dummy SPADE player actions into normal engine InputState."""
-        latest: dict[str, PlayerAction] = {}
+        """Input of every agent-driven character for this tick.
+
+        The newest action of each player agent replaces its held input; the
+        held input is then applied on every tick, so the character keeps
+        running (or keeps the jump key down) between two decisions.
+        """
         while (result := self.bridge.poll_action(AgentType.PLAYER)) is not None:
             if not isinstance(result, PlayerActionResult):
                 LOGGER.warning(
@@ -174,33 +208,28 @@ class AgentGameIntegration:
                     "Discarding action for uncontrolled player %r", result.player_id
                 )
                 continue
-            latest[result.player_id] = result.action
+            self._held_player_inputs[result.player_id] = _player_input(result.action)
 
-        player_inputs: dict[str, InputState] = {}
-        for player_id, action in latest.items():
-            player_inputs[player_id] = InputState(
-                left=action is PlayerAction.MOVE_LEFT,
-                right=action is PlayerAction.MOVE_RIGHT,
-                jump=action is PlayerAction.JUMP,
-                down=action is PlayerAction.CROUCH,
-            )
-        return player_inputs
+        return {
+            player_id: held
+            for player_id, held in self._held_player_inputs.items()
+            if player_id in self.spade_controlled_player_ids
+        }
 
     def _retreive_agent_actions(self) -> dict[str, EnemyMovementCommand]:
         # Pop every queued ActionResult and translate it into an engine command.
         enemies = self.engine.world_state.environment.enemies
-        self._stopped_enemy_ids &= enemies.keys()  # maintains only alive enemies
+        for enemy_id in self._held_commands.keys() - enemies.keys():
+            del self._held_commands[enemy_id]  # maintains only alive enemies
         self._enemies_with_decision &= enemies.keys()
         # Include all SPADE-controlled enemies every tick, preserving their
         # last heading between asynchronous BDI decisions.
         commands: dict[str, EnemyMovementCommand] = {}
         for enemy_id in self._live_spade_enemy_ids():
             enemy = enemies[enemy_id]
-            if (
-                enemy_id not in self._enemies_with_decision
-                or enemy_id in self._stopped_enemy_ids
-                or enemy.vx == 0
-            ):
+            if enemy_id in self._held_commands:
+                commands[enemy_id] = self._held_commands[enemy_id]
+            elif enemy_id not in self._enemies_with_decision or enemy.vx == 0:
                 # Until its agent has decided at least once (SPADE may take
                 # seconds to start), the enemy waits instead of walking blind.
                 commands[enemy_id] = EnemyMovementCommand.STOP
@@ -209,15 +238,7 @@ class AgentGameIntegration:
             else:
                 commands[enemy_id] = EnemyMovementCommand.MOVE_LEFT
 
-        while (result := self.bridge.poll_action(AgentType.GOOMBA)) is not None:
-            if not isinstance(result, ActionResult):
-                # Never let a malformed agent message crash the game thread.
-                LOGGER.warning(
-                    "Discarding GOOMBA action of type %s: expected ActionResult",
-                    type(result).__name__,
-                )
-                continue
-
+        for result in self._poll_agent_actions():
             enemy = enemies.get(result.enemy_id)
             if enemy is None or result.enemy_id not in self.spade_controlled_enemy_ids:
                 LOGGER.debug(
@@ -236,12 +257,40 @@ class AgentGameIntegration:
 
             commands[result.enemy_id] = command
             self._enemies_with_decision.add(result.enemy_id)
-            if command is EnemyMovementCommand.STOP:
-                self._stopped_enemy_ids.add(result.enemy_id)
+            if command in HELD_COMMANDS:
+                self._held_commands[result.enemy_id] = command
             else:
-                self._stopped_enemy_ids.discard(result.enemy_id)
+                self._held_commands.pop(result.enemy_id, None)
 
-        return commands
+        return commands    
+
+    def _poll_agent_actions(self):
+        """Every queued ActionResult, from the queue of each enemy agent type.
+
+        An action is accepted only from the queue of the enemy's own agent
+        type: a Goomba agent cannot drive a Koopa, and vice versa.
+        """
+        enemies = self.engine.world_state.environment.enemies
+        for agent_type in ENEMY_AGENT_TYPES:
+            while (result := self.bridge.poll_action(agent_type)) is not None:
+                if not isinstance(result, ActionResult):
+                    # Never let a malformed agent message crash the game thread.
+                    LOGGER.warning(
+                        "Discarding %s action of type %s: expected ActionResult",
+                        agent_type.value,
+                        type(result).__name__,
+                    )
+                    continue
+                enemy = enemies.get(result.enemy_id)
+                if enemy is not None and agent_type_of(enemy) is not agent_type:
+                    LOGGER.warning(
+                        "Discarding %s action for %s enemy %r",
+                        agent_type.value,
+                        enemy.enemy_type.value,
+                        result.enemy_id,
+                    )
+                    continue
+                yield result
 
     @staticmethod
     def _to_engine_command(
@@ -256,6 +305,10 @@ class AgentGameIntegration:
             return EnemyMovementCommand.MOVE_RIGHT
         if action is EnemyAction.STOP:
             return EnemyMovementCommand.STOP
+        if action is EnemyAction.DIVE:
+            return EnemyMovementCommand.DIVE
+        if action is EnemyAction.RISE:
+            return EnemyMovementCommand.RISE
         if action is EnemyAction.TURN_AROUND:
             # Turn relative to a move already chosen this tick, else to the
             # current velocity (STOP keeps vx, so a stopped enemy still has one).
@@ -272,3 +325,13 @@ class AgentGameIntegration:
                 else EnemyMovementCommand.MOVE_LEFT
             )
         return None
+
+
+def _player_input(action: PlayerAction) -> InputState:
+    """The keys a player would press for ``action``."""
+    return InputState(
+        left=action is PlayerAction.MOVE_LEFT,
+        right=action in (PlayerAction.MOVE_RIGHT, PlayerAction.JUMP_RIGHT),
+        jump=action in (PlayerAction.JUMP, PlayerAction.JUMP_RIGHT),
+        down=action is PlayerAction.CROUCH,
+    )

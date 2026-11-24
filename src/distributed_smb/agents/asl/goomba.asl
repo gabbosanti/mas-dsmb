@@ -3,29 +3,6 @@ direction(right).
 
 // Tunables (ticks are simulation ticks: 60 per second).
 sighting_refresh(60).   // re-announce a sighting that is still valid this often
-sighting_ttl(180).      // a sighting older than this is ignored by who receives it
-encircle_range(600).    // how far (px) a Goomba comes from to close the player in
-same_height(32).        // max vertical distance (px) to be "at the player's height"
-
-// flank(Side, Sender, SenderX, PX): agent Sender (standing at SenderX) sees a
-// player at PX, at my height, and the player stands between Sender and me,
-// on my Side: walking that way closes it in. Sender comes from the source
-// annotation that spade_bdi adds to every received message.
-flank(left, Sender, SenderX, PX) :-
-    perception(Now) & player_spotted(PX, PY, SenderX, Seen)[source(Sender)]
-    & sighting_ttl(TTL)
-    & Now - Seen < TTL
-    & position(X, Y) & same_height(H) & PY - Y < H & Y - PY < H
-    & SenderX < PX & PX < X
-    & encircle_range(Range) & X - PX < Range.
-
-flank(right, Sender, SenderX, PX) :-
-    perception(Now) & player_spotted(PX, PY, SenderX, Seen)[source(Sender)]
-    & sighting_ttl(TTL)
-    & Now - Seen < TTL
-    & position(X, Y) & same_height(H) & PY - Y < H & Y - PY < H
-    & X < PX & PX < SenderX
-    & encircle_range(Range) & PX - X < Range.
 
 // ---------------------------------------------------------------------------
 // Movement. Each new game perception produces exactly one decision: the first
@@ -41,9 +18,6 @@ flank(right, Sender, SenderX, PX) :-
 +perception(Sequence) : player_near(Side) & path_blocked(Side)
     <- .hold.
 
-+perception(Sequence) : not player_near(_) & flank(Side, _, _, _) & path_blocked(Side)
-    <- .hold.
-
 // --- Safety first: never walk into a void or a wall ---
 +perception(Sequence) : void_ahead & direction(Direction)
     <- .turn_around(Direction).
@@ -56,12 +30,6 @@ flank(right, Sender, SenderX, PX) :-
 +perception(Sequence) : player_near(Side)
     <- .chase(Side).
 
-// --- Behaviour encircle: close in a player another agent is facing ---
-// Reached only when this Goomba does not see the player itself (otherwise
-// kill_mario above applies): it acts on what another agent told it.
-+perception(Sequence) : flank(Side, Sender, SenderX, PX)
-    <- .encircle(Side, Sender, SenderX, PX).
-
 // --- Behaviour patrol ---
 +perception(Sequence) : clear_ahead & direction(right)
     <- .move_right.
@@ -70,8 +38,9 @@ flank(right, Sender, SenderX, PX) :-
     <- .move_left.
 
 // ---------------------------------------------------------------------------
-// Communication. A Goomba that sees a player tells every other agent where
-// the player is and where it stands itself:
+// Communication. A Goomba that sees a player tells the Lakitus where the
+// player is and where it stands itself, so that a Lakitu on the other side
+// of the player can dive to block its escape (see koopa.asl, barrier):
 //     player_spotted(PlayerX, PlayerY, SenderX, Tick)
 // The sighting is refreshed while the player stays in sight and withdrawn
 // (untell) when it is lost. announced(...) remembers what was told, because
@@ -89,11 +58,11 @@ flank(right, Sender, SenderX, PX) :-
 -player_near(Side)
     <- !withdraw.
 
-+!announce(PX, PY, Seen) : peers(Peers) & position(X, _)
++!announce(PX, PY, Seen) : koopa_peers(Peers) & position(X, _)
     <- .send(Peers, tell, player_spotted(PX, PY, X, Seen));
        +announced(PX, PY, X, Seen).
 
-+!withdraw : announced(PX, PY, X, Seen) & peers(Peers)
++!withdraw : announced(PX, PY, X, Seen) & koopa_peers(Peers)
     <- .send(Peers, untell, player_spotted(PX, PY, X, Seen));
        -announced(PX, PY, X, Seen).
 

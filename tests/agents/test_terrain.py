@@ -80,3 +80,30 @@ def test_rejects_negative_parameters():
         GroundSensor(lookahead=-1)
     with pytest.raises(ValueError):
         GroundSensor(tolerance=-1)
+
+
+def test_clearance_below_measures_the_space_under_the_body():
+    sensor = GroundSensor()
+    floor_ = ObstacleObservation(x=0, y=200, width=400, height=32)
+    ledge = ObstacleObservation(x=500, y=150, width=50, height=32)
+
+    # 50x50 body at (100, 100): bottom at 150, floor top at 200.
+    assert sensor.clearance_below(Position(100, 100), 50, 50, [floor_, ledge]) == 50
+    # Above a pit: nothing under the body.
+    assert sensor.clearance_below(Position(420, 100), 50, 50, [floor_]) is None
+
+
+def test_a_pit_hidden_between_the_feet_and_the_far_probe_is_detected():
+    """Regression: only the far end of the lookahead used to be probed.
+
+    A walker that lands with its leading edge already past the edge of a
+    platform saw the floor on the other side of the pit, and walked into it.
+    """
+    sensor = GroundSensor(lookahead=64)
+    near_side = ObstacleObservation(x=0, y=FLOOR_Y, width=160, height=32)
+    far_side = ObstacleObservation(x=200, y=FLOOR_Y, width=400, height=32)
+
+    # Leading edge at 170 (past the edge at 160), far probe at 234 (on the far side).
+    assert sensor.is_void_ahead(
+        walker_at(120), WIDTH, HEIGHT, SightDirection.RIGHT, [near_side, far_side]
+    )

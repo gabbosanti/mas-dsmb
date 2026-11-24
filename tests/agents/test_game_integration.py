@@ -7,7 +7,7 @@ from distributed_smb.agents.models import (
     ActionResult,
     EnemyAction,
     GoombaPerception,
-    GoombaPerceptionMessage,
+    EnemyPerceptionMessage,
     SightDirection,
 )
 from distributed_smb.application.agent_integration import (
@@ -49,7 +49,7 @@ def test_observation_is_an_immutable_raw_snapshot_without_sight_filtering():
     observation = AgentGameIntegration(engine).observe("enemy-1")
 
     assert isinstance(observation, GoombaPerception)
-    assert observation.goomba_id == "enemy-1"
+    assert observation.enemy_id == "enemy-1"
     assert (observation.position.x, observation.position.y) == (100, 100)
     assert (observation.width, observation.height) == (enemy.width, enemy.height)
     assert observation.direction is SightDirection.LEFT
@@ -217,9 +217,9 @@ def test_spade_bridge_publishes_only_at_configured_tick_cadence():
     integration.tick(1 / 60, {})
     message = integration.bridge.poll_perception(AgentType.GOOMBA)
 
-    assert isinstance(message, GoombaPerceptionMessage)
+    assert isinstance(message, EnemyPerceptionMessage)
     assert message.simulation_sequence == 5
-    assert message.perception.goomba_id == "enemy-1"
+    assert message.perception.enemy_id == "enemy-1"
 
 
 def test_spade_bridge_drops_oldest_messages_when_a_queue_is_full():
@@ -228,8 +228,8 @@ def test_spade_bridge_drops_oldest_messages_when_a_queue_is_full():
     engine = GameEngine()
     perception = AgentGameIntegration(engine).observe("enemy-1")
     bridge = SpadeAgentBridge(perceptions=make_agent_queues(capacity=1))
-    bridge.publish(AgentType.GOOMBA, GoombaPerceptionMessage(1, perception))
-    bridge.publish(AgentType.GOOMBA, GoombaPerceptionMessage(2, perception))
+    bridge.publish(AgentType.GOOMBA, EnemyPerceptionMessage(1, perception))
+    bridge.publish(AgentType.GOOMBA, EnemyPerceptionMessage(2, perception))
 
     assert bridge.dropped_perceptions == 1
     assert bridge.poll_perception(AgentType.GOOMBA).simulation_sequence == 2

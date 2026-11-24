@@ -43,16 +43,17 @@ class PlayerPerception:
             self.position.x + self.width / 2, self.position.y + self.height / 2
         )
 
-
 @dataclass(frozen=True, slots=True)
-class GoombaPerception:
-    """Raw, immutable snapshot of the world sent to a Goomba agent.
+class EnemyPerception:
+    """Raw, immutable snapshot of the world sent to an enemy agent.
 
-    It carries facts only: what the Goomba can actually see, or which player
+    It carries facts only: what the enemy can actually see, or which player
     is closest, is decided agent-side (see ``distributed_smb.agents.perception``).
+    Each enemy kind has its own subclass, so a perception can never reach an
+    agent of the wrong kind.
     """
 
-    goomba_id: str
+    enemy_id: str
     position: Position
     width: float
     height: float
@@ -68,32 +69,85 @@ class GoombaPerception:
 
 
 @dataclass(frozen=True, slots=True)
-class GoombaPerceptionMessage:
+class GoombaPerception(EnemyPerception):
+    """Snapshot for a Goomba: a walker on the ground."""
+
+
+@dataclass(frozen=True, slots=True)
+class KoopaPerception(EnemyPerception):
+    """Snapshot for a Koopa (Lakitu): a flyer, not bound to the ground."""
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyPerceptionMessage:
     """Queue envelope that ties a perception to its simulation tick."""
 
     simulation_sequence: int
-    perception: GoombaPerception
+    perception: EnemyPerception
+
+
+#---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class EnemyObservation:
+    """An enemy as seen by a player agent."""
+
+    kind: str  # "goomba" | "koopa"
+    position: Position
+    width: float
+    height: float
+
+    @property
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerAgentPerception:
+    """Raw snapshot sent to the agent that drives a disconnected player.
+
+    Facts only, like the enemies' perceptions: whether there is a wall, a
+    pit or an enemy ahead is decided agent-side.
+    """
+
+    player_id: str
+    position: Position  # top-left corner
+    width: float
+    height: float
+    on_ground: bool
+    goal_x: float | None  # left edge of the castle (final gate), if any
+    obstacles: tuple[ObstacleObservation, ...] = ()
+    enemies: tuple[EnemyObservation, ...] = ()
+
+    @property
+    def center(self) -> Position:
+        return Position(
+            self.position.x + self.width / 2, self.position.y + self.height / 2
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class PlayerPerceptionMessage:
-    """Queue envelope for a dummy player's snapshot."""
+    """Queue envelope that ties a player agent's perception to its tick."""
 
     simulation_sequence: int
-    perception: PlayerPerception
+    perception: PlayerAgentPerception
 
 
 class PlayerAction(str, Enum):
     MOVE_LEFT = "MOVE_LEFT"
     MOVE_RIGHT = "MOVE_RIGHT"
     JUMP = "JUMP"
+    JUMP_RIGHT = "JUMP_RIGHT"  # running jump
     CROUCH = "CROUCH"
     STOP = "STOP"
 
 
 @dataclass(frozen=True, slots=True)
 class PlayerActionResult:
-    """Random action selected by a dummy SPADE player agent."""
+    """Action chosen by the BDI agent that drives a disconnected player."""
 
     player_id: str
     action: PlayerAction
@@ -105,6 +159,8 @@ class EnemyAction(str, Enum):
     MOVE_RIGHT = "MOVE_RIGHT"
     STOP = "STOP"
     JUMP = "JUMP"
+    DIVE = "DIVE"  # flying enemies: straight down
+    RISE = "RISE"  # flying enemies: straight up
 
 
 @dataclass(frozen=True, slots=True)
